@@ -8,4 +8,4 @@ go:
   - 1.5
   - 1.6
 install: make test-deps
-script: make build  coverage
+script: make build coverage
