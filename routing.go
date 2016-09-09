@@ -57,10 +57,10 @@ func (r *APIRoute) Version(version int) *APIRoute {
 // or other data into to the handlers when the applications start,
 // without relying on either global state *or* running into complex
 // typing issues.
-func (m *APIRoute) Handler(h http.HandlerFunc) *APIRoute {
-	m.handler = h
+func (r *APIRoute) Handler(h http.HandlerFunc) *APIRoute {
+	r.handler = h
 
-	return m
+	return r
 }
 
 // Get is a chainable method to add a handler for the GET method to

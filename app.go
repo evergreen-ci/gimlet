@@ -26,11 +26,11 @@ import (
 
 // APIApp is a structure representing a single API service.
 type APIApp struct {
-	router         *mux.Router
-	strictSlash    bool
+	StrictSlash    bool
 	isResolved     bool
 	defaultVersion int
 	port           int
+	router         *mux.Router
 	address        string
 	routes         []*APIRoute
 	middleware     []negroni.Handler
@@ -43,9 +43,9 @@ type APIApp struct {
 // for new methods.
 func NewApp() *APIApp {
 	a := &APIApp{
+		StrictSlash:    true,
 		defaultVersion: -1, // this is the same as having no version prepended to the path.
 		port:           3000,
-		strictSlash:    true,
 	}
 
 	a.AddMiddleware(negroni.NewRecovery())
@@ -72,7 +72,7 @@ func (a *APIApp) Router() (*mux.Router, error) {
 	if a.isResolved {
 		return a.router, nil
 	}
-	return a.router, errors.New("application is not resolved")
+	return nil, errors.New("application is not resolved")
 }
 
 // AddApp allows you to combine App instances, by taking one app and
@@ -110,16 +110,6 @@ func (a *APIApp) AddApp(app *APIApp) error {
 	return nil
 }
 
-// SetStrictSlash defines the trailing slash behavior to pass to the
-// `mux` layer. When `true`, routes with and without trailing slashes
-// resolve to the same target. When `false`, the trailing slash is
-// meaningful. The default value for Gimlet apps is `true`, and this
-// method should be replaced with something more reasonable in the
-// future.
-func (a *APIApp) SetStrictSlash(v bool) {
-	a.strictSlash = v
-}
-
 // AddMiddleware adds a negroni handler as middleware to the end of
 // the current list of middleware handlers.
 func (a *APIApp) AddMiddleware(m negroni.Handler) {
@@ -130,7 +120,7 @@ func (a *APIApp) AddMiddleware(m negroni.Handler) {
 // all routes and creats a mux.Router object for the application
 // instance.
 func (a *APIApp) Resolve() error {
-	a.router = mux.NewRouter().StrictSlash(a.strictSlash)
+	a.router = mux.NewRouter().StrictSlash(a.StrictSlash)
 
 	var hasErrs bool
 	for _, route := range a.routes {
@@ -155,7 +145,6 @@ func (a *APIApp) Resolve() error {
 		if route.version == a.defaultVersion || route.version == 0 {
 			a.router.HandleFunc(route.route, route.handler).Methods(methods...)
 			grip.Debugln("added route for:", route.route)
-
 		}
 	}
 
