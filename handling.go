@@ -2,6 +2,8 @@ package gimlet
 
 import (
 	"encoding/json"
+	"io"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -58,14 +60,15 @@ func WriteInternalErrorJSON(w http.ResponseWriter, data interface{}) {
 // GetJSON parses JSON from a request body into an object specified by
 // the request. Used in handler functiosn to retreve and parse data
 // submitted by the client.
-func GetJSON(r *http.Request, data interface{}) error {
-	d := json.NewDecoder(r.Body)
+func GetJSON(r io.ReadCloser, data interface{}) error {
+	defer r.Close()
 
-	err := d.Decode(data)
-	grip.CatchDebug(err)
-	grip.Debug(&JSONMessage{data: data})
+	bytes, err := ioutil.ReadAll(r)
+	if err != nil {
+		return err
+	}
 
-	return err
+	return json.Unmarshal(bytes, data)
 }
 
 // GetVars is a helper method that processes an http.Request and
