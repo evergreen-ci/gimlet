@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/tychoish/grip"
+	"github.com/tychoish/grip/logging"
 	"github.com/urfave/negroni"
 )
 
@@ -23,10 +24,7 @@ type AppLogging struct {
 // with Negroni. Sets the logging configuration to be the same as the
 // default global grip logging object.
 func NewAppLogger() *AppLogging {
-	l := &AppLogging{grip.NewJournaler("gimlet")}
-
-	// use the default sender for grip's standard logger.
-	l.SetSender(grip.GetSender())
+	l := &AppLogging{&logging.Grip{grip.GetSender()}}
 
 	return l
 }
