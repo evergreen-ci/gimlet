@@ -10,7 +10,7 @@ imports:
   subpackages:
   - gzip
 - name: github.com/tychoish/grip
-  version: 75ec083fa0ae6224f0e47b62cde9a641426608cb
+  version: 3c1ff245e7a3c6ec8ba104f628d6abea753314c9
   subpackages:
   - level
   - logging
