@@ -9,8 +9,8 @@ imports:
   version: 13f05ed68248e012fcc773ecd829abcc0bb3abd8
   subpackages:
   - gzip
-- name: github.com/tychoish/grip
-  version: e0bdc95a73eb02bb80b9f82c7ccbfce59055d7af
+- name: github.com/mongodb/grip
+  version: e6dbf67914ff2e3542b5f2e99f81f5015126b6b6
   subpackages:
   - level
   - logging
