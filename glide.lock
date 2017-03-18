@@ -10,7 +10,7 @@ imports:
   subpackages:
   - gzip
 - name: github.com/mongodb/grip
-  version: e6dbf67914ff2e3542b5f2e99f81f5015126b6b6
+  version: 5225ff0b40e7a9500e76f101e7a1bdef741619a0
   subpackages:
   - level
   - logging

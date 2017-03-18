@@ -24,7 +24,6 @@ variables:
       - command: git.get_project
         params:
           directory: gopath/src/github.com/mongodb/grip
-      - func: setup-credentials
       - func: run-make
         vars: { target: "${task_name}" }
 
@@ -83,7 +82,6 @@ tasks:
       - command: git.get_project
         params:
           directory: gopath/src/github.com/mongodb/grip
-      - func: setup-credentials
       - func: run-make
         vars:
           target: "coverage-html"
@@ -150,4 +148,38 @@ buildvariants:
       build_env: "PATH=/usr/local/go/bin:$PATH"
     run_on:
       - osx-1010
+    tasks: [ ".test" ]
+
+  - name: windows
+    display_name: Windows
+    run_on:
+      - windows-64-vs2015-small
+      - windows-64-vs2013-test
+      - windows-64-vs2010-test
+    expansions:
+      build_env: "GOROOT=c:/go DISABLE_COVERAGE=yes"
+    tasks: [ ".test" ]
+
+  - name: rhel71-s390x
+    display_name: "RHEL7.1 s390x"
+    run_on:
+      - rhel72-zseries-test
+    expansions:
+      build_env: "PATH=/opt/mongodbtoolchain/v2/bin:$PATH DISABLE_COVERAGE=yes"
+    tasks: [ ".test" ]
+
+  - name: rhel71-power
+    display_name: "RHEL7.1 POWER8"
+    run_on:
+      - rhel71-power8-test
+    expansions:
+      build_env: "PATH=/opt/mongodbtoolchain/v2/bin:$PATH DISABLE_COVERAGE=yes"
+    tasks: [ ".test" ]
+
+  - name: ubuntu1604-arm64
+    display_name: "Ubuntu 16.04 arm64"
+    run_on:
+      - ubuntu1604-arm64-small
+    expansions:
+      build_env: "PATH=/opt/mongodbtoolchain/v2/bin:$PATH DISABLE_COVERAGE=yes"
     tasks: [ ".test" ]
