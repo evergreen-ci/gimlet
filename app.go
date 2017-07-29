@@ -13,13 +13,14 @@ package gimlet
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/phyber/negroni-gzip/gzip"
 	"github.com/mongodb/grip"
+	"github.com/phyber/negroni-gzip/gzip"
 	"github.com/tylerb/graceful"
 	"github.com/urfave/negroni"
 )
@@ -32,6 +33,7 @@ type APIApp struct {
 	port           int
 	router         *mux.Router
 	address        string
+	subApps        *APIApp
 	routes         []*APIRoute
 	middleware     []negroni.Handler
 }
@@ -67,7 +69,7 @@ func (a *APIApp) SetDefaultVersion(version int) {
 }
 
 // Router is the getter for an APIApp's router object. If the
-// application isn't resloved, then the error return value is non-nil.
+// application isn't resolved, then the error return value is non-nil.
 func (a *APIApp) Router() (*mux.Router, error) {
 	if a.isResolved {
 		return a.router, nil
@@ -85,29 +87,7 @@ func (a *APIApp) AddApp(app *APIApp) error {
 		return errors.New("cannot merge an app into a resolved app")
 	}
 
-	// this is a weird case, so worth a warning, but not worth exiting
-	if app.isResolved {
-		grip.Warningln("merging a resolved app into an unresolved app may be an error.",
-			"Continuing cautiously.")
-	}
-	// this is incredibly straightforward, just add the added routes to our routes list.
-	if app.defaultVersion == a.defaultVersion {
-		a.routes = append(a.routes, app.routes...)
-		return nil
-	}
-
-	// This makes sure that instance default versions are
-	// respected in routes when merging instances. This covers the
-	// case where you assemble v1 and v2 of an api in different
-	// places in your code and want to merge them in later.
-	for _, route := range app.routes {
-		if route.version == -1 {
-			route.Version(app.defaultVersion)
-		}
-		a.routes = append(a.routes, route)
-	}
-
-	return nil
+	a.subApps = append(a.subApps, app)
 }
 
 // AddMiddleware adds a negroni handler as middleware to the end of
@@ -120,14 +100,14 @@ func (a *APIApp) AddMiddleware(m negroni.Handler) {
 // all routes and creats a mux.Router object for the application
 // instance.
 func (a *APIApp) Resolve() error {
+	catcher := grip.NewCatcher()
+
 	a.router = mux.NewRouter().StrictSlash(a.StrictSlash)
 
-	var hasErrs bool
 	for _, route := range a.routes {
 		if !route.IsValid() {
-			hasErrs = true
-			grip.Errorf("%d is an invalid api version. not adding route for %s",
-				route.version, route.route)
+			catcher.Add(fmt.Errorf("%d is an invalid api version. not adding route for %s",
+				route.version, route.route))
 			continue
 		}
 
@@ -150,11 +130,7 @@ func (a *APIApp) Resolve() error {
 
 	a.isResolved = true
 
-	if hasErrs {
-		return errors.New("encountered errors resolving routes")
-	}
-
-	return nil
+	return catcher.Resolve()
 }
 
 // ResetMiddleware removes *all* middleware handlers from the current
@@ -163,15 +139,10 @@ func (a *APIApp) ResetMiddleware() {
 	a.middleware = []negroni.Handler{}
 }
 
-// Run configured API service on the configured port. If you Registers
-// middlewear for gziped responses and graceful shutdown with a 10
-// second timeout.
-func (a *APIApp) Run() error {
-	var err error
-	if !a.isResolved {
-		err = a.Resolve()
-	}
-
+// getHander internal helper resolves the negorni middleware for the
+// application and returns it in the form of a http.Handler for use in
+// stitching together applications
+func (a *APIApp) getHandler() http.Handler {
 	n := negroni.New()
 	for _, m := range a.middleware {
 		n.Use(m)
@@ -179,11 +150,30 @@ func (a *APIApp) Run() error {
 
 	n.UseHandler(a.router)
 
+	return n
+}
+
+// Run configured API service on the configured port. Before running
+// the application, Run also resolves any sub-apps, and adds all
+// routes.
+func (a *APIApp) Run() error {
+	catcher := grip.NewCatcher()
+	if !a.isResolved {
+		catcher.Resolve(a.Resolve())
+	}
+
+	n := negroni.New()
+	n.UseHandler(a.getHandler())
+	for _, app := range a.subApps {
+		catcher.Add(app.Resolve())
+		n.UseHandler(app.getHandler())
+	}
+
 	listenOn := strings.Join([]string{a.address, strconv.Itoa(a.port)}, ":")
 	grip.Noticeln("starting app on:", listenOn)
 
 	graceful.Run(listenOn, 10*time.Second, n)
-	return err
+	return catcher.Resolve()
 }
 
 // SetPort allows users to configure a default port for the API

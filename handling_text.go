@@ -9,34 +9,37 @@ import (
 	"github.com/mongodb/grip"
 )
 
+func convertToBytes(data interface{}) []bytes {
+	switch data := data.(type) {
+	case []byte:
+		return data
+	case string:
+		return []byte(data)
+	case error:
+		return []byte(data.Error())
+	case []string:
+		return []byte(strings.Join(data, "\n"))
+	case fmt.Stringer:
+		return []byte(data.String())
+	case *bytes.Buffer:
+		return data.Bytes()
+	default:
+		return []byte(fmt.Sprintf("%v", data))
+	}
+}
+
 // WriteTextResponse writes data to the response body with the given
 // code as plain text after attempting to convert the data to a byte
 // array.
 func WriteTextResponse(w http.ResponseWriter, code int, data interface{}) {
-	var out []byte
-
-	switch data := data.(type) {
-	case []byte:
-		out = data
-	case string:
-		out = []byte(data)
-	case error:
-		out = []byte(data.Error())
-	case []string:
-		out = []byte(strings.Join(data, "\n"))
-	case fmt.Stringer:
-		out = []byte(data.String())
-	case *bytes.Buffer:
-		out = data.Bytes()
-	default:
-		out = []byte(fmt.Sprintf("%v", data))
-	}
+	out := convertToBytes(data)
 
 	w.Header().Set("Content-Type", "plain/text; charset=utf-8")
 	w.WriteHeader(code)
 	size, err := w.Write(out)
 	if err != nil {
-		grip.Warningf("encountered error %s writing a %d response", err.Error(), size)
+		grip.Warningf("encountered error %s writing a %d (of %d) response",
+			err.Error(), size, len(out))
 	}
 }
 

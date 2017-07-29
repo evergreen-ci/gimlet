@@ -3,6 +3,8 @@ package gimlet
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/mongodb/grip/level"
 )
 
 // JSONMessage is an implementation of the grip/message.Composer
@@ -11,7 +13,8 @@ import (
 // normal operation. Also contains a MarshalPretty() method which is
 // used in rendering JSON into the response objects.
 type JSONMessage struct {
-	data interface{}
+	data  interface{}
+	Level level.Priority
 }
 
 // NewJSONMessage constructs a new JSONMessage object.
@@ -53,4 +56,21 @@ func (m *JSONMessage) MarshalPretty() ([]byte, error) {
 	response, err := json.MarshalIndent(m.data, "", "  ")
 	response = append(response, []byte("\n")...)
 	return response, err
+}
+
+// Priority returns the configured priority of the message.
+func (m *JSONMessage) Priority() level.Priority {
+	return m.Level
+}
+
+// SetPriority allows you to configure the priority of the
+// message. Returns an error if the priority is not valid.
+func (m *JSONMessage) SetPriority(l level.Priority) error {
+	if !level.IsValidPriority(l) {
+		return fmt.Errorf("%s (%d) is not a valid priority", l, l)
+	}
+
+	m.Level = l
+
+	return nil
 }
