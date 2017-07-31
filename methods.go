@@ -14,13 +14,15 @@ const (
 func (m httpMethod) String() string {
 	switch m {
 	case get:
-		return "get"
+		return "GET"
 	case put:
-		return "put"
+		return "PUT"
 	case delete:
-		return "delete"
+		return "DELETE"
 	case patch:
-		return "patch"
+		return "PATCH"
+	case post:
+		return "POST"
 	default:
 		return ""
 	}
@@ -48,7 +50,7 @@ func (o OutputFormat) IsValid() bool {
 func (o OutputFormat) String() string {
 	switch o {
 	case JSON:
-		return "binary"
+		return "json"
 	case TEXT:
 		return "text"
 	case HTML:

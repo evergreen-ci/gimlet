@@ -7,4 +7,4 @@ import (
 	"net/http"
 )
 
-func getContext(r *http.Request) context.Context { return r.Context() }
+func getRequestContext(r *http.Request) (*http.Request, context.Context) { return r, r.Context() }

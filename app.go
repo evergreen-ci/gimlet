@@ -33,7 +33,7 @@ type APIApp struct {
 	port           int
 	router         *mux.Router
 	address        string
-	subApps        *APIApp
+	subApps        []*APIApp
 	routes         []*APIRoute
 	middleware     []negroni.Handler
 }
@@ -88,6 +88,7 @@ func (a *APIApp) AddApp(app *APIApp) error {
 	}
 
 	a.subApps = append(a.subApps, app)
+	return nil
 }
 
 // AddMiddleware adds a negroni handler as middleware to the end of
@@ -122,7 +123,7 @@ func (a *APIApp) Resolve() error {
 			grip.Debugln("added route for:", versionedRoute)
 		}
 
-		if route.version == a.defaultVersion || route.version == 0 {
+		if route.version == a.defaultVersion {
 			a.router.HandleFunc(route.route, route.handler).Methods(methods...)
 			grip.Debugln("added route for:", route.route)
 		}
@@ -159,7 +160,7 @@ func (a *APIApp) getHandler() http.Handler {
 func (a *APIApp) Run() error {
 	catcher := grip.NewCatcher()
 	if !a.isResolved {
-		catcher.Resolve(a.Resolve())
+		catcher.Add(a.Resolve())
 	}
 
 	n := negroni.New()

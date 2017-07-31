@@ -33,8 +33,7 @@ func (a *APIApp) AddRoute(r string) *APIRoute {
 	return route
 }
 
-// IsValid checks if a route has is valid. Current implementation only
-// makes sure that the version of the route is method.
+// IsValid checks if a route has is valid and populated.
 func (r *APIRoute) IsValid() bool {
 	switch {
 	case r.version < 0:
@@ -70,8 +69,11 @@ func (r *APIRoute) Version(version int) *APIRoute {
 // typing issues.
 func (r *APIRoute) Handler(h http.HandlerFunc) *APIRoute {
 	if r.handler != nil {
-		grip.Warningf("called Handler more than once for route %s", string)
+		grip.Warningf("called Handler more than once for route %s", r.route)
+	} else if h == nil {
+		grip.Alertf("adding nil route handler will prorobably result in runtime panics for '%s'", r.route)
 	}
+
 	r.handler = h
 
 	return r
@@ -83,7 +85,9 @@ func (r *APIRoute) Handler(h http.HandlerFunc) *APIRoute {
 // generation.
 func (r *APIRoute) RouteHandler(h RouteHandler) *APIRoute {
 	if r.handler != nil {
-		grip.Warningf("called Handler more than once for route %s", string)
+		grip.Warningf("called Handler more than once for route %s", r.route)
+	} else if h == nil {
+		grip.Alertf("adding nil route handler will prorobably result in runtime panics for '%s'", r.route)
 	}
 
 	r.handler = handleHandler(h)

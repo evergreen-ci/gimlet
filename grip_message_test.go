@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mongodb/grip/level"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -60,4 +61,22 @@ func (s *GripLoggingSuite) TestResolveMethodReturnsJsonFormatedString() {
 	m := NewJSONMessage(map[string]int{"a": 1})
 	out := m.String()
 	s.Equal("{\"a\":1}", out)
+}
+
+func (s *GripLoggingSuite) TestPrioritySetters() {
+	levels := []level.Priority{
+		level.Debug, level.Trace,
+		level.Info, level.Notice, level.Warning, level.Error,
+		level.Critical, level.Alert, level.Emergency,
+	}
+
+	m := NewJSONMessage(struct{}{})
+
+	for _, pri := range levels {
+		s.NotEqual(pri, m.Priority())
+		s.NoError(m.SetPriority(pri))
+		s.Equal(pri, m.Priority())
+	}
+
+	s.Error(m.SetPriority(level.Priority(10000)))
 }

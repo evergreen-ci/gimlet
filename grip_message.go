@@ -19,7 +19,7 @@ type JSONMessage struct {
 
 // NewJSONMessage constructs a new JSONMessage object.
 func NewJSONMessage(data interface{}) *JSONMessage {
-	return &JSONMessage{data}
+	return &JSONMessage{data: data}
 }
 
 // Resolve
@@ -28,7 +28,7 @@ func NewJSONMessage(data interface{}) *JSONMessage {
 func (m *JSONMessage) String() string {
 	out, err := json.Marshal(m.data)
 	if err != nil {
-		return fmt.Sprintf("problem marshaling message. Error: %+v", err)
+		return fmt.Sprintf("problem marshaling message. Error: %v", err)
 	}
 	return string(out)
 }

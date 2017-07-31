@@ -32,7 +32,7 @@ func WriteBinaryRespones(w http.ResponseWriter, code int, data interface{}) {
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.WriteHeader(status)
+	w.WriteHeader(code)
 	w.Write(out)
 }
 

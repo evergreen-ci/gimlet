@@ -9,7 +9,7 @@ import (
 	"github.com/mongodb/grip"
 )
 
-func convertToBytes(data interface{}) []bytes {
+func convertToBytes(data interface{}) []byte {
 	switch data := data.(type) {
 	case []byte:
 		return data

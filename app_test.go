@@ -1,11 +1,12 @@
 package gimlet
 
 import (
+	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/level"
+	"github.com/stretchr/testify/suite"
 )
 
 // APIAppSuite contains tests of the APIApp system. Tests of the route
@@ -111,12 +112,11 @@ func (s *APIAppSuite) TestRouteMergingInIfVersionsAreTheSame() {
 	route := subApp.AddRoute("/foo")
 	s.Len(subApp.routes, 1)
 
-	s.Len(s.app.routes, 0)
+	s.Len(s.app.subApps, 0)
 	err := s.app.AddApp(subApp)
 	s.NoError(err)
-
-	s.Len(s.app.routes, 1)
-	s.Equal(s.app.routes[0], route)
+	s.Len(s.app.subApps, 1)
+	s.Equal(s.app.subApps[0].routes[0], route)
 }
 
 func (s *APIAppSuite) TestRouteMergingInWithDifferntVersions() {
@@ -135,11 +135,11 @@ func (s *APIAppSuite) TestRouteMergingInWithDifferntVersions() {
 	s.Len(subApp.routes, 1)
 
 	// try adding to second app, to the first, with one route
-	s.Len(s.app.routes, 0)
+	s.Len(s.app.subApps, 0)
 	err := s.app.AddApp(subApp)
 	s.NoError(err)
-	s.Len(s.app.routes, 1)
-	s.Equal(s.app.routes[0], route)
+	s.Len(s.app.subApps, 1)
+	s.Equal(s.app.subApps[0].routes[0], route)
 
 	nextApp := NewApp()
 	s.Len(nextApp.routes, 0)
@@ -152,10 +152,7 @@ func (s *APIAppSuite) TestRouteMergingInWithDifferntVersions() {
 	// make sure the default value of nextApp is on the route in the subApp
 	err = s.app.AddApp(nextApp)
 	s.NoError(err)
-	s.Equal(s.app.routes[1], nextRoute)
-
-	// this is the meaningful validation here.
-	s.Equal(s.app.routes[1].version, 3)
+	s.Equal(s.app.subApps[1].routes[0], nextRoute)
 }
 
 func (s *APIAppSuite) TestRouterReturnsRouterInstanceWhenResolved() {
@@ -165,7 +162,7 @@ func (s *APIAppSuite) TestRouterReturnsRouterInstanceWhenResolved() {
 	s.Error(err)
 
 	s.app.AddRoute("/foo").Version(1)
-	s.NoError(s.app.Resolve())
+	s.Error(s.app.Resolve())
 	s.True(s.app.isResolved)
 
 	r, err = s.app.Router()
@@ -187,4 +184,45 @@ func (s *APIAppSuite) TestSetPortToExistingValueIsANoOp() {
 	s.Equal(port, s.app.port)
 	s.NoError(s.app.SetPort(port))
 	s.Equal(port, s.app.port)
+}
+
+func (s *APIAppSuite) TestResolveValidRoute() {
+	s.False(s.app.isResolved)
+	route := &APIRoute{
+		version: 1,
+		methods: []httpMethod{get},
+		handler: func(_ http.ResponseWriter, _ *http.Request) { grip.Info("hello") },
+		route:   "/foo",
+	}
+	s.True(route.IsValid())
+	s.app.routes = append(s.app.routes, route)
+	s.NoError(s.app.Resolve())
+	s.True(s.app.isResolved)
+}
+
+func (s *APIAppSuite) TestResolveAppWithDefaultVersion() {
+	s.False(s.app.isResolved)
+	s.app.defaultVersion = 1
+	route := &APIRoute{
+		version: 1,
+		methods: []httpMethod{get},
+		handler: func(_ http.ResponseWriter, _ *http.Request) { grip.Info("hello") },
+		route:   "/foo",
+	}
+	s.True(route.IsValid())
+	s.app.routes = append(s.app.routes, route)
+	s.NoError(s.app.Resolve())
+	s.True(s.app.isResolved)
+}
+
+func (s *APIAppSuite) TestSetHostOperations() {
+	s.Equal("", s.app.address)
+	s.False(s.app.isResolved)
+
+	s.NoError(s.app.SetHost("1"))
+	s.Equal("1", s.app.address)
+	s.app.isResolved = true
+
+	s.Error(s.app.SetHost("2"))
+	s.Equal("1", s.app.address)
 }

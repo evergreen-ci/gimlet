@@ -8,4 +8,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-func getContext(_ *http.Request) context.Context { return context.Background() }
+func getRequestContext(r *http.Request) (*http.Request, context.Context) {
+	return r, context.Background()
+}

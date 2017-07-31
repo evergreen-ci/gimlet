@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"github.com/mongodb/grip"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -64,12 +63,4 @@ func GetYAML(r io.ReadCloser, data interface{}) error {
 	}
 
 	return yaml.Unmarshal(bytes, data)
-}
-
-// GetVars is a helper method that processes an http.Request and
-// returns a map of strings to decoded strings for all arguments
-// passed to the method in the URL. Use this helper function when
-// writing handler functions.
-func GetVars(r *http.Request) map[string]string {
-	return mux.Vars(r)
 }
