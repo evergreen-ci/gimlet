@@ -94,7 +94,11 @@ func (p *Page) Validate() error {
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
-	return errors.New(strings.Join(errs, "; "))
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
 }
 
 // GetLink returns the pagination metadata for this page. It is called

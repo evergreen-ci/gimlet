@@ -78,8 +78,8 @@ func (r *responseBuilder) Status() int           { return r.status }
 func (r *responseBuilder) Pages() *ResponsePages { return r.pages }
 
 func (r *responseBuilder) AddData(d interface{}) error {
-	if r.data == nil {
-		return errors.New("cannot add nil data to responder")
+	if d == nil {
+		return errors.New("cannot  data to responder")
 	}
 
 	r.data = append(r.data, d)
@@ -118,7 +118,7 @@ func (r *responseBuilder) SetPages(p *ResponsePages) error {
 //
 // This implementation only allows a single data object, and AddData
 // will overwrite existing data as set.
-func NewBasicResponder(data interface{}, f OutputFormat, s int) (Responder, error) {
+func NewBasicResponder(s int, f OutputFormat, data interface{}) (Responder, error) {
 	r := &responderImpl{}
 
 	errs := []string{}
@@ -155,7 +155,11 @@ func (r *responderImpl) Status() int           { return r.status }
 func (r *responderImpl) Pages() *ResponsePages { return r.pages }
 
 func (r *responderImpl) AddData(d interface{}) error {
-	if r.data == nil {
+	if d == nil {
+		return errors.New("cannot add nil data to responder")
+	}
+
+	if r.data != nil {
 		return errors.New("cannot add new data to responder")
 	}
 
