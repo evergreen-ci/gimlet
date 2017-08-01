@@ -63,3 +63,20 @@ func (o OutputFormat) String() string {
 		return "text"
 	}
 }
+
+func (o OutputFormat) ContentType() string {
+	switch o {
+	case JSON:
+		return "application/json; charset=utf-8"
+	case TEXT:
+		return "plain/text; charset=utf-8"
+	case HTML:
+		return "application/html; charset=utf-8"
+	case BINARY:
+		return "application/octet-stream"
+	case YAML:
+		return "application/yaml; charset=utf-8"
+	default:
+		return "plain/text; charset=utf-8"
+	}
+}

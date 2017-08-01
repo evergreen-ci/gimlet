@@ -46,4 +46,8 @@ func TestOutputFormat(t *testing.T) {
 		assert.Equal(out, meth.String())
 		assert.False(meth.IsValid())
 	}
+
+	// content-type should default to text
+	assert.Equal(OutputFormat(100).ContentType(),
+		TEXT.ContentType())
 }

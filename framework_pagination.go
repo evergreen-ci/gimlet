@@ -108,18 +108,17 @@ func (p *Page) GetLink(route string) string {
 	url, err := url.Parse(fmt.Sprintf("%s/%s", p.BaseURL, route))
 	if err != nil {
 		grip.Alertf("encountered error '%v' building page, falling back to baseURL '%s'", err, p.BaseURL)
-	} else {
-		p.url = url
+		url = p.url
 	}
 
-	q := p.url.Query()
+	q := url.Query()
 	q.Set(p.KeyQueryParam, p.Key)
 
 	if p.Limit != 0 {
 		q.Set(p.LimitQueryParam, fmt.Sprintf("%d", p.Limit))
 	}
 
-	p.url.RawQuery = q.Encode()
+	url.RawQuery = q.Encode()
 
-	return fmt.Sprintf("<%s>; rel=\"%s\"", p.url, p.Relation)
+	return fmt.Sprintf("<%s>; rel=\"%s\"", url, p.Relation)
 }

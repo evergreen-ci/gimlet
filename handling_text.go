@@ -1,46 +1,14 @@
 package gimlet
 
 import (
-	"bytes"
-	"fmt"
 	"net/http"
-	"strings"
-
-	"github.com/mongodb/grip"
 )
-
-func convertToBytes(data interface{}) []byte {
-	switch data := data.(type) {
-	case []byte:
-		return data
-	case string:
-		return []byte(data)
-	case error:
-		return []byte(data.Error())
-	case []string:
-		return []byte(strings.Join(data, "\n"))
-	case fmt.Stringer:
-		return []byte(data.String())
-	case *bytes.Buffer:
-		return data.Bytes()
-	default:
-		return []byte(fmt.Sprintf("%v", data))
-	}
-}
 
 // WriteTextResponse writes data to the response body with the given
 // code as plain text after attempting to convert the data to a byte
 // array.
 func WriteTextResponse(w http.ResponseWriter, code int, data interface{}) {
-	out := convertToBytes(data)
-
-	w.Header().Set("Content-Type", "plain/text; charset=utf-8")
-	w.WriteHeader(code)
-	size, err := w.Write(out)
-	if err != nil {
-		grip.Warningf("encountered error %s writing a %d (of %d) response",
-			err.Error(), size, len(out))
-	}
+	writeResponse(TEXT, w, code, convertToBytes(data))
 }
 
 // WriteText writes the data, converted to text as possible, to the response body, with a successful
@@ -57,7 +25,7 @@ func WriteErrorText(w http.ResponseWriter, data interface{}) {
 	WriteTextResponse(w, http.StatusBadRequest, data)
 }
 
-// WriteErrorText write the data, converted to text as possible, to the response body with an
+// WriteInternalErrorText write the data, converted to text as possible, to the response body with an
 // internal server error (e.g. 500) response code.
 func WriteInternalErrorText(w http.ResponseWriter, data interface{}) {
 	// 500

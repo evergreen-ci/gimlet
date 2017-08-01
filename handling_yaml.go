@@ -1,8 +1,7 @@
 package gimlet
 
 import (
-	"io"
-	"io/ioutil"
+	"fmt"
 	"net/http"
 
 	"github.com/mongodb/grip"
@@ -13,19 +12,17 @@ import (
 // request, setting the return status of to 500 if the YAML
 // seralization process encounters an error, otherwise return
 func WriteYAMLResponse(w http.ResponseWriter, code int, data interface{}) {
-	out, err := yaml.Marshal(data)
-	if err != nil {
-		grip.CatchDebug(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	defer func() {
+		if msg := recover(); msg != nil {
+			m := fmt.Sprintf("problem yaml parsing message: %v", msg)
+			grip.Debug(m)
+			http.Error(w, m, http.StatusInternalServerError)
+		}
+	}()
 
-	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-	w.WriteHeader(code)
-	size, err := w.Write(out)
-	if err != nil {
-		grip.Warningf("encountered error %s writing a %d response", err.Error(), size)
-	}
+	// ignoring the error because the yaml library always panics
+	out, _ := yaml.Marshal(data)
+	writeResponse(YAML, w, code, out)
 }
 
 // WriteYAML is a helper method to write YAML data to the body of an
@@ -47,20 +44,4 @@ func WriteErrorYAML(w http.ResponseWriter, data interface{}) {
 func WriteInternalErrorYAML(w http.ResponseWriter, data interface{}) {
 	// 500
 	WriteYAMLResponse(w, http.StatusInternalServerError, data)
-}
-
-// GetYAML parses YAML from a io.ReadCloser (e.g. http/*Request.Body
-// or http/*Response.Body) into an object specified by the
-// request. Used in handler functiosn to retreve and parse data
-// submitted by the client.
-func GetYAML(r io.ReadCloser, data interface{}) error {
-	defer r.Close()
-
-	// TODO: limited reader
-	bytes, err := ioutil.ReadAll(r)
-	if err != nil {
-		return err
-	}
-
-	return yaml.Unmarshal(bytes, data)
 }

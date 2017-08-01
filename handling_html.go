@@ -2,21 +2,12 @@ package gimlet
 
 import (
 	"net/http"
-
-	"github.com/mongodb/grip"
 )
 
 // WriteHTMLResponse writes an HTML response with the specified error code.
 func WriteHTMLResponse(w http.ResponseWriter, code int, data interface{}) {
 	out := convertToBytes(data)
-
-	w.Header().Set("Content-Type", "plain/text; charset=utf-8")
-	w.WriteHeader(code)
-	size, err := w.Write(out)
-	if err != nil {
-		grip.Warningf("encountered error %s writing a %d (of %d) response",
-			err.Error(), size, len(out))
-	}
+	writeResponse(HTML, w, code, out)
 }
 
 // WriteHTML writes the data, converted to text as possible, to the

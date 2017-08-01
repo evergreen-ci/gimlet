@@ -76,7 +76,7 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 		case HTML:
 			WriteHTMLResponse(w, resp.Status(), resp.Data())
 		case BINARY:
-			WriteBinaryRespones(w, resp.Status(), resp.Data())
+			WriteBinaryResponse(w, resp.Status(), resp.Data())
 		}
 	}
 }
