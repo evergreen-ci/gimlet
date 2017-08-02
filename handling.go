@@ -35,10 +35,10 @@ func convertToBin(data interface{}) []byte {
 			out = append(out, []byte(s)...)
 		}
 		return out
-	case fmt.Stringer:
-		return []byte(data.String())
 	case *bytes.Buffer:
 		return data.Bytes()
+	case fmt.Stringer:
+		return []byte(data.String())
 	default:
 		return []byte(fmt.Sprintf("%v", data))
 	}
@@ -54,10 +54,10 @@ func convertToBytes(data interface{}) []byte {
 		return []byte(data.Error())
 	case []string:
 		return []byte(strings.Join(data, "\n"))
-	case fmt.Stringer:
-		return []byte(data.String())
 	case *bytes.Buffer:
 		return data.Bytes()
+	case fmt.Stringer:
+		return []byte(data.String())
 	default:
 		return []byte(fmt.Sprintf("%v", data))
 	}

@@ -1,7 +1,9 @@
 package gimlet
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -97,4 +99,33 @@ func TestResponsesWritingHelpers(t *testing.T) {
 			assert.True(len(body) < 4)
 		}
 	}
+}
+
+func TestBytesConverter(t *testing.T) {
+	assert := assert.New(t)
+
+	cases := [][]interface{}{
+		{fmt.Sprintf("%v", t), t},
+		{"gimlet", "gimlet"},
+		{"gimlet", errors.New("gimlet")},
+		{"gimlet", []byte("gimlet")},
+		{"GET", get},
+		{"gimlet", bytes.NewBufferString("gimlet")},
+	}
+
+	for _, c := range cases {
+		if !assert.Len(c, 2) {
+			continue
+		}
+
+		out := c[0].(string)
+		in := c[1]
+
+		assert.Equal([]byte(out), convertToBytes(in))
+		assert.Equal([]byte(out), convertToBin(in))
+	}
+
+	assert.Equal([]byte("gimletgimlet"), convertToBin([]string{"gimlet", "gimlet"}))
+	assert.Equal([]byte("gimlet\ngimlet"), convertToBytes([]string{"gimlet", "gimlet"}))
+
 }
