@@ -1,10 +1,11 @@
 package gimlet
 
 import (
-	"context"
+	"errors"
 	"net/http"
 
 	"github.com/mongodb/grip"
+	"golang.org/x/net/context"
 )
 
 // RouteHandler provides an alternate method for defining routes with
@@ -15,6 +16,8 @@ type RouteHandler interface {
 	// rather than attaching data to the context. The factory
 	// allows gimlet to, internally, reconstruct a handler interface
 	// for every request.
+	//
+	// Factory is always called at the beginning of the request.
 	Factory() RouteHandler
 
 	// Parse makes it possible to modify the request context and
@@ -51,8 +54,7 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 
 		resp := handler.Run(ctx)
 		if resp == nil {
-			grip.Error(err)
-			WriteTextResponse(w, http.StatusInternalServerError, err)
+			WriteTextResponse(w, http.StatusInternalServerError, errors.New("undefined response"))
 			return
 		}
 

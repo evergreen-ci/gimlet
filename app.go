@@ -13,8 +13,6 @@ package gimlet
 import (
 	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +27,7 @@ import (
 type APIApp struct {
 	StrictSlash    bool
 	isResolved     bool
+	prefix         string
 	defaultVersion int
 	port           int
 	router         *mux.Router
@@ -68,7 +67,7 @@ func (a *APIApp) SetDefaultVersion(version int) {
 	}
 }
 
-// Router is the getter for an APIApp's router object. If the
+// Router is the getter for an APIApp's router object. If thetr
 // application isn't resolved, then the error return value is non-nil.
 func (a *APIApp) Router() (*mux.Router, error) {
 	if a.isResolved {
@@ -118,12 +117,13 @@ func (a *APIApp) Resolve() error {
 		}
 
 		if route.version > 0 {
-			versionedRoute := fmt.Sprintf("/v%d%s", route.version, route.route)
+			versionedRoute := getVersionedRoute(a.prefix, route.version, route.route)
 			a.router.HandleFunc(versionedRoute, route.handler).Methods(methods...)
 			grip.Debugln("added route for:", versionedRoute)
 		}
 
 		if route.version == a.defaultVersion {
+			route.route = getDefaultRoute(a.prefix, route.route)
 			a.router.HandleFunc(route.route, route.handler).Methods(methods...)
 			grip.Debugln("added route for:", route.route)
 		}
@@ -134,6 +134,24 @@ func (a *APIApp) Resolve() error {
 	return catcher.Resolve()
 }
 
+func getVersionedRoute(prefix string, version int, route string) string {
+	if strings.HasPrefix(route, prefix) {
+		if prefix == "" {
+			return fmt.Sprintf("/v%d%s", version, route)
+		}
+		route = route[len(prefix):]
+	}
+
+	return fmt.Sprintf("%s/v%d%s", prefix, version, route)
+}
+
+func getDefaultRoute(prefix, route string) string {
+	if strings.HasPrefix(route, prefix) {
+		return route
+	}
+	return prefix + route
+}
+
 // ResetMiddleware removes *all* middleware handlers from the current
 // application.
 func (a *APIApp) ResetMiddleware() {
@@ -142,39 +160,49 @@ func (a *APIApp) ResetMiddleware() {
 
 // getHander internal helper resolves the negorni middleware for the
 // application and returns it in the form of a http.Handler for use in
-// stitching together applications
-func (a *APIApp) getHandler() http.Handler {
-	n := negroni.New()
-	for _, m := range a.middleware {
-		n.Use(m)
+// stitching together applicationstr
+func (a *APIApp) getNegroni() (*negroni.Negroni, error) {
+	if err := a.Resolve(); err != nil {
+		return nil, err
 	}
 
+	catcher := grip.NewCatcher()
+	n := negroni.New(a.middleware...)
 	n.UseHandler(a.router)
+	for _, app := range a.subApps {
+		if !strings.HasPrefix(app.prefix, a.prefix) {
+			app.prefix = a.prefix + app.prefix
+		}
+		catcher.Add(app.Resolve())
 
-	return n
+		subNegroni, err := app.getNegroni()
+		if err != nil {
+			catcher.Add(err)
+		}
+
+		n.UseHandler(subNegroni)
+	}
+
+	if catcher.HasErrors() {
+		return nil, catcher.Resolve()
+	}
+
+	return n, nil
 }
 
 // Run configured API service on the configured port. Before running
 // the application, Run also resolves any sub-apps, and adds all
 // routes.
 func (a *APIApp) Run() error {
-	catcher := grip.NewCatcher()
-	if !a.isResolved {
-		catcher.Add(a.Resolve())
+	n, err := a.getNegroni()
+	if err != nil {
+		return err
 	}
 
-	n := negroni.New()
-	n.UseHandler(a.getHandler())
-	for _, app := range a.subApps {
-		catcher.Add(app.Resolve())
-		n.UseHandler(app.getHandler())
-	}
+	grip.Noticef("starting app on: %s:$d", a.address, a.port)
+	graceful.Run(fmt.Sprintf("%s:%d", a.address, a.port), 10*time.Second, n)
 
-	listenOn := strings.Join([]string{a.address, strconv.Itoa(a.port)}, ":")
-	grip.Noticeln("starting app on:", listenOn)
-
-	graceful.Run(listenOn, 10*time.Second, n)
-	return catcher.Resolve()
+	return nil
 }
 
 // SetPort allows users to configure a default port for the API
@@ -214,4 +242,14 @@ func (a *APIApp) SetHost(name string) error {
 	a.address = name
 
 	return nil
+}
+
+// SetPrefix sets the route prefix, adding a leading slash, "/", if
+// neccessary.
+func (a *APIApp) SetPrefix(p string) {
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+
+	a.prefix = p
 }

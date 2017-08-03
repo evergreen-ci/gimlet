@@ -42,7 +42,6 @@ func GetJSON(r io.ReadCloser, data interface{}) error {
 func GetYAML(r io.ReadCloser, data interface{}) error {
 	defer r.Close()
 
-	// TODO: limited reader
 	bytes, err := ioutil.ReadAll(&io.LimitedReader{R: r, N: maxRequestSize})
 	if err != nil {
 		return err

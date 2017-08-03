@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/send"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -127,5 +129,20 @@ func TestBytesConverter(t *testing.T) {
 
 	assert.Equal([]byte("gimletgimlet"), convertToBin([]string{"gimlet", "gimlet"}))
 	assert.Equal([]byte("gimlet\ngimlet"), convertToBytes([]string{"gimlet", "gimlet"}))
+}
 
+type mangledResponseWriter struct{ *httptest.ResponseRecorder }
+
+func (r mangledResponseWriter) Write(b []byte) (int, error) { return 0, errors.New("always errors") }
+
+func TestWriteResponseErrorLogs(t *testing.T) {
+	defer grip.SetSender(grip.GetSender())
+	assert := assert.New(t)
+	sender := send.MakeInternalLogger()
+	rw := mangledResponseWriter{httptest.NewRecorder()}
+	assert.NoError(grip.SetSender(sender))
+
+	assert.False(sender.HasMessage())
+	writeResponse(JSON, rw, 200, []byte("foo"))
+	assert.True(sender.HasMessage())
 }
