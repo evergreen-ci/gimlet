@@ -1,11 +1,11 @@
 package gimlet
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/mongodb/grip"
-	"golang.org/x/net/context"
 )
 
 // RouteHandler provides an alternate method for defining routes with
