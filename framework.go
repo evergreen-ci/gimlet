@@ -41,8 +41,7 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 		var err error
 
 		handler := h.Factory()
-		r, ctx := getRequestContext(r)
-		ctx, cancel := context.WithCancel(ctx)
+		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
 		ctx, err = handler.Parse(ctx, r)
