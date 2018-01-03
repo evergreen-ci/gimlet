@@ -6,5 +6,4 @@ import:
   subpackages:
   - gzip
 - package: github.com/mongodb/grip
-- package: github.com/tylerb/graceful
 - package: github.com/stretchr/testify
