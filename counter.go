@@ -1,5 +1,10 @@
 package gimlet
 
+import (
+	"context"
+	"net/http"
+)
+
 var jobIDSource <-chan int
 
 func init() {
@@ -20,4 +25,19 @@ func init() {
 // for use in request ids.
 func getNumber() int {
 	return <-jobIDSource
+}
+
+func setRequestID(r *http.Request, id int) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), requestIDKey, id))
+}
+
+// GetRequestID returns the unique (monotonically increaseing) ID of
+func GetRequestID(r *http.Request) int {
+	if rv := r.Context().Value(requestIDKey); rv != nil {
+		if id, ok := rv.(int); ok {
+			return id
+		}
+	}
+
+	return 0
 }

@@ -13,6 +13,9 @@ type contextKey int
 const (
 	authHandlerKey contextKey = iota
 	userManagerKey
+	requestIDKey
+	loggerKey
+	startAtKey
 )
 
 func GetAuthenticator(ctx context.Context) auth.Authenticator {
@@ -105,7 +108,6 @@ func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, nex
 		return
 	}
 
-	// TODO get user from request here!
 	user, err := authenticator.GetUserFromRequest(userMgr, r)
 	if err != nil {
 		writeResponse(TEXT, rw, http.StatusUnauthorized, []byte(err.Error()))
@@ -115,6 +117,11 @@ func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, nex
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+
+	// grip.Info(message.Fields{
+	// 	"route":
+
+	// )
 
 	// log?
 
