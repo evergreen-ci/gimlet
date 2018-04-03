@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/message"
 	"github.com/tychoish/gimlet/auth"
 	"github.com/urfave/negroni"
 )
@@ -87,6 +89,7 @@ func (a *authHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next ht
 	next(rw, r)
 }
 
+// NewAccessRequirement provides middlesware that requires a specific role to access a resource.
 func NewAccessRequirement(role string) negroni.Handler { return &requiredAccess{role: role} }
 
 type requiredAccess struct {
@@ -118,16 +121,21 @@ func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, nex
 		return
 	}
 
-	// grip.Info(message.Fields{
-	// 	"route":
-
-	// )
-
-	// log?
+	grip.Info(message.Fields{
+		"path":           r.URL.Path,
+		"remote":         r.RemoteAddr,
+		"request":        GetRequestID(ctx),
+		"user":           user.Username(),
+		"user_roles":     user.Roles(),
+		"required_roles": ra.role,
+	})
 
 	next(rw, r)
 }
 
+// NewRequireAuth provides middlesware that requires that users be
+// authenticated generally to access the resource, but does no
+// validation of their access.
 func NewRequireAuthHandler() negroni.Handler { return &requireAuthHandler{} }
 
 type requireAuthHandler struct{}
@@ -156,6 +164,15 @@ func (_ *requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, 
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+
+	grip.Info(message.Fields{
+		"path":           r.URL.Path,
+		"remote":         r.RemoteAddr,
+		"request":        GetRequestID(ctx),
+		"user":           user.Username(),
+		"user_roles":     user.Roles(),
+		"required_roles": ra.role,
+	})
 
 	next(rw, r)
 }
