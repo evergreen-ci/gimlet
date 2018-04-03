@@ -32,12 +32,12 @@ func setRequestID(r *http.Request, id int) *http.Request {
 }
 
 // GetRequestID returns the unique (monotonically increaseing) ID of
-func GetRequestID(r *http.Request) int {
-	if rv := r.Context().Value(requestIDKey); rv != nil {
+func GetRequestID(ctx context.Context) int {
+	if rv := ctx.Value(requestIDKey); rv != nil {
 		if id, ok := rv.(int); ok {
 			return id
 		}
 	}
 
-	return 0
+	return -1
 }

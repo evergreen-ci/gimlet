@@ -39,8 +39,8 @@ func setStartAtTime(r *http.Request, startAt time.Time) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), startAtKey, startAt))
 }
 
-func getRequestStartAt(r *http.Request) time.Time {
-	if rv := r.Context().Value(startAtKey); rv != nil {
+func getRequestStartAt(ctx context.Context) time.Time {
+	if rv := ctx.Value(startAtKey); rv != nil {
 		if t, ok := rv.(time.Time); ok {
 			return t
 		}
@@ -49,8 +49,8 @@ func getRequestStartAt(r *http.Request) time.Time {
 	return time.Time{}
 }
 
-func GetLogger(r *http.Request) grip.Journaler {
-	if rv := r.Context().Value(loggerKey); rv != nil {
+func GetLogger(ctx context.Context) grip.Journaler {
+	if rv := ctx.Value(loggerKey); rv != nil {
 		if l, ok := rv.(grip.Journaler); ok {
 			return l
 		}
@@ -77,9 +77,9 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 	}
 
 	id := getNumber()
-	setRequestID(r, id)
+	r = setRequestID(r, id)
 	startAt := time.Now()
-	setStartAtTime(r, startAt)
+	r = setStartAtTime(r, startAt)
 
 	logger.Info(message.Fields{
 		"action":  "started",
@@ -93,13 +93,14 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 }
 
 func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWriter) {
-	startAt := getRequestStartAt(r)
+	ctx := r.Context()
+	startAt := getRequestStartAt(ctx)
 	dur := time.Since(startAt)
 
 	logger.Info(message.Fields{
 		"method":      r.Method,
 		"remote":      r.RemoteAddr,
-		"request":     GetRequestID(r),
+		"request":     GetRequestID(ctx),
 		"path":        r.URL.Path,
 		"duration_ms": int64(dur / time.Millisecond),
 		"action":      "completed",
@@ -117,6 +118,7 @@ func NewRecoveryLogger() negroni.Handler { return &appRecoveryLogger{} }
 
 func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	r = setupLogger(l.Journaler, r)
+	ctx := r.Context()
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -129,7 +131,7 @@ func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, n
 			l.Critical(message.WrapStack(2, message.Fields{
 				"panic":   err,
 				"action":  "aborted",
-				"request": GetRequestID(r),
+				"request": GetRequestID(ctx),
 				"path":    r.URL.Path,
 				"remote":  r.RemoteAddr,
 			}))
