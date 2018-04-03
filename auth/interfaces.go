@@ -27,6 +27,8 @@ type Provider interface {
 	UserManager() UserManager
 }
 
+// Authenticator represents a service that answers specific
+// authentication related questions, and is the public interface used for authentication workflows.
 type Authenticator interface {
 	CheckResourceAccess(User, string) bool
 	CheckGroupAccess(User, string) bool
@@ -38,7 +40,8 @@ type Authenticator interface {
 // authentication mechanisms, and provides the data that is sent by
 // the api and ui server after authenticating
 //
-// Note: this is the UserManager interface from Evergreen.
+// Note: this is the UserManager interface from Evergreen, without
+// modification.
 type UserManager interface {
 	GetUserByToken(token string) (User, error)
 	CreateUserToken(username, password string) (string, error)
