@@ -166,12 +166,11 @@ func (_ *requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, 
 	}
 
 	grip.Info(message.Fields{
-		"path":           r.URL.Path,
-		"remote":         r.RemoteAddr,
-		"request":        GetRequestID(ctx),
-		"user":           user.Username(),
-		"user_roles":     user.Roles(),
-		"required_roles": ra.role,
+		"path":       r.URL.Path,
+		"remote":     r.RemoteAddr,
+		"request":    GetRequestID(ctx),
+		"user":       user.Username(),
+		"user_roles": user.Roles(),
 	})
 
 	next(rw, r)
