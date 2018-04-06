@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/evergreen-ci/gimlet/auth"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
-	"github.com/tychoish/gimlet/auth"
 	"github.com/urfave/negroni"
 )
 
