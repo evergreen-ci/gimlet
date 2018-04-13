@@ -47,10 +47,10 @@ type UserManager interface {
 	CreateUserToken(username, password string) (string, error)
 	// GetLoginHandler returns the function that starts the login process for auth mechanisms
 	// that redirect to a thirdparty site for authentication
-	GetLoginHandler(url string) func(http.ResponseWriter, *http.Request)
+	GetLoginHandler(url string) http.HandlerFunc
 	// GetLoginRedirectHandler returns the function that does login for the
 	// user once it has been redirected from a thirdparty site.
-	GetLoginCallbackHandler() func(http.ResponseWriter, *http.Request)
+	GetLoginCallbackHandler() http.HandlerFunc
 	// IsRedirect returns true if the user must be redirected to a thirdparty site to authenticate
 	IsRedirect() bool
 }

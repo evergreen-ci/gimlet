@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/evergreen-ci/gimlet/auth"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,16 +12,12 @@ func TestMiddlewareValueAccessors(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	auth, ok := safeGetAuthenticator(ctx)
+	a, ok := auth.GetAuthenticator(ctx)
 	assert.False(ok)
-	assert.Nil(auth)
-	assert.Panics(func() { auth = GetAuthenticator(ctx) })
-	assert.Nil(auth)
+	assert.Nil(a)
 
-	userm, ok := safeGetUserManager(ctx)
+	userm, ok := auth.GetUserManager(ctx)
 	assert.False(ok)
-	assert.Nil(userm)
-	assert.Panics(func() { userm = GetUserManager(ctx) })
 	assert.Nil(userm)
 
 	var idone, idtwo int

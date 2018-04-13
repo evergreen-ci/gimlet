@@ -4,21 +4,26 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
+
+	"github.com/evergreen-ci/gimlet/auth"
 )
 
 type User struct {
+	ID           string
 	Name         string
 	EmailAddress string
 	ReportNil    bool
 	APIKey       string
-	Roles        []string
+	RoleNames    []string
 }
 
 func (u *User) DisplayName() string { return u.Name }
 func (u *User) Email() string       { return u.EmailAddress }
+func (u *User) Username() string    { return u.ID }
 func (u *User) IsNil() bool         { return u.ReportNil }
 func (u *User) GetAPIKey() string   { return u.APIKey }
-func (u *User) Roles() []string     { return u.Roles }
+func (u *User) Roles() []string     { return u.RoleNames }
 
 type Provider struct {
 	ReloadShouldFail  bool
@@ -53,7 +58,7 @@ func (p *Provider) Close() error {
 	return nil
 }
 
-func (p *Provider) Authenticator() gimlet.Authenticator {
+func (p *Provider) Authenticator() auth.Authenticator {
 	if p.MockAuthenticator == nil {
 		p.MockAuthenticator = &Authenticator{
 			ResourceUserMapping:     make(map[string]string),
@@ -66,30 +71,67 @@ func (p *Provider) Authenticator() gimlet.Authenticator {
 	return p.MockAuthenticator
 }
 
-func (p *Provider) UserManager() gimlet.UserManager {
+func (p *Provider) UserManager() auth.UserManager {
 	if p.MockUserManager == nil {
 		p.MockUserManager = &UserManager{}
 	}
 
-	return p.UserManager
+	return p.MockUserManager
 }
 
 type Authenticator struct {
 	ResourceUserMapping     map[string]string
 	GroupUserMapping        map[string]string
 	CheckAuthenticatedState map[string]bool
+	UserToken               string
 }
 
-func (a *Authenticator) CheckResourceAccess(u gimlet.User, resource string) bool {}
-func (a *Authenticator) CheckGroupAccess(u gimlet.User, group string) bool       {}
-func (a *Authenticator) CheckAuthenticated(u gimlet.User) bool                   {}
-func (a *Authenticator) GetUserFromRequest(um gimlet.UserManager, r *http.Request) (gimlet.User, error) {
+func (a *Authenticator) CheckResourceAccess(u auth.User, resource string) bool {
+	r, ok := a.ResourceUserMapping[u.DisplayName()]
+	if !ok {
+		return false
+	}
+
+	return r == resource
 }
 
-type UserManager struct{}
+func (a *Authenticator) CheckGroupAccess(u auth.User, group string) bool {
+	g, ok := a.GroupUserMapping[u.DisplayName()]
+	if !ok {
+		return false
+	}
 
-func (m *UserManager) GetUserByToken(token string) (gimlet.User, error)          {}
-func (m *UserManager) CreateUserToken(username, password string) (string, error) {}
-func (m *UserManager) GetLoginHandler(url string) http.HandlerFunc               {}
-func (m *UserManager) GetLoginCallbackHandler() http.HandlerFunc                 {}
-func (m *UserManager) IsRedirect() bool                                          {}
+	return g == group
+}
+func (a *Authenticator) CheckAuthenticated(u auth.User) bool {
+	return a.CheckAuthenticatedState[u.DisplayName()]
+}
+
+func (a *Authenticator) GetUserFromRequest(um auth.UserManager, r *http.Request) (auth.User, error) {
+	return um.GetUserByToken(a.UserToken)
+}
+
+type UserManager struct {
+	TokenToUsers map[string]auth.User
+}
+
+func (m *UserManager) GetUserByToken(token string) (auth.User, error) {
+	if m.TokenToUsers == nil {
+		return nil, errors.New("no users configured")
+	}
+
+	u, ok := m.TokenToUsers[token]
+	if !ok {
+		return nil, errors.New("user does not exist")
+	}
+
+	return u, nil
+}
+
+func (m *UserManager) CreateUserToken(username, password string) (string, error) {
+	return strings.Join([]string{username, password}, "."), nil
+}
+
+func (m *UserManager) GetLoginHandler(url string) http.HandlerFunc { return nil }
+func (m *UserManager) GetLoginCallbackHandler() http.HandlerFunc   { return nil }
+func (m *UserManager) IsRedirect() bool                            { return false }

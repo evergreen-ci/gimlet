@@ -1,7 +1,7 @@
 # start project configuration
 name := gimlet
 buildDir := build
-packages := $(name)
+packages := $(name) mock auth
 orgPath := github.com/evergreen-ci
 projectPath := $(orgPath)/$(name)
 # end project configuration
