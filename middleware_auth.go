@@ -82,7 +82,7 @@ func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, nex
 		"required_roles": ra.role,
 	})
 
-	next(rw, r)
+	next(rw, r)working
 }
 
 // NewRequireAuth provides middlesware that requires that users be
@@ -110,6 +110,7 @@ func (_ *requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, 
 	user, err := authenticator.GetUserFromRequest(userMgr, r)
 	if err != nil {
 		writeResponse(TEXT, rw, http.StatusUnauthorized, []byte(err.Error()))
+		return
 	}
 
 	if !authenticator.CheckAuthenticated(user) {
