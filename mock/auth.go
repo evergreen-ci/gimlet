@@ -87,7 +87,7 @@ type Authenticator struct {
 }
 
 func (a *Authenticator) CheckResourceAccess(u auth.User, resource string) bool {
-	r, ok := a.ResourceUserMapping[u.DisplayName()]
+	r, ok := a.ResourceUserMapping[u.Username()]
 	if !ok {
 		return false
 	}
@@ -96,7 +96,7 @@ func (a *Authenticator) CheckResourceAccess(u auth.User, resource string) bool {
 }
 
 func (a *Authenticator) CheckGroupAccess(u auth.User, group string) bool {
-	g, ok := a.GroupUserMapping[u.DisplayName()]
+	g, ok := a.GroupUserMapping[u.Username()]
 	if !ok {
 		return false
 	}
@@ -104,7 +104,7 @@ func (a *Authenticator) CheckGroupAccess(u auth.User, group string) bool {
 	return g == group
 }
 func (a *Authenticator) CheckAuthenticated(u auth.User) bool {
-	return a.CheckAuthenticatedState[u.DisplayName()]
+	return a.CheckAuthenticatedState[u.Username()]
 }
 
 func (a *Authenticator) GetUserFromRequest(um auth.UserManager, r *http.Request) (auth.User, error) {
