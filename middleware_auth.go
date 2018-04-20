@@ -82,7 +82,7 @@ func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, nex
 		"required_roles": ra.role,
 	})
 
-	next(rw, r)working
+	next(rw, r)
 }
 
 // NewRequireAuth provides middlesware that requires that users be
