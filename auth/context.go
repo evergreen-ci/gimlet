@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 )
 
 type contextKey string
@@ -21,16 +20,13 @@ func SetUserManager(ctx context.Context, um UserManager) context.Context {
 }
 
 func GetAuthenticator(ctx context.Context) (Authenticator, bool) {
-	fmt.Printf("zero %+v\n", ctx)
 	a := ctx.Value(authHandlerKey)
 	if a == nil {
-		fmt.Println("one")
 		return nil, false
 	}
 
 	amgr, ok := a.(Authenticator)
 	if !ok {
-		fmt.Println("two")
 		return nil, false
 	}
 

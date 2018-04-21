@@ -3,7 +3,6 @@ package gimlet
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,11 +59,10 @@ func TestAuthRequiredBehavior(t *testing.T) {
 
 	counter := 0
 	next := func(rw http.ResponseWriter, r *http.Request) {
-
 		counter++
 		rw.WriteHeader(http.StatusOK)
-		fmt.Println(rw)
 	}
+
 	authenticator := &mock.Authenticator{
 		UserToken:               "test",
 		CheckAuthenticatedState: map[string]bool{},
@@ -149,4 +147,54 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	assert.Equal(http.StatusOK, rw.Code)
 	assert.Equal(1, counter)
 
+}
+
+func TestAuthAttachWrapper(t *testing.T) {
+	assert := assert.New(t) // nolint
+	buf := []byte{}
+	body := bytes.NewBuffer(buf)
+
+	req := httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw := httptest.NewRecorder()
+	counter := 0
+	authenticator := &mock.Authenticator{
+		UserToken:               "test",
+		CheckAuthenticatedState: map[string]bool{},
+	}
+	usermanager := &mock.UserManager{
+		TokenToUsers: map[string]auth.User{},
+	}
+
+	provider := &mock.Provider{
+		MockAuthenticator: authenticator,
+		MockUserManager:   usermanager,
+	}
+
+	ah := NewAuthenticationHandler(provider)
+	assert.NotNil(ah)
+	assert.Equal(ah.(*authHandler).provider, provider)
+
+	baseCtx := context.Background()
+	req = req.WithContext(baseCtx)
+
+	assert.Exactly(req.Context(), baseCtx)
+
+	ah.ServeHTTP(rw, req, func(nrw http.ResponseWriter, r *http.Request) {
+		rctx := r.Context()
+		assert.NotEqual(rctx, baseCtx)
+
+		um, ok := auth.GetUserManager(rctx)
+		assert.True(ok)
+		assert.Equal(usermanager, um)
+
+		ath, ok := auth.GetAuthenticator(rctx)
+		assert.True(ok)
+		assert.Equal(authenticator, ath)
+
+		counter++
+		nrw.WriteHeader(http.StatusTeapot)
+	})
+
+	assert.Equal(1, counter)
+	assert.Equal(http.StatusTeapot, rw.Code)
 }
