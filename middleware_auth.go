@@ -41,14 +41,16 @@ func (a *authHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next ht
 	next(rw, r)
 }
 
-// NewAccessRequirement provides middlesware that requires a specific role to access a resource.
-func NewAccessRequirement(role string) negroni.Handler { return &requiredAccess{role: role} }
+// NewRoleRequired provides middlesware that requires a specific role
+// to access a resource. This access is defined as a property of the
+// user objects.
+func NewRoleRequired(role string) negroni.Handler { return &requiredRole{role: role} }
 
-type requiredAccess struct {
+type requiredRole struct {
 	role string
 }
 
-func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+func (rr *requiredRole) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
 
 	authenticator, ok := auth.GetAuthenticator(ctx)
@@ -66,9 +68,57 @@ func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, nex
 	user, err := authenticator.GetUserFromRequest(userMgr, r)
 	if err != nil {
 		writeResponse(TEXT, rw, http.StatusUnauthorized, []byte(err.Error()))
+		return
 	}
 
-	if !authenticator.CheckGroupAccess(user, ra.role) {
+	if !auth.UserHasRole(user, rr.role) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	grip.Info(message.Fields{
+		"path":          r.URL.Path,
+		"remote":        r.RemoteAddr,
+		"request":       GetRequestID(ctx),
+		"user":          user.Username(),
+		"user_roles":    user.Roles(),
+		"required_role": rr.role,
+	})
+
+	next(rw, r)
+}
+
+// NewGroupMembershipRequired provides middleware that requires that
+// users belong to a group to gain access to a resource. This is
+// access is defined as a property of the authentication system.
+func NewGroupMembershipRequired(name string) negroni.Handler { return &requiredGroup{group: name} }
+
+type requiredGroup struct {
+	group string
+}
+
+func (rg *requiredGroup) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	ctx := r.Context()
+
+	authenticator, ok := auth.GetAuthenticator(ctx)
+	if !ok {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	userMgr, ok := auth.GetUserManager(ctx)
+	if !ok {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	user, err := authenticator.GetUserFromRequest(userMgr, r)
+	if err != nil {
+		writeResponse(TEXT, rw, http.StatusUnauthorized, []byte(err.Error()))
+		return
+	}
+
+	if !authenticator.CheckGroupAccess(user, rg.group) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -79,7 +129,7 @@ func (ra *requiredAccess) ServeHTTP(rw http.ResponseWriter, r *http.Request, nex
 		"request":        GetRequestID(ctx),
 		"user":           user.Username(),
 		"user_roles":     user.Roles(),
-		"required_roles": ra.role,
+		"required_group": rg.group,
 	})
 
 	next(rw, r)

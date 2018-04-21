@@ -108,7 +108,14 @@ func (a *Authenticator) CheckAuthenticated(u auth.User) bool {
 }
 
 func (a *Authenticator) GetUserFromRequest(um auth.UserManager, r *http.Request) (auth.User, error) {
-	return um.GetUserByToken(a.UserToken)
+	u, err := um.GetUserByToken(a.UserToken)
+	if err != nil {
+		return nil, err
+	}
+	if u == nil {
+		return nil, errors.New("user not defined")
+	}
+	return u, nil
 }
 
 type UserManager struct {

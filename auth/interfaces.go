@@ -54,3 +54,14 @@ type UserManager interface {
 	// IsRedirect returns true if the user must be redirected to a thirdparty site to authenticate
 	IsRedirect() bool
 }
+
+// UserHasRole determines if the user has the defined role.
+func UserHasRole(u User, role string) bool {
+	for _, r := range u.Roles() {
+		if r == role {
+			return true
+		}
+	}
+
+	return false
+}

@@ -42,10 +42,15 @@ func TestAuthMiddlewareConstructors(t *testing.T) {
 	assert.NotNil(ah)
 	assert.Equal(provider, ah.provider)
 
-	ra, ok := NewAccessRequirement("foo").(*requiredAccess)
+	ra, ok := NewRoleRequired("foo").(*requiredRole)
 	assert.True(ok)
 	assert.NotNil(ra)
 	assert.Equal("foo", ra.role)
+
+	rg, ok := NewGroupMembershipRequired("foo").(*requiredGroup)
+	assert.True(ok)
+	assert.NotNil(rg)
+	assert.Equal("foo", rg.group)
 
 	rah, ok := NewRequireAuthHandler().(*requireAuthHandler)
 	assert.True(ok)
@@ -146,7 +151,6 @@ func TestAuthRequiredBehavior(t *testing.T) {
 
 	assert.Equal(http.StatusOK, rw.Code)
 	assert.Equal(1, counter)
-
 }
 
 func TestAuthAttachWrapper(t *testing.T) {
@@ -197,4 +201,203 @@ func TestAuthAttachWrapper(t *testing.T) {
 
 	assert.Equal(1, counter)
 	assert.Equal(http.StatusTeapot, rw.Code)
+}
+
+func TestRoleRestrictedAccessMiddleware(t *testing.T) {
+	assert := assert.New(t) // nolint
+	buf := []byte{}
+	body := bytes.NewBuffer(buf)
+
+	counter := 0
+	next := func(rw http.ResponseWriter, r *http.Request) {
+		counter++
+		rw.WriteHeader(http.StatusOK)
+	}
+
+	authenticator := &mock.Authenticator{
+		UserToken:               "test",
+		CheckAuthenticatedState: map[string]bool{},
+		GroupUserMapping:        map[string]string{},
+	}
+	user := &mock.User{
+		ID:        "test-user",
+		RoleNames: []string{"staff"},
+	}
+	usermanager := &mock.UserManager{
+		TokenToUsers: map[string]auth.User{},
+	}
+
+	ra := NewRoleRequired("sudo")
+
+	// start without any context setup
+	//
+	req := httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw := httptest.NewRecorder()
+	ra.ServeHTTP(rw, req, next)
+
+	// there's nothing attached to the context, so it's a 401
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try again with an authenticator...
+	//
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	rw = httptest.NewRecorder()
+	ctx := req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+
+	// just the authenticator isn't enough
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try with a user manager
+	//
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	ctx = auth.SetUserManager(ctx, usermanager)
+	req = req.WithContext(ctx)
+	ra.ServeHTTP(rw, req, next)
+
+	// just the authenticator isn't users aren't enough
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// now set up the user (which is defined with the wrong role, so won't work)
+	//
+	usermanager.TokenToUsers[authenticator.UserToken] = user
+
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	ctx = auth.SetUserManager(ctx, usermanager)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+
+	// shouldn't work because the authenticator doesn't have the user registered
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// make the user have the right access
+	//
+	user.RoleNames = []string{"sudo"}
+
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	ctx = auth.SetUserManager(ctx, usermanager)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+
+	assert.Equal(http.StatusOK, rw.Code)
+	assert.Equal(1, counter)
+}
+
+func TestGroupAccessRequired(t *testing.T) {
+	assert := assert.New(t) // nolint
+	buf := []byte{}
+	body := bytes.NewBuffer(buf)
+
+	counter := 0
+	next := func(rw http.ResponseWriter, r *http.Request) {
+		counter++
+		rw.WriteHeader(http.StatusOK)
+	}
+
+	authenticator := &mock.Authenticator{
+		UserToken:               "test",
+		CheckAuthenticatedState: map[string]bool{},
+		GroupUserMapping: map[string]string{
+			"test-user": "staff",
+		},
+	}
+	user := &mock.User{
+		ID: "test-user",
+	}
+	usermanager := &mock.UserManager{
+		TokenToUsers: map[string]auth.User{},
+	}
+
+	ra := NewGroupMembershipRequired("sudo")
+
+	// start without any context setup
+	//
+	req := httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw := httptest.NewRecorder()
+	ra.ServeHTTP(rw, req, next)
+
+	// there's nothing attached to the context, so it's a 401
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try again with an authenticator...
+	//
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	rw = httptest.NewRecorder()
+	ctx := req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+
+	// just the authenticator isn't enough
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try with a user manager
+	//
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	ctx = auth.SetUserManager(ctx, usermanager)
+	req = req.WithContext(ctx)
+	ra.ServeHTTP(rw, req, next)
+
+	// just the authenticator isn't users aren't enough
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// now set up the user (which has the wrong access defined)
+	//
+	usermanager.TokenToUsers[authenticator.UserToken] = user
+
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	ctx = auth.SetUserManager(ctx, usermanager)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+
+	// shouldn't work because the authenticator doesn't have the user registered
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// make the user have the right access
+	//
+	authenticator.GroupUserMapping["test-user"] = "sudo"
+
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = auth.SetAuthenticator(ctx, authenticator)
+	ctx = auth.SetUserManager(ctx, usermanager)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+
+	assert.Equal(http.StatusOK, rw.Code)
+	assert.Equal(1, counter)
 }
