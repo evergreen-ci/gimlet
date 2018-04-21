@@ -6,7 +6,6 @@ import (
 	"github.com/evergreen-ci/gimlet/auth"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
-	"github.com/urfave/negroni"
 )
 
 type contextKey int
@@ -24,7 +23,7 @@ const (
 // While your application can have multiple authentication mechanisms,
 // a single request can only have one authentication provider
 // associated with it.
-func NewAuthenticationHandler(a auth.Provider) negroni.Handler {
+func NewAuthenticationHandler(a auth.Provider) Middleware {
 	return &authHandler{provider: a}
 }
 
@@ -44,7 +43,7 @@ func (a *authHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next ht
 // NewRoleRequired provides middlesware that requires a specific role
 // to access a resource. This access is defined as a property of the
 // user objects.
-func NewRoleRequired(role string) negroni.Handler { return &requiredRole{role: role} }
+func NewRoleRequired(role string) Middleware { return &requiredRole{role: role} }
 
 type requiredRole struct {
 	role string
@@ -91,7 +90,7 @@ func (rr *requiredRole) ServeHTTP(rw http.ResponseWriter, r *http.Request, next 
 // NewGroupMembershipRequired provides middleware that requires that
 // users belong to a group to gain access to a resource. This is
 // access is defined as a property of the authentication system.
-func NewGroupMembershipRequired(name string) negroni.Handler { return &requiredGroup{group: name} }
+func NewGroupMembershipRequired(name string) Middleware { return &requiredGroup{group: name} }
 
 type requiredGroup struct {
 	group string
@@ -138,7 +137,7 @@ func (rg *requiredGroup) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 // NewRequireAuth provides middlesware that requires that users be
 // authenticated generally to access the resource, but does no
 // validation of their access.
-func NewRequireAuthHandler() negroni.Handler { return &requireAuthHandler{} }
+func NewRequireAuthHandler() Middleware { return &requireAuthHandler{} }
 
 type requireAuthHandler struct{}
 

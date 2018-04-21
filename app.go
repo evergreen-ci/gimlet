@@ -25,6 +25,9 @@ import (
 	"github.com/urfave/negroni"
 )
 
+// Midleware is a local alias for negroni.Handler types
+type Middleware negroni.Handler
+
 // APIApp is a structure representing a single API service.
 type APIApp struct {
 	StrictSlash    bool
@@ -36,7 +39,7 @@ type APIApp struct {
 	address        string
 	subApps        []*APIApp
 	routes         []*APIRoute
-	middleware     []negroni.Handler
+	middleware     []Middleware
 }
 
 // NewApp returns a pointer to an application instance. These
@@ -94,7 +97,7 @@ func (a *APIApp) AddApp(app *APIApp) error {
 
 // AddMiddleware adds a negroni handler as middleware to the end of
 // the current list of middleware handlers.
-func (a *APIApp) AddMiddleware(m negroni.Handler) {
+func (a *APIApp) AddMiddleware(m Middleware) {
 	a.middleware = append(a.middleware, m)
 }
 
@@ -157,7 +160,7 @@ func getDefaultRoute(prefix, route string) string {
 // ResetMiddleware removes *all* middleware handlers from the current
 // application.
 func (a *APIApp) ResetMiddleware() {
-	a.middleware = []negroni.Handler{}
+	a.middleware = []Middleware{}
 }
 
 // getHander internal helper resolves the negorni middleware for the
@@ -169,7 +172,10 @@ func (a *APIApp) getNegroni() (*negroni.Negroni, error) {
 	}
 
 	catcher := grip.NewCatcher()
-	n := negroni.New(a.middleware...)
+	n := negroni.New()
+	for _, m := range a.middleware {
+		n.Use(m)
+	}
 	n.UseHandler(a.router)
 	for _, app := range a.subApps {
 		if !strings.HasPrefix(app.prefix, a.prefix) {
