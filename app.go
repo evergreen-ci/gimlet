@@ -25,9 +25,6 @@ import (
 	"github.com/urfave/negroni"
 )
 
-// Midleware is a local alias for negroni.Handler types
-type Middleware negroni.Handler
-
 // APIApp is a structure representing a single API service.
 type APIApp struct {
 	StrictSlash    bool

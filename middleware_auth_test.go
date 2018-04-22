@@ -35,12 +35,14 @@ func TestMiddlewareValueAccessors(t *testing.T) {
 
 func TestAuthMiddlewareConstructors(t *testing.T) {
 	assert := assert.New(t) // nolint
-	provider := &mock.Provider{}
+	authenticator := &mock.Authenticator{}
+	usermanager := &mock.UserManager{}
 
-	ah, ok := NewAuthenticationHandler(provider).(*authHandler)
+	ah, ok := NewAuthenticationHandler(authenticator, usermanager).(*authHandler)
 	assert.True(ok)
 	assert.NotNil(ah)
-	assert.Equal(provider, ah.provider)
+	assert.Equal(authenticator, ah.auth)
+	assert.Equal(usermanager, ah.um)
 
 	ra, ok := NewRoleRequired("foo").(*requiredRole)
 	assert.True(ok)
@@ -169,14 +171,10 @@ func TestAuthAttachWrapper(t *testing.T) {
 		TokenToUsers: map[string]auth.User{},
 	}
 
-	provider := &mock.Provider{
-		MockAuthenticator: authenticator,
-		MockUserManager:   usermanager,
-	}
-
-	ah := NewAuthenticationHandler(provider)
+	ah := NewAuthenticationHandler(authenticator, usermanager)
 	assert.NotNil(ah)
-	assert.Equal(ah.(*authHandler).provider, provider)
+	assert.Equal(ah.(*authHandler).um, usermanager)
+	assert.Equal(ah.(*authHandler).auth, authenticator)
 
 	baseCtx := context.Background()
 	req = req.WithContext(baseCtx)

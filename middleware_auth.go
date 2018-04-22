@@ -8,14 +8,6 @@ import (
 	"github.com/mongodb/grip/message"
 )
 
-type contextKey int
-
-const (
-	requestIDKey contextKey = iota
-	loggerKey
-	startAtKey
-)
-
 // NewAuthenticationHandler produces middleware that attaches
 // Authenticator and UserManager instances to the request context,
 // enabling the use of GetAuthenticator and GetUserManager accessors.
@@ -23,18 +15,22 @@ const (
 // While your application can have multiple authentication mechanisms,
 // a single request can only have one authentication provider
 // associated with it.
-func NewAuthenticationHandler(a auth.Provider) Middleware {
-	return &authHandler{provider: a}
+func NewAuthenticationHandler(a auth.Authenticator, um auth.UserManager) Middleware {
+	return &authHandler{
+		auth: a,
+		um:   um,
+	}
 }
 
 type authHandler struct {
-	provider auth.Provider
+	auth auth.Authenticator
+	um   auth.UserManager
 }
 
 func (a *authHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
-	ctx = auth.SetAuthenticator(ctx, a.provider.Authenticator())
-	ctx = auth.SetUserManager(ctx, a.provider.UserManager())
+	ctx = auth.SetAuthenticator(ctx, a.auth)
+	ctx = auth.SetUserManager(ctx, a.um)
 
 	r = r.WithContext(ctx)
 	next(rw, r)

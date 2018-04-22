@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"net/http"
 )
 
@@ -17,14 +16,6 @@ type User interface {
 	IsNil() bool
 	GetAPIKey() string
 	Roles() []string
-}
-
-type Provider interface {
-	Reload(context.Context) error
-	Open(context.Context) error
-	Close() error
-	Authenticator() Authenticator
-	UserManager() UserManager
 }
 
 // Authenticator represents a service that answers specific
