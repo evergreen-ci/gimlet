@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 )
 
@@ -19,31 +20,41 @@ type User interface {
 }
 
 // Authenticator represents a service that answers specific
-// authentication related questions, and is the public interface used for authentication workflows.
+// authentication related questions, and is the public interface
+// used for authentication workflows.
 type Authenticator interface {
 	CheckResourceAccess(User, string) bool
 	CheckGroupAccess(User, string) bool
 	CheckAuthenticated(User) bool
+
+	// TODO remove
 	GetUserFromRequest(UserManager, *http.Request) (User, error)
 }
 
 // UserManager sets and gets user tokens for implemented
 // authentication mechanisms, and provides the data that is sent by
 // the api and ui server after authenticating
-//
-// Note: this is the UserManager interface from Evergreen, without
-// modification.
 type UserManager interface {
-	GetUserByToken(token string) (User, error)
-	CreateUserToken(username, password string) (string, error)
+	// The first 5 methods are borrowed directly from evergreen without modification
+	GetUserByToken(context.Context, string) (User, error)
+	CreateUserToken(string, string) (string, error)
 	// GetLoginHandler returns the function that starts the login process for auth mechanisms
 	// that redirect to a thirdparty site for authentication
 	GetLoginHandler(url string) http.HandlerFunc
 	// GetLoginRedirectHandler returns the function that does login for the
 	// user once it has been redirected from a thirdparty site.
 	GetLoginCallbackHandler() http.HandlerFunc
-	// IsRedirect returns true if the user must be redirected to a thirdparty site to authenticate
+
+	// IsRedirect returns true if the user must be redirected to a
+	// thirdparty site to authenticate.
+	// TODO: should add a "do redirect if needed".
 	IsRedirect() bool
+
+	// These methods are simple wrappers around the user
+	// persistence layer. May consider moving them to the
+	// authenticator.
+	GetUserByID(string) (User, error)
+	GetOrCreateUser(User) (User, error)
 }
 
 // UserHasRole determines if the user has the defined role.

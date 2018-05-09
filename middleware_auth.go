@@ -29,8 +29,8 @@ type authHandler struct {
 
 func (a *authHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
-	ctx = auth.SetAuthenticator(ctx, a.auth)
-	ctx = auth.SetUserManager(ctx, a.um)
+	ctx = SetAuthenticator(ctx, a.auth)
+	ctx = SetUserManager(ctx, a.um)
 
 	r = r.WithContext(ctx)
 	next(rw, r)
@@ -48,13 +48,13 @@ type requiredRole struct {
 func (rr *requiredRole) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
 
-	authenticator, ok := auth.GetAuthenticator(ctx)
+	authenticator, ok := GetAuthenticator(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	userMgr, ok := auth.GetUserManager(ctx)
+	userMgr, ok := GetUserManager(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
@@ -95,13 +95,13 @@ type requiredGroup struct {
 func (rg *requiredGroup) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
 
-	authenticator, ok := auth.GetAuthenticator(ctx)
+	authenticator, ok := GetAuthenticator(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	userMgr, ok := auth.GetUserManager(ctx)
+	userMgr, ok := GetUserManager(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
@@ -140,13 +140,13 @@ type requireAuthHandler struct{}
 func (_ *requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
 
-	authenticator, ok := auth.GetAuthenticator(ctx)
+	authenticator, ok := GetAuthenticator(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	userMgr, ok := auth.GetUserManager(ctx)
+	userMgr, ok := GetUserManager(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
