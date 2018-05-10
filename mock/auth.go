@@ -25,60 +25,6 @@ func (u *User) IsNil() bool         { return u.ReportNil }
 func (u *User) GetAPIKey() string   { return u.APIKey }
 func (u *User) Roles() []string     { return u.RoleNames }
 
-type Provider struct {
-	ReloadShouldFail  bool
-	OpenShouldFail    bool
-	CloseShouldFail   bool
-	MockAuthenticator *Authenticator
-	MockUserManager   *UserManager
-}
-
-func (p *Provider) Reload(_ context.Context) error {
-	if p.ReloadShouldFail {
-		return errors.New("reload failure")
-	}
-
-	return nil
-}
-
-func (p *Provider) Open(_ context.Context) error {
-	if p.OpenShouldFail {
-		return errors.New("open failure")
-
-	}
-
-	return nil
-}
-
-func (p *Provider) Close() error {
-	if p.CloseShouldFail {
-		return errors.New("close failure")
-	}
-
-	return nil
-}
-
-func (p *Provider) Authenticator() auth.Authenticator {
-	if p.MockAuthenticator == nil {
-		p.MockAuthenticator = &Authenticator{
-			ResourceUserMapping:     make(map[string]string),
-			GroupUserMapping:        make(map[string]string),
-			CheckAuthenticatedState: make(map[string]bool),
-		}
-
-	}
-
-	return p.MockAuthenticator
-}
-
-func (p *Provider) UserManager() auth.UserManager {
-	if p.MockUserManager == nil {
-		p.MockUserManager = &UserManager{}
-	}
-
-	return p.MockUserManager
-}
-
 type Authenticator struct {
 	ResourceUserMapping     map[string]string
 	GroupUserMapping        map[string]string
@@ -108,7 +54,9 @@ func (a *Authenticator) CheckAuthenticated(u auth.User) bool {
 }
 
 func (a *Authenticator) GetUserFromRequest(um auth.UserManager, r *http.Request) (auth.User, error) {
-	u, err := um.GetUserByToken(a.UserToken)
+	ctx := r.Context()
+
+	u, err := um.GetUserByToken(ctx, a.UserToken)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +70,7 @@ type UserManager struct {
 	TokenToUsers map[string]auth.User
 }
 
-func (m *UserManager) GetUserByToken(token string) (auth.User, error) {
+func (m *UserManager) GetUserByToken(_ context.Context, token string) (auth.User, error) {
 	if m.TokenToUsers == nil {
 		return nil, errors.New("no users configured")
 	}
@@ -139,6 +87,8 @@ func (m *UserManager) CreateUserToken(username, password string) (string, error)
 	return strings.Join([]string{username, password}, "."), nil
 }
 
-func (m *UserManager) GetLoginHandler(url string) http.HandlerFunc { return nil }
-func (m *UserManager) GetLoginCallbackHandler() http.HandlerFunc   { return nil }
-func (m *UserManager) IsRedirect() bool                            { return false }
+func (m *UserManager) GetLoginHandler(url string) http.HandlerFunc    { return nil }
+func (m *UserManager) GetLoginCallbackHandler() http.HandlerFunc      { return nil }
+func (m *UserManager) IsRedirect() bool                               { return false }
+func (m *UserManager) GetUserByID(id string) (auth.User, error)       { return nil, nil }
+func (m *UserManager) GetOrCreateUser(u auth.User) (auth.User, error) { return u, nil }

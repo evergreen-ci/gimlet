@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"net/http"
 	"sync"
 )
 
@@ -85,9 +84,4 @@ func (a *basicAuthenticator) CheckAuthenticated(u User) bool {
 	}
 
 	return u.GetAPIKey() == ur.GetAPIKey()
-}
-
-// TODO: remove
-func (a *basicAuthenticator) GetUserFromRequest(um UserManager, r *http.Request) (User, error) {
-	return nil, nil
 }

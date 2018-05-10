@@ -48,21 +48,9 @@ type requiredRole struct {
 func (rr *requiredRole) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
 
-	authenticator, ok := GetAuthenticator(ctx)
+	user, ok := GetUser(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	userMgr, ok := GetUserManager(ctx)
-	if !ok {
-		rw.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	user, err := authenticator.GetUserFromRequest(userMgr, r)
-	if err != nil {
-		writeResponse(TEXT, rw, http.StatusUnauthorized, []byte(err.Error()))
 		return
 	}
 
@@ -101,15 +89,9 @@ func (rg *requiredGroup) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		return
 	}
 
-	userMgr, ok := GetUserManager(ctx)
+	user, ok := GetUser(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	user, err := authenticator.GetUserFromRequest(userMgr, r)
-	if err != nil {
-		writeResponse(TEXT, rw, http.StatusUnauthorized, []byte(err.Error()))
 		return
 	}
 
@@ -146,15 +128,9 @@ func (_ *requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	userMgr, ok := GetUserManager(ctx)
+	user, ok := GetUser(ctx)
 	if !ok {
 		rw.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	user, err := authenticator.GetUserFromRequest(userMgr, r)
-	if err != nil {
-		writeResponse(TEXT, rw, http.StatusUnauthorized, []byte(err.Error()))
 		return
 	}
 

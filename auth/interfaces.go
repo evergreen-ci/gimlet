@@ -26,9 +26,6 @@ type Authenticator interface {
 	CheckResourceAccess(User, string) bool
 	CheckGroupAccess(User, string) bool
 	CheckAuthenticated(User) bool
-
-	// TODO remove
-	GetUserFromRequest(UserManager, *http.Request) (User, error)
 }
 
 // UserManager sets and gets user tokens for implemented
