@@ -146,6 +146,7 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	ctx = setAuthenticator(ctx, authenticator)
 	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
+	req = setUserForRequest(req, user)
 
 	ra.ServeHTTP(rw, req, next)
 
@@ -291,6 +292,7 @@ func TestRoleRestrictedAccessMiddleware(t *testing.T) {
 	ctx = setAuthenticator(ctx, authenticator)
 	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
+	req = setUserForRequest(req, user)
 
 	ra.ServeHTTP(rw, req, next)
 
@@ -391,6 +393,7 @@ func TestGroupAccessRequired(t *testing.T) {
 	ctx = setAuthenticator(ctx, authenticator)
 	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
+	req = setUserForRequest(req, user)
 
 	ra.ServeHTTP(rw, req, next)
 
