@@ -9,6 +9,6 @@ import (
 func TestInterfaceCompliance(t *testing.T) {
 	assert := assert.New(t)
 
-	assert.Implements((*User)(nil), &BasicUser{})
+	assert.Implements((*User)(nil), &basicUser{})
 	assert.Implements((*Authenticator)(nil), &basicAuthenticator{})
 }
