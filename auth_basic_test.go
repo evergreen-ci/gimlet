@@ -1,4 +1,4 @@
-package auth
+package gimlet
 
 import (
 	"testing"
@@ -10,6 +10,5 @@ func TestInterfaceCompliance(t *testing.T) {
 	assert := assert.New(t)
 
 	assert.Implements((*User)(nil), &BasicUser{})
-	assert.Implements((*Provider)(nil), &BasicProvider{})
-
+	assert.Implements((*Authenticator)(nil), &basicAuthenticator{})
 }

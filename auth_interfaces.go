@@ -1,4 +1,4 @@
-package auth
+package gimlet
 
 import (
 	"context"
@@ -52,15 +52,4 @@ type UserManager interface {
 	// authenticator.
 	GetUserByID(string) (User, error)
 	GetOrCreateUser(User) (User, error)
-}
-
-// UserHasRole determines if the user has the defined role.
-func UserHasRole(u User, role string) bool {
-	for _, r := range u.Roles() {
-		if r == role {
-			return true
-		}
-	}
-
-	return false
 }

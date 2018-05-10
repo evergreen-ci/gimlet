@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/evergreen-ci/gimlet/auth"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 )
@@ -18,17 +17,17 @@ type UserMiddlewareConfiguration struct {
 	HeaderKeyName   string
 }
 
-func setUserForRequest(r *http.Request, u auth.User) *http.Request {
+func setUserForRequest(r *http.Request, u User) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), userKey, u))
 }
 
-func GetUser(ctx context.Context) (auth.User, bool) {
+func GetUser(ctx context.Context) (User, bool) {
 	u := ctx.Value(userKey)
 	if u == nil {
 		return nil, false
 	}
 
-	usr, ok := u.(auth.User)
+	usr, ok := u.(User)
 	if !ok {
 		return nil, false
 	}
@@ -38,10 +37,10 @@ func GetUser(ctx context.Context) (auth.User, bool) {
 
 type userMiddleware struct {
 	conf    UserMiddlewareConfiguration
-	manager auth.UserManager
+	manager UserManager
 }
 
-func UserMiddleware(um auth.UserManager, conf UserMiddlewareConfiguration) Middleware {
+func UserMiddleware(um UserManager, conf UserMiddlewareConfiguration) Middleware {
 	return &userMiddleware{
 		conf:    conf,
 		manager: um,

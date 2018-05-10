@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/evergreen-ci/gimlet/auth"
-	"github.com/evergreen-ci/gimlet/mock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,8 +33,8 @@ func TestMiddlewareValueAccessors(t *testing.T) {
 
 func TestAuthMiddlewareConstructors(t *testing.T) {
 	assert := assert.New(t) // nolint
-	authenticator := &mock.Authenticator{}
-	usermanager := &mock.UserManager{}
+	authenticator := &MockAuthenticator{}
+	usermanager := &MockUserManager{}
 
 	ah, ok := NewAuthenticationHandler(authenticator, usermanager).(*authHandler)
 	assert.True(ok)
@@ -70,15 +68,15 @@ func TestAuthRequiredBehavior(t *testing.T) {
 		rw.WriteHeader(http.StatusOK)
 	}
 
-	authenticator := &mock.Authenticator{
+	authenticator := &MockAuthenticator{
 		UserToken:               "test",
 		CheckAuthenticatedState: map[string]bool{},
 	}
-	user := &mock.User{
+	user := &MockUser{
 		ID: "test-user",
 	}
-	usermanager := &mock.UserManager{
-		TokenToUsers: map[string]auth.User{},
+	usermanager := &MockUserManager{
+		TokenToUsers: map[string]User{},
 	}
 
 	ra := NewRequireAuthHandler()
@@ -99,7 +97,7 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	rw = httptest.NewRecorder()
 	rw = httptest.NewRecorder()
 	ctx := req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
+	ctx = setAuthenticator(ctx, authenticator)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -113,8 +111,8 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 	ra.ServeHTTP(rw, req, next)
 
@@ -129,8 +127,8 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -145,8 +143,8 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -163,12 +161,12 @@ func TestAuthAttachWrapper(t *testing.T) {
 	req := httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw := httptest.NewRecorder()
 	counter := 0
-	authenticator := &mock.Authenticator{
+	authenticator := &MockAuthenticator{
 		UserToken:               "test",
 		CheckAuthenticatedState: map[string]bool{},
 	}
-	usermanager := &mock.UserManager{
-		TokenToUsers: map[string]auth.User{},
+	usermanager := &MockUserManager{
+		TokenToUsers: map[string]User{},
 	}
 
 	ah := NewAuthenticationHandler(authenticator, usermanager)
@@ -212,17 +210,17 @@ func TestRoleRestrictedAccessMiddleware(t *testing.T) {
 		rw.WriteHeader(http.StatusOK)
 	}
 
-	authenticator := &mock.Authenticator{
+	authenticator := &MockAuthenticator{
 		UserToken:               "test",
 		CheckAuthenticatedState: map[string]bool{},
 		GroupUserMapping:        map[string]string{},
 	}
-	user := &mock.User{
+	user := &MockUser{
 		ID:        "test-user",
 		RoleNames: []string{"staff"},
 	}
-	usermanager := &mock.UserManager{
-		TokenToUsers: map[string]auth.User{},
+	usermanager := &MockUserManager{
+		TokenToUsers: map[string]User{},
 	}
 
 	ra := NewRoleRequired("sudo")
@@ -243,7 +241,7 @@ func TestRoleRestrictedAccessMiddleware(t *testing.T) {
 	rw = httptest.NewRecorder()
 	rw = httptest.NewRecorder()
 	ctx := req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
+	ctx = setAuthenticator(ctx, authenticator)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -257,8 +255,8 @@ func TestRoleRestrictedAccessMiddleware(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 	ra.ServeHTTP(rw, req, next)
 
@@ -273,8 +271,8 @@ func TestRoleRestrictedAccessMiddleware(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -290,8 +288,8 @@ func TestRoleRestrictedAccessMiddleware(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -311,18 +309,18 @@ func TestGroupAccessRequired(t *testing.T) {
 		rw.WriteHeader(http.StatusOK)
 	}
 
-	authenticator := &mock.Authenticator{
+	authenticator := &MockAuthenticator{
 		UserToken:               "test",
 		CheckAuthenticatedState: map[string]bool{},
 		GroupUserMapping: map[string]string{
 			"test-user": "staff",
 		},
 	}
-	user := &mock.User{
+	user := &MockUser{
 		ID: "test-user",
 	}
-	usermanager := &mock.UserManager{
-		TokenToUsers: map[string]auth.User{},
+	usermanager := &MockUserManager{
+		TokenToUsers: map[string]User{},
 	}
 
 	ra := NewGroupMembershipRequired("sudo")
@@ -343,7 +341,7 @@ func TestGroupAccessRequired(t *testing.T) {
 	rw = httptest.NewRecorder()
 	rw = httptest.NewRecorder()
 	ctx := req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
+	ctx = setAuthenticator(ctx, authenticator)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -357,8 +355,8 @@ func TestGroupAccessRequired(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 	ra.ServeHTTP(rw, req, next)
 
@@ -373,8 +371,8 @@ func TestGroupAccessRequired(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)
@@ -390,8 +388,8 @@ func TestGroupAccessRequired(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw = httptest.NewRecorder()
 	ctx = req.Context()
-	ctx = SetAuthenticator(ctx, authenticator)
-	ctx = SetUserManager(ctx, usermanager)
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
 
 	ra.ServeHTTP(rw, req, next)

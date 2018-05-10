@@ -1,9 +1,9 @@
 package gimlet
 
 import (
+	"context"
 	"net/http"
 
-	"github.com/evergreen-ci/gimlet/auth"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 )
@@ -15,7 +15,7 @@ import (
 // While your application can have multiple authentication mechanisms,
 // a single request can only have one authentication provider
 // associated with it.
-func NewAuthenticationHandler(a auth.Authenticator, um auth.UserManager) Middleware {
+func NewAuthenticationHandler(a Authenticator, um UserManager) Middleware {
 	return &authHandler{
 		auth: a,
 		um:   um,
@@ -23,17 +23,54 @@ func NewAuthenticationHandler(a auth.Authenticator, um auth.UserManager) Middlew
 }
 
 type authHandler struct {
-	auth auth.Authenticator
-	um   auth.UserManager
+	auth Authenticator
+	um   UserManager
 }
 
 func (a *authHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	ctx := r.Context()
-	ctx = SetAuthenticator(ctx, a.auth)
-	ctx = SetUserManager(ctx, a.um)
+	ctx = setAuthenticator(ctx, a.auth)
+	ctx = setUserManager(ctx, a.um)
 
 	r = r.WithContext(ctx)
+
 	next(rw, r)
+}
+
+func setAuthenticator(ctx context.Context, a Authenticator) context.Context {
+	return context.WithValue(ctx, authHandlerKey, a)
+}
+
+func setUserManager(ctx context.Context, um UserManager) context.Context {
+	return context.WithValue(ctx, userManagerKey, um)
+}
+
+func GetAuthenticator(ctx context.Context) (Authenticator, bool) {
+	a := ctx.Value(authHandlerKey)
+	if a == nil {
+		return nil, false
+	}
+
+	amgr, ok := a.(Authenticator)
+	if !ok {
+		return nil, false
+	}
+
+	return amgr, true
+}
+
+func GetUserManager(ctx context.Context) (UserManager, bool) {
+	m := ctx.Value(userManagerKey)
+	if m == nil {
+		return nil, false
+	}
+
+	umgr, ok := m.(UserManager)
+	if !ok {
+		return nil, false
+	}
+
+	return umgr, true
 }
 
 // NewRoleRequired provides middlesware that requires a specific role
@@ -54,7 +91,7 @@ func (rr *requiredRole) ServeHTTP(rw http.ResponseWriter, r *http.Request, next 
 		return
 	}
 
-	if !auth.UserHasRole(user, rr.role) {
+	if !userHasRole(user, rr.role) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
