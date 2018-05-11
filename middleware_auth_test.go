@@ -22,6 +22,10 @@ func TestMiddlewareValueAccessors(t *testing.T) {
 	assert.False(ok)
 	assert.Nil(userm)
 
+	usr, ok := GetUser(ctx)
+	assert.False(ok)
+	assert.Nil(usr)
+
 	var idone, idtwo int
 	idone = getNumber()
 	assert.Equal(0, idtwo)
@@ -29,6 +33,23 @@ func TestMiddlewareValueAccessors(t *testing.T) {
 	assert.NotPanics(func() { idtwo = GetRequestID(ctx) })
 	assert.True(idone > idtwo)
 	assert.Equal(-1, idtwo)
+
+	// some gross checks to make sure that we're safe if the authenticator is the wrong type
+	ctx = context.WithValue(ctx, authHandlerKey, true)
+	ctx = context.WithValue(ctx, userManagerKey, true)
+	ctx = context.WithValue(ctx, userKey, true)
+
+	a, ok = GetAuthenticator(ctx)
+	assert.False(ok)
+	assert.Nil(a)
+
+	userm, ok = GetUserManager(ctx)
+	assert.False(ok)
+	assert.Nil(userm)
+
+	usr, ok = GetUser(ctx)
+	assert.False(ok)
+	assert.Nil(usr)
 }
 
 func TestAuthMiddlewareConstructors(t *testing.T) {
@@ -74,6 +95,9 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	}
 	user := &MockUser{
 		ID: "test-user",
+	}
+	baduser := &MockUser{
+		ID: "bad-user",
 	}
 	usermanager := &MockUserManager{
 		TokenToUsers: map[string]User{},
@@ -137,7 +161,20 @@ func TestAuthRequiredBehavior(t *testing.T) {
 	assert.Equal(http.StatusUnauthorized, rw.Code)
 	assert.Equal(0, counter)
 
-	// register the user
+	// register a bad user
+	//
+	authenticator.CheckAuthenticatedState[user.Username()] = true
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = setUserManager(ctx, usermanager)
+	req = req.WithContext(ctx)
+	req = setUserForRequest(req, baduser)
+
+	ra.ServeHTTP(rw, req, next)
+
+	// register the correct user
 	//
 	authenticator.CheckAuthenticatedState[user.Username()] = true
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
@@ -275,6 +312,7 @@ func TestRoleRestrictedAccessMiddleware(t *testing.T) {
 	ctx = setAuthenticator(ctx, authenticator)
 	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
+	req = setUserForRequest(req, user)
 
 	ra.ServeHTTP(rw, req, next)
 
@@ -376,6 +414,7 @@ func TestGroupAccessRequired(t *testing.T) {
 	ctx = setAuthenticator(ctx, authenticator)
 	ctx = setUserManager(ctx, usermanager)
 	req = req.WithContext(ctx)
+	req = setUserForRequest(req, user)
 
 	ra.ServeHTTP(rw, req, next)
 

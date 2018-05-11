@@ -43,3 +43,18 @@ func userHasRole(u User, role string) bool {
 
 	return false
 }
+
+func userInGroup(u User, groups []string) bool {
+	if groups == nil || len(groups) == 0 {
+		return false
+	}
+
+	id := u.Username()
+	for _, g := range groups {
+		if id == g {
+			return true
+		}
+	}
+
+	return false
+}

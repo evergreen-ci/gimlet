@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 )
 
@@ -49,6 +48,9 @@ func UserMiddleware(um UserManager, conf UserMiddlewareConfiguration) Middleware
 
 func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	var err error
+	ctx := r.Context()
+	reqID := GetRequestID(ctx)
+	logger := GetLogger(ctx)
 
 	if !u.conf.SkipCookie {
 		var token string
@@ -68,16 +70,19 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			usr, err := u.manager.GetUserByToken(ctx, token)
 
 			if err != nil {
-				// TODO fix this error report,
-				grip.Infof("Error getting user %s: %+v", usr.Username(), err)
+				logger.Debug(message.WrapError(err, message.Fields{
+					"request": reqID,
+					"user":    usr.Username(),
+					"message": "problem getting user by token",
+				}))
 			} else {
 				usr, err = u.manager.GetOrCreateUser(usr)
 				// Get the user's full details from the DB or create them if they don't exists
 				if err != nil {
-					// TODO fix this error report, add context
-					grip.Debug(message.WrapError(err, message.Fields{
+					logger.Debug(message.WrapError(err, message.Fields{
 						"message": "error looking up user",
 						"user":    usr.Username(),
+						"request": reqID,
 					}))
 				} else {
 					r = setUserForRequest(r, usr)
@@ -103,18 +108,23 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 
 		if len(authDataAPIKey) > 0 {
 			usr, err := u.manager.GetUserByID(authDataName)
-			if u != nil && err == nil {
+
+			// only loggable if the err is non-nil
+			logger.Error(message.WrapError(err, message.Fields{
+				"message":   "problem getting user by id",
+				"operation": "header check",
+				"name":      authDataName,
+				"request":   reqID,
+			}))
+
+			if usr != nil {
 				if usr.GetAPIKey() != authDataAPIKey {
-					http.Error(rw, "Unauthorized - invalid API key", http.StatusUnauthorized)
+					WriteTextResponse(rw, http.StatusUnauthorized, "invalid API key")
 					return
 				}
 				r = setUserForRequest(r, usr)
-			} else {
-				// TODO fix this error report
-				grip.Errorln("Error getting user:", err)
 			}
 		}
-
 	}
 
 	next(rw, r)

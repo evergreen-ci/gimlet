@@ -104,5 +104,13 @@ func (m *MockUserManager) CreateUserToken(username, password string) (string, er
 func (m *MockUserManager) GetLoginHandler(url string) http.HandlerFunc { return nil }
 func (m *MockUserManager) GetLoginCallbackHandler() http.HandlerFunc   { return nil }
 func (m *MockUserManager) IsRedirect() bool                            { return false }
-func (m *MockUserManager) GetUserByID(id string) (User, error)         { return nil, nil }
-func (m *MockUserManager) GetOrCreateUser(u User) (User, error)        { return u, nil }
+
+func (m *MockUserManager) GetUserByID(id string) (User, error) {
+	u, ok := m.TokenToUsers[id]
+	if !ok {
+		return nil, errors.New("not exist")
+	}
+
+	return u, nil
+}
+func (m *MockUserManager) GetOrCreateUser(u User) (User, error) { return u, nil }

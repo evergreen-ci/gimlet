@@ -5,12 +5,12 @@ import "sync"
 type basicAuthenticator struct {
 	mu     sync.RWMutex
 	users  map[string]User
-	groups map[string]string
+	groups map[string][]string
 }
 
-func NewBasicAuthenticator(users []User, groups map[string]string) Authenticator {
+func NewBasicAuthenticator(users []User, groups map[string][]string) Authenticator {
 	if groups == nil {
-		groups = map[string]string{}
+		groups = map[string][]string{}
 	}
 
 	a := &basicAuthenticator{
@@ -45,11 +45,11 @@ func (a *basicAuthenticator) CheckGroupAccess(u User, group string) bool {
 		return false
 	}
 
-	if u.GetAPIKey() == ur.GetAPIKey() {
-		return true
+	if u.GetAPIKey() != ur.GetAPIKey() {
+		return false
 	}
 
-	return false
+	return userInGroup(u, a.groups[group])
 }
 
 func (a *basicAuthenticator) CheckAuthenticated(u User) bool {
