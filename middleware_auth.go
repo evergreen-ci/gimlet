@@ -186,3 +186,48 @@ func (_ *requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, 
 
 	next(rw, r)
 }
+
+// NewRestrictAccessToUsers allows you to define a list of users that
+// may access certain resource. This is similar to "groups," but allows
+// you to control access centrally rather than needing to edit or
+// change user documents.
+//
+// This middleware is redundant to the "access required middleware."
+func NewRestrictAccessToUsers(userIDs []string) Middleware {
+	return &restrictedAccessHandler{ids: userIDs}
+}
+
+type restrictedAccessHandler struct {
+	ids []string
+}
+
+func (ra *restrictedAccessHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	ctx := r.Context()
+
+	user, ok := GetUser(ctx)
+	if !ok {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	authenticator, ok := GetAuthenticator(ctx)
+	if !ok {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if !authenticator.CheckAuthenticated(user) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	id := user.Username()
+	for _, allowed := range ra.ids {
+		if id == allowed {
+			next(rw, r)
+			return
+		}
+	}
+
+	rw.WriteHeader(http.StatusUnauthorized)
+}

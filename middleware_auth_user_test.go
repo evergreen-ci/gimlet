@@ -185,5 +185,4 @@ func TestUserMiddleware(t *testing.T) {
 		assert.False(ok)
 	})
 	assert.Equal(http.StatusOK, rw.Code)
-
 }

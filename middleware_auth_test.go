@@ -439,3 +439,97 @@ func TestGroupAccessRequired(t *testing.T) {
 	assert.Equal(http.StatusOK, rw.Code)
 	assert.Equal(1, counter)
 }
+
+func TestRestrictedAccessMiddleware(t *testing.T) {
+	assert := assert.New(t)
+	buf := []byte{}
+	body := bytes.NewBuffer(buf)
+
+	counter := 0
+	next := func(rw http.ResponseWriter, r *http.Request) {
+		counter++
+		rw.WriteHeader(http.StatusOK)
+	}
+
+	authenticator := &MockAuthenticator{
+		UserToken: "test",
+		CheckAuthenticatedState: map[string]bool{
+			"test-user": true,
+		},
+		GroupUserMapping: map[string]string{
+			"test-user": "staff",
+		},
+	}
+	user := &MockUser{
+		ID: "test-user",
+	}
+	baduser := &MockUser{
+		ID: "prod-user",
+	}
+
+	ra := NewRestrictAccessToUsers([]string{"test-user"})
+
+	// start without any context setup
+	//
+	req := httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw := httptest.NewRecorder()
+	ra.ServeHTTP(rw, req, next)
+
+	// there's nothing attached to the context, so it's a 401
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try again with a user attached but no authenticator...
+	//
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	rw = httptest.NewRecorder()
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, userKey, user)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try with the wrong user, that can't authenticate
+	//
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = context.WithValue(ctx, userKey, baduser)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try with the wrong user that can authenticate but isn't allowed
+	//
+	authenticator.CheckAuthenticatedState[baduser.ID] = true
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = context.WithValue(ctx, userKey, baduser)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+	assert.Equal(http.StatusUnauthorized, rw.Code)
+	assert.Equal(0, counter)
+
+	// try with the correct user
+	//
+	req = httptest.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	ctx = req.Context()
+	ctx = setAuthenticator(ctx, authenticator)
+	ctx = context.WithValue(ctx, userKey, user)
+	req = req.WithContext(ctx)
+
+	ra.ServeHTTP(rw, req, next)
+	assert.Equal(http.StatusOK, rw.Code)
+	assert.Equal(1, counter)
+
+}
