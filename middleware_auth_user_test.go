@@ -97,7 +97,6 @@ func TestUserMiddleware(t *testing.T) {
 	assert.Equal(http.StatusOK, rw.Code)
 
 	// double check with a bad user
-
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
 	req.Header[conf.HeaderUserName] = []string{user.ID}
 	req.Header[conf.HeaderKeyName] = []string{"worse"}
@@ -108,4 +107,83 @@ func TestUserMiddleware(t *testing.T) {
 		assert.False(ok)
 	})
 	assert.Equal(http.StatusUnauthorized, rw.Code)
+
+	// check reading the cookie
+	//
+	conf = UserMiddlewareConfiguration{
+		SkipHeaderCheck: true,
+		SkipCookie:      false,
+		CookieName:      "gimlet-token",
+	}
+	m = UserMiddleware(usermanager, conf)
+	var err error
+	// begin with the wrong cookie value
+	req, err = http.NewRequest("GET", "http://localhost/bar", body)
+	assert.NoError(err)
+	req.AddCookie(&http.Cookie{
+		Name:  "foo",
+		Value: "better",
+	})
+	rw = httptest.NewRecorder()
+	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+		rusr, ok := GetUser(r.Context())
+		assert.Nil(rusr)
+		assert.False(ok)
+	})
+	assert.Equal(http.StatusOK, rw.Code)
+
+	// try with the right token but wrong value
+	req, err = http.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	assert.NoError(err)
+	assert.NotNil(req)
+	req.AddCookie(&http.Cookie{
+		Name:  "gimlet-token",
+		Value: "false",
+	})
+	rw = httptest.NewRecorder()
+	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+		rusr, ok := GetUser(r.Context())
+		assert.Nil(rusr)
+		assert.False(ok)
+	})
+	assert.Equal(http.StatusOK, rw.Code)
+
+	// try with something that should work
+	usermanager.TokenToUsers["42"] = user
+	req, err = http.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	assert.NoError(err)
+	assert.NotNil(req)
+	req.AddCookie(&http.Cookie{
+		Name:  "gimlet-token",
+		Value: "42",
+	})
+	rw = httptest.NewRecorder()
+	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+		rusr, ok := GetUser(r.Context())
+		assert.True(ok)
+		assert.Equal(user, rusr)
+	})
+	assert.Equal(http.StatusOK, rw.Code)
+
+	// test that if get-or-create fails that the op does
+	usermanager.CreateUserFails = true
+	req, err = http.NewRequest("GET", "http://localhost/bar", body)
+	rw = httptest.NewRecorder()
+	assert.NoError(err)
+	assert.NotNil(req)
+	req.AddCookie(&http.Cookie{
+		Name:  "gimlet-token",
+		Value: "42",
+	})
+	rw = httptest.NewRecorder()
+	counter = 0
+	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+		rusr, ok := GetUser(r.Context())
+		assert.Nil(rusr)
+		assert.False(ok)
+	})
+	assert.Equal(http.StatusOK, rw.Code)
+
 }

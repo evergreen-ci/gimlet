@@ -81,7 +81,8 @@ func (a *MockAuthenticator) GetUserFromRequest(um UserManager, r *http.Request) 
 }
 
 type MockUserManager struct {
-	TokenToUsers map[string]User
+	TokenToUsers    map[string]User
+	CreateUserFails bool
 }
 
 func (m *MockUserManager) GetUserByToken(_ context.Context, token string) (User, error) {
@@ -113,4 +114,10 @@ func (m *MockUserManager) GetUserByID(id string) (User, error) {
 
 	return u, nil
 }
-func (m *MockUserManager) GetOrCreateUser(u User) (User, error) { return u, nil }
+func (m *MockUserManager) GetOrCreateUser(u User) (User, error) {
+	if m.CreateUserFails {
+		return nil, errors.New("event")
+	}
+
+	return u, nil
+}

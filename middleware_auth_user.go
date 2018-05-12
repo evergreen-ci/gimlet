@@ -72,7 +72,6 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			if err != nil {
 				logger.Debug(message.WrapError(err, message.Fields{
 					"request": reqID,
-					"user":    usr.Username(),
 					"message": "problem getting user by token",
 				}))
 			} else {
@@ -81,7 +80,6 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 				if err != nil {
 					logger.Debug(message.WrapError(err, message.Fields{
 						"message": "error looking up user",
-						"user":    usr.Username(),
 						"request": reqID,
 					}))
 				} else {
