@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // these are the legacy tests from the github.com/evergreen-ci/render package modified for the new interface
@@ -44,6 +46,19 @@ func TestHTML(t *testing.T) {
 			t.Errorf("Expected: [%v]\ngot : [%v]", expected, string(out.Bytes()))
 		}
 	}
+
+	// now make sure if we posion the cache that we error
+	hr := r.(*htmlRenderer)
+	for k, v := range hr.cache {
+		out := &bytes.Buffer{}
+		err := v.ExecuteTemplate(out, "base", testData)
+		assert.NoError(t, err)
+		hr.cache[k] = v
+	}
+
+	out := &bytes.Buffer{}
+	err := r.Render(out, testData, "base", "test1.html", "test2.html")
+	assert.Error(t, err)
 }
 
 func TestBadTemplates(t *testing.T) {
@@ -83,7 +98,6 @@ func TestBadTemplates(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("Expected Internal Server Error (500) but got %v", w.Code)
 	}
-
 }
 
 func TestWriteHTTP(t *testing.T) {
@@ -105,6 +119,18 @@ func TestWriteHTTP(t *testing.T) {
 	if string(w.Body.Bytes()) != expected {
 		t.Errorf("Expected: [%v]\ngot : [%v]", expected, string(w.Body.Bytes()))
 	}
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected OK (200) but got %v", w.Code)
+	}
+
+	w = httptest.NewRecorder()
+	rndr.Stream(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected OK (200) but got %v", w.Code)
+	}
+
+	w = httptest.NewRecorder()
+	rndr.Stream(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected OK (200) but got %v", w.Code)
 	}

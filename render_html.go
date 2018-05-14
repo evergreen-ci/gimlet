@@ -68,12 +68,7 @@ func (r *htmlRenderer) GetTemplate(filenames ...string) (RenderTemplate, error) 
 		r.cache[cacheKey] = tmpl
 	}
 
-	tmpl, err = tmpl.Clone()
-	if err != nil {
-		return nil, err
-	}
-
-	return tmpl, nil
+	return tmpl.Clone()
 }
 
 func (r *htmlRenderer) Render(out io.Writer, data interface{}, entryPoint string, files ...string) error {

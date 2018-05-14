@@ -69,12 +69,7 @@ func (r *textRenderer) GetTemplate(filenames ...string) (RenderTemplate, error) 
 		r.cache[cacheKey] = tmpl
 	}
 
-	tmpl, err = tmpl.Clone()
-	if err != nil {
-		return nil, err
-	}
-
-	return tmpl, nil
+	return tmpl.Clone()
 }
 
 // Text loads the given set of template files and executes the template named entryPoint against
