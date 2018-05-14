@@ -42,12 +42,7 @@ func (r *textRenderer) GetTemplate(filenames ...string) (RenderTemplate, error) 
 		// generate a cache key by joining filenames with null byte (can't appear in filenames)
 		cacheKey = strings.Join(filenames, "\x00")
 		if tmpl, ok = r.cache[cacheKey]; ok {
-			tmpl, err = tmpl.Clone()
-			if err != nil {
-				return nil, err
-			}
-
-			return tmpl, nil
+			return tmpl.Clone()
 		}
 	}
 

@@ -2,136 +2,126 @@ package gimlet
 
 import (
 	"bytes"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-// these are the legacy tests from the github.com/evergreen-ci/render package modified for the new interface
-
-const expected = `<html><body><div>menu</div><p>hello Socrates setarcoS</p></body></html>`
-
-var testData = struct {
-	Name string
-}{"Socrates"}
-
-var funcMap = template.FuncMap{
-	"Reverse": func(in string) string {
-		runes := []rune(in)
-		for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
-			runes[i], runes[j] = runes[j], runes[i]
-		}
-		return string(runes)
-	},
+type RenderSuite struct {
+	render      Renderer
+	opts        RendererOptions
+	constructor func(RendererOptions) Renderer
+	testData    interface{}
+	suite.Suite
 }
 
-func TestHTML(t *testing.T) {
-	r := NewHTMLRenderer(RendererOptions{
-		Directory: "testdata",
-		Functions: funcMap,
-	})
+func TestHTMLRenderSuite(t *testing.T) {
+	s := new(RenderSuite)
+	s.constructor = func(opts RendererOptions) Renderer {
+		return NewHTMLRenderer(opts)
+	}
+	suite.Run(t, s)
+}
 
+func TestTextRenderSuite(t *testing.T) {
+	s := new(RenderSuite)
+	s.constructor = func(opts RendererOptions) Renderer {
+		return NewTextRenderer(opts)
+	}
+	suite.Run(t, s)
+}
+
+func (s *RenderSuite) SetupSuite() {
+	s.testData = struct {
+		Name string
+	}{"Socrates"}
+	s.opts = RendererOptions{
+		Directory: "testdata",
+		Functions: map[string]interface{}{
+			"Reverse": func(in string) string {
+				runes := []rune(in)
+				for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+					runes[i], runes[j] = runes[j], runes[i]
+				}
+				return string(runes)
+			},
+		},
+	}
+
+}
+func (s *RenderSuite) SetupTest() {
+	s.render = s.constructor(s.opts)
+
+}
+
+func (s *RenderSuite) TestBaseHTML() {
 	for i := 0; i < 10; i++ {
 		out := &bytes.Buffer{}
-		err := r.Render(out, testData, "base", "test1.html", "test2.html")
+		err := s.render.Render(out, testData, "base", "test1.html", "test2.html")
 
-		if err != nil {
-			t.Errorf("Got from HTML(): %v", err)
-		}
-
-		if string(out.Bytes()) != expected {
-			t.Errorf("Expected: [%v]\ngot : [%v]", expected, string(out.Bytes()))
-		}
+		s.NoError(err)
+		s.Equal(expected, string(out.Bytes()))
 	}
 
-	// now make sure if we posion the cache that we error
-	hr := r.(*htmlRenderer)
-	for k, v := range hr.cache {
+	if r, ok := s.render.(*htmlRenderer); ok {
+		for k, v := range r.cache {
+			out := &bytes.Buffer{}
+			err := v.ExecuteTemplate(out, "base", testData)
+			s.NoError(err)
+			r.cache[k] = v
+		}
+
 		out := &bytes.Buffer{}
-		err := v.ExecuteTemplate(out, "base", testData)
-		assert.NoError(t, err)
-		hr.cache[k] = v
+		err := s.render.Render(out, testData, "base", "test1.html", "test2.html")
+		s.Error(err)
 	}
-
-	out := &bytes.Buffer{}
-	err := r.Render(out, testData, "base", "test1.html", "test2.html")
-	assert.Error(t, err)
 }
 
-func TestBadTemplates(t *testing.T) {
-	rndr := NewHTMLRenderer(RendererOptions{
-		Directory: "testdata",
-		Functions: funcMap,
-	})
-
+func (s *RenderSuite) TestBadTemplates() {
 	out := &bytes.Buffer{}
-	err := rndr.Render(out, testData, "base", "invalid_template.html")
-	if err == nil {
-		t.Errorf("expected invalid template file to trigger err on parse (but it didn't)")
-	}
+	err := s.render.Render(out, testData, "base", "invalid_template.html")
+	s.Error(err)
 
-	err = rndr.Render(out, testData, "base", "template_does_not_exist.html")
-	if err == nil {
-		t.Errorf("expected nonexistent template file to trigger err on load (but it didn't)")
-	}
+	err = s.render.Render(out, testData, "base", "template_does_not_exist.html")
+	s.Error(err)
 
-	err = rndr.Render(out, testData, "base", "badtemplate.html")
-	if err == nil {
-		t.Errorf("expected template execution to return err but it did not")
-	}
+	err = s.render.Render(out, testData, "base", "badtemplate.html")
+	s.Error(err)
 
 	req, err := http.NewRequest("GET", "http://example.com/foo", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	s.Require().NoError(err)
 
 	htmlHandler := func(w http.ResponseWriter, r *http.Request) {
-		rndr.WriteResponse(w, http.StatusOK, testData, "badtemplate.html")
+		s.render.WriteResponse(w, http.StatusOK, testData, "badtemplate.html")
 	}
 
 	w := httptest.NewRecorder()
 	htmlHandler(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("Expected Internal Server Error (500) but got %v", w.Code)
-	}
+	s.Equal(http.StatusInternalServerError, w.Code)
 }
 
-func TestWriteHTTP(t *testing.T) {
-	rndr := NewHTMLRenderer(RendererOptions{
-		Directory: "testdata",
-		Functions: funcMap,
-	})
+func (s *RenderSuite) TestWriteHTTP() {
 	req, err := http.NewRequest("GET", "http://example.com/foo", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	s.Require().NoError(err)
 
 	/* Test a handler that writes a rendered HTML template */
 	w := httptest.NewRecorder()
 	htmlHandler := func(w http.ResponseWriter, r *http.Request) {
-		rndr.WriteResponse(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
+		s.render.WriteResponse(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
 	}
 	htmlHandler(w, req)
-	if string(w.Body.Bytes()) != expected {
-		t.Errorf("Expected: [%v]\ngot : [%v]", expected, string(w.Body.Bytes()))
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected OK (200) but got %v", w.Code)
-	}
+
+	s.Equal(expected, string(w.Body.Bytes()))
+	s.Equal(http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
-	rndr.Stream(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected OK (200) but got %v", w.Code)
-	}
+	s.render.Stream(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
+	s.Equal(http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
-	rndr.Stream(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected OK (200) but got %v", w.Code)
-	}
+	s.render.Stream(w, http.StatusOK, testData, "base", "test1.html", "test2.html")
+	s.Equal(http.StatusOK, w.Code)
 }
