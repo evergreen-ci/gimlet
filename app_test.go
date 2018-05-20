@@ -95,8 +95,8 @@ func (s *AppSuite) TestRouterReturnsRouterInstanceWhenResolved() {
 	s.Nil(r)
 	s.Error(err)
 
-	s.app.AddRoute("/foo").Version(1)
-	s.Error(s.app.Resolve())
+	s.app.AddRoute("/foo").Version(1).Get().Handler(func(_ http.ResponseWriter, _ *http.Request) {})
+	s.NoError(s.app.Resolve())
 	s.True(s.app.isResolved)
 
 	r, err = s.app.Router()
@@ -108,7 +108,18 @@ func (s *AppSuite) TestResolveEncountersErrorsWithAnInvalidRoot() {
 	s.False(s.app.isResolved)
 
 	s.app.AddRoute("/foo").Version(-10)
-	s.Error(s.app.Resolve())
+	err1 := s.app.Resolve()
+	s.Error(err1)
+
+	// also check that app.getNegroni
+	n, err2 := s.app.getNegroni()
+	s.Nil(n)
+	s.Error(err2)
+	s.Equal(err1, err2)
+
+	// also to run
+	err2 = s.app.Run(nil)
+	s.Equal(err1, err2)
 }
 
 func (s *AppSuite) TestSetPortToExistingValueIsANoOp() {
@@ -188,7 +199,7 @@ func (s *AppSuite) TestGetDefaultRoute() {
 		prefix := inputs[0]
 		route := inputs[1]
 
-		s.Equal(output, getDefaultRoute(prefix, route))
+		s.Equal(output, getDefaultRoute(true, prefix, route))
 	}
 }
 
@@ -208,7 +219,7 @@ func (s *AppSuite) TestGetVersionRoute() {
 		version := inputs[1].(int)
 		route := inputs[2].(string)
 
-		s.Equal(output, getVersionedRoute(prefix, version, route))
+		s.Equal(output, getVersionedRoute(true, prefix, version, route))
 	}
 }
 
