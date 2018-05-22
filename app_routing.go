@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -15,6 +16,22 @@ type APIRoute struct {
 	methods []httpMethod
 	handler http.HandlerFunc
 	version int
+}
+
+func (a *APIRoute) String() string {
+	var methods []string
+	for _, m := range a.methods {
+		methods = append(methods, m.String())
+
+	}
+
+	return fmt.Sprintf(
+		"r='%s', v='%d', methods=[%s], defined=%t",
+		a.route,
+		a.version,
+		strings.Join(methods, ", "),
+		a.handler == nil,
+	)
 }
 
 // AddRoute is the primary method for creating and registering a new route with an
