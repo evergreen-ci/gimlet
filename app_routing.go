@@ -30,7 +30,7 @@ func (a *APIRoute) String() string {
 		a.route,
 		a.version,
 		strings.Join(methods, ", "),
-		a.handler == nil,
+		a.handler != nil,
 	)
 }
 

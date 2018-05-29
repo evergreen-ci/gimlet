@@ -127,3 +127,24 @@ func (s *RoutingSuite) TestRouteValidation() {
 	r.route = "/foo"
 	s.True(r.IsValid())
 }
+
+func (s *RoutingSuite) TestStringNoMethods() {
+	r := s.app.AddRoute("/foo").Version(2)
+	str := r.String()
+	s.Contains(str, "v='2")
+	s.Contains(str, "/foo")
+	s.Contains(str, "defined=false")
+	s.Contains(str, "defined=false")
+	s.Contains(str, "methods=[]")
+}
+
+func (s *RoutingSuite) TestStringWithMethods() {
+	r := s.app.AddRoute("/foo").Version(2).Get().Patch()
+	str := r.String()
+	s.Contains(str, "v='2")
+	s.Contains(str, "/foo")
+	s.Contains(str, "defined=false")
+	s.Contains(str, "defined=false")
+	s.Contains(str, "GET")
+	s.Contains(str, "PATCH")
+}
