@@ -1,11 +1,10 @@
 package gimlet
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // Responder is an interface for constructing a response from a
