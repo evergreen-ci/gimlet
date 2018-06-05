@@ -27,9 +27,10 @@ import (
 // APIApp is a structure representing a single API service.
 type APIApp struct {
 	StrictSlash    bool
+	SimpleVersions bool
+	NoVersions     bool
 	isResolved     bool
 	prefix         string
-	defaultVersion int
 	port           int
 	router         *mux.Router
 	address        string
@@ -45,25 +46,13 @@ type APIApp struct {
 // for new methods.
 func NewApp() *APIApp {
 	a := &APIApp{
-		defaultVersion: -1, // this is the same as having no version prepended to the path.
-		port:           3000,
+		port: 3000,
 	}
 
 	a.AddMiddleware(negroni.NewRecovery())
 	a.AddMiddleware(NewAppLogger())
 
 	return a
-}
-
-// SetDefaultVersion allows you to specify a default version for the
-// application. Default versions must be 0 (no version,) or larger.
-func (a *APIApp) SetDefaultVersion(version int) {
-	if version < 0 {
-		grip.Warningf("%d is not a valid version", version)
-	} else {
-		a.defaultVersion = version
-		grip.Noticef("Set default api version to /v%d/", version)
-	}
 }
 
 // Router is the getter for an APIApp's router object. If thetr

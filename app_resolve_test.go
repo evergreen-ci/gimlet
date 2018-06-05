@@ -7,27 +7,47 @@ import (
 )
 
 func TestRouteResolutionHelpers(t *testing.T) {
-	assert := assert.New(t)
-
-	res := getDefaultRoute(false, "/foo", "/bar")
-	assert.Equal("/bar", res)
-	res = getDefaultRoute(true, "/foo", "/bar")
-	assert.Equal("/foo/bar", res)
-	res = getDefaultRoute(true, "/foo", "/foo/bar")
-	assert.Equal("/foo/bar", res)
-
-	res = getVersionedRoute(false, "/foo", 1, "/bar")
-	assert.Equal("/v1/bar", res)
-	res = getVersionedRoute(true, "/foo", 1, "/bar")
-	assert.Equal("/foo/v1/bar", res)
-	res = getVersionedRoute(true, "/foo", 1, "/foo/bar")
-	assert.Equal("/foo/v1/bar", res)
+	app := &APIApp{}
+	for _, tc := range []struct {
+		route     *APIRoute
+		expected  string
+		addPrefix bool
+	}{
+		{
+			expected:  "/v1/bar",
+			addPrefix: false,
+			route: &APIRoute{
+				prefix:  "/foo",
+				version: 1,
+				route:   "/bar",
+			},
+		},
+		{
+			expected:  "/foo/v1/bar",
+			addPrefix: true,
+			route: &APIRoute{
+				prefix:  "/foo",
+				version: 1,
+				route:   "/bar",
+			},
+		},
+		{
+			expected:  "/foo/v1/bar",
+			addPrefix: true,
+			route: &APIRoute{
+				prefix:  "/foo",
+				version: 1,
+				route:   "/foo/bar",
+			},
+		},
+	} {
+		assert.Equal(t, tc.expected, tc.route.resolveVersionedRoute(app, tc.addPrefix))
+	}
 
 	handler, err := NewApp().Handler()
-	assert.NoError(err)
+	assert.NoError(t, err)
 	h := getRouteHandlerWithMiddlware(nil, handler)
-	assert.Equal(handler, h)
+	assert.Equal(t, handler, h)
 	h = getRouteHandlerWithMiddlware([]Middleware{NewRecoveryLogger()}, handler)
-	assert.NotEqual(handler, h)
-
+	assert.NotEqual(t, handler, h)
 }

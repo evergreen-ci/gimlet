@@ -68,18 +68,67 @@ func (a *APIApp) attachRoutes(router *mux.Router, addPrefix bool) error {
 		}
 
 		handler := getRouteHandlerWithMiddlware(a.wrappers, route.handler)
-		if route.version > 0 {
-			versionedRoute := getVersionedRoute(addPrefix, a.prefix, route.version, route.route)
+		if a.NoVersions {
+			router.Handle(route.resolveLegacyRoute(a, addPrefix), handler)
+		} else if route.version >= 0 {
+			versionedRoute := route.resolveVersionedRoute(a, addPrefix)
 			router.Handle(versionedRoute, handler).Methods(methods...)
-		}
-
-		if route.version == a.defaultVersion {
-			route.route = getDefaultRoute(addPrefix, a.prefix, route.route)
-			router.Handle(route.route, handler).Methods(methods...)
+		} else {
+			catcher.Add(fmt.Errorf("skipping '%s', because of versioning error", route))
 		}
 	}
 
 	return catcher.Resolve()
+}
+
+func (r *APIRoute) getRoutePrefix(app *APIApp, addPrefix bool) string {
+	if !addPrefix {
+		return ""
+	}
+
+	if r.prefix != "" {
+		return r.prefix
+	}
+
+	return app.prefix
+}
+
+func (r *APIRoute) resolveLegacyRoute(app *APIApp, addPrefix bool) string {
+	prefix := r.getRoutePrefix(app, addPrefix)
+
+	if prefix == "" {
+		return r.route
+	}
+
+	if strings.HasPrefix(r.route, "/") {
+		return prefix + r.route
+	}
+
+	return strings.Join([]string{prefix, r.route}, "/")
+}
+
+func (r *APIRoute) resolveVersionedRoute(app *APIApp, addPrefix bool) string {
+	var (
+		versionPrefix string
+		prefix        string
+		route         string
+	)
+
+	if !app.SimpleVersions {
+		versionPrefix = "v"
+	}
+
+	prefix = r.getRoutePrefix(app, addPrefix)
+	if strings.HasPrefix(r.route, prefix) {
+		if prefix == "" {
+			return fmt.Sprintf("/%s%d%s", versionPrefix, r.version, r.route)
+		}
+		route = r.route[len(prefix):]
+	} else {
+		route = r.route
+	}
+
+	return fmt.Sprintf("%s/%s%d%s", prefix, versionPrefix, r.version, route)
 }
 
 func getRouteHandlerWithMiddlware(mws []Middleware, route http.Handler) http.Handler {
@@ -93,30 +142,4 @@ func getRouteHandlerWithMiddlware(mws []Middleware, route http.Handler) http.Han
 	}
 	n.UseHandler(route)
 	return n
-}
-
-func getVersionedRoute(addPrefix bool, prefix string, version int, route string) string {
-	if !addPrefix {
-		prefix = ""
-	}
-
-	if strings.HasPrefix(route, prefix) {
-		if prefix == "" {
-			return fmt.Sprintf("/v%d%s", version, route)
-		}
-		route = route[len(prefix):]
-	}
-
-	return fmt.Sprintf("%s/v%d%s", prefix, version, route)
-}
-
-func getDefaultRoute(addPrefix bool, prefix, route string) string {
-	if !addPrefix {
-		return route
-	}
-
-	if strings.HasPrefix(route, prefix) {
-		return route
-	}
-	return prefix + route
 }
