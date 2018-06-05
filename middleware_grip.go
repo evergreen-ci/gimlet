@@ -129,11 +129,12 @@ func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, n
 			rw.WriteHeader(http.StatusInternalServerError)
 
 			l.Critical(message.WrapStack(2, message.Fields{
-				"panic":   err,
-				"action":  "aborted",
-				"request": GetRequestID(ctx),
-				"path":    r.URL.Path,
-				"remote":  r.RemoteAddr,
+				"panic":    err,
+				"action":   "aborted",
+				"request":  GetRequestID(ctx),
+				"duration": time.Since(getRequestStartAt(ctx)),
+				"path":     r.URL.Path,
+				"remote":   r.RemoteAddr,
 			}))
 		}
 	}()
