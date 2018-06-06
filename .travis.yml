@@ -6,4 +6,4 @@ go:
   - "1.8"
   - "1.9"
   - "1.10"
-script: make build coverage
+script: make build test
