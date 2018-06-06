@@ -106,6 +106,7 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 		"action":      "completed",
 		"status":      res.Status(),
 		"outcome":     http.StatusText(res.Status()),
+		"length":      r.ContentLength,
 	})
 }
 
@@ -135,6 +136,7 @@ func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, n
 				"duration": time.Since(getRequestStartAt(ctx)),
 				"path":     r.URL.Path,
 				"remote":   r.RemoteAddr,
+				"length":   r.ContentLength,
 			}))
 		}
 	}()
