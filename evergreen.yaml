@@ -119,9 +119,10 @@ buildvariants:
   - name: coverage
     display_name: Coverage
     run_on:
-      - archlinux-test
+      - ubuntu1604-test
     expansions:
       test_timeout: 15m
+      gobin: /opt/go1.8/go/bin/go
     tasks:
       - name: ".report"
         stepback: false
@@ -145,17 +146,5 @@ buildvariants:
       goroot: /usr/local/go1.8/go
     run_on:
       - macos-1012
-    tasks:
-      - name: ".test"
-
-
-  - name: windows
-    display_name: Windows
-    run_on:
-      - windows-64-vs2015-small
-    expansions:
-      disable_coverage: yes
-      gobin: /cygdrive/c/go1.8/go/bin/go
-      goroot: c:/go1.8/go
     tasks:
       - name: ".test"
