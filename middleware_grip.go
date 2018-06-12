@@ -35,8 +35,31 @@ func setServiceLogger(r *http.Request, logger grip.Journaler) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), loggerKey, logger))
 }
 
+type logAnnotation struct {
+	key   string
+	value interface{}
+}
+
+func AddLoggingAnnotation(r *http.Request, key string, data interface{}) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), loggingAnnotationsKey, &logAnnotation{key: key, value: data}))
+}
+
 func setStartAtTime(r *http.Request, startAt time.Time) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), startAtKey, startAt))
+}
+
+func getLogAnnotation(ctx context.Context) *logAnnotation {
+	if rv := ctx.Value(loggingAnnotationsKey); rv != nil {
+		switch a := rv.(type) {
+		case *logAnnotation:
+			return a
+		case logAnnotation:
+			return &a
+		default:
+			return nil
+		}
+	}
+	return nil
 }
 
 func getRequestStartAt(ctx context.Context) time.Time {
@@ -96,8 +119,8 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 	ctx := r.Context()
 	startAt := getRequestStartAt(ctx)
 	dur := time.Since(startAt)
-
-	logger.Info(message.Fields{
+	a := getLogAnnotation(ctx)
+	m := message.Fields{
 		"method":      r.Method,
 		"remote":      r.RemoteAddr,
 		"request":     GetRequestID(ctx),
@@ -107,7 +130,13 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 		"status":      res.Status(),
 		"outcome":     http.StatusText(res.Status()),
 		"length":      r.ContentLength,
-	})
+	}
+
+	if a != nil {
+		m[a.key] = a.value
+	}
+
+	logger.Info(m)
 }
 
 // This is largely duplicated from the above, but lets us optionally
@@ -140,7 +169,6 @@ func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, n
 			}))
 		}
 	}()
-
 	next(rw, r)
 
 	res := rw.(negroni.ResponseWriter)
