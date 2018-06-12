@@ -26,8 +26,6 @@ functions:
       binary: make
       args: ["${make_args|}", "${target}"]
       env:
-        AWS_KEY: ${aws_key}
-        AWS_SECRET: ${aws_secret}
         DISABLE_COVERAGE: ${disable_coverage}
         GOARCH: ${goarch}
         GO_BIN_PATH: ${gobin}
@@ -110,34 +108,56 @@ buildvariants:
   - name: race-detector
     display_name: Race Detector (Arch Linux)
     expansions:
-      mongodb_url: http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-3.2.9.tgz
+      race_enabed: true
+      test_timeout: 15m
+      disable_coverage: yes
     run_on:
       - archlinux-test
-    tasks: [ ".race", ".report" ]
+    tasks:
+      - name: ".race"
 
-  - name: rhel62-gccgo
-    display_name: RHEL 6.2 (gccgo)
-    expansions:
-      build_env: "PATH=/opt/mongodbtoolchain/v2/bin:$PATH DISABLE_COVERAGE=yes"
-      mongodb_url: http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-3.2.9.tgz
+  - name: coverage
+    display_name: Coverage
     run_on:
-      - rhel62-small
-    tasks: [ ".test" ]
+      - archlinux-test
+    expansions:
+      test_timeout: 15m
+    tasks:
+      - name: ".report"
+        stepback: false
 
   - name: ubuntu1604
     display_name: Ubuntu 16.04
     expansions:
+      gobin: /opt/go1.8/go/bin/go
+      disable_coverage: yes
+      goroot: /opt/go1.8/go
       build_env: "PATH=/opt/go/bin:$PATH GOROOT=/opt/go"
-      mongodb_url: http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-3.2.9.tgz
     run_on:
       - ubuntu1604-test
-    tasks: [ ".test" ]
+    tasks: 
+      - ".test"
 
   - name: macos
     display_name: macOS 10.12
     expansions:
-      build_env: "PATH=/usr/local/go/bin:$PATH"
-      mongodb_url: https://fastdl.mongodb.org/osx/mongodb-osx-x86_64-3.2.9.tgz
+      disable_coverage: yes
+      gobin: /usr/local/go1.8/go/bin/go
+      goroot: /usr/local/go1.8/go
     run_on:
       - macos-1012
-    tasks: [ ".test" ]
+    tasks:
+      - name: ".test"
+
+
+  - name: windows
+    display_name: Windows
+    run_on:
+      - windows-64-vs2015-small
+    expansions:
+      disable_coverage: yes
+      gobin: /cygdrive/c/go1.8/go/bin/go
+      goroot: c:/go1.8/go
+      extension: ".exe"
+    tasks:
+      - name: ".test"
