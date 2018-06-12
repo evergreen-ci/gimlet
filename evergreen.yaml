@@ -132,7 +132,6 @@ buildvariants:
       gobin: /opt/go1.8/go/bin/go
       disable_coverage: yes
       goroot: /opt/go1.8/go
-      build_env: "PATH=/opt/go/bin:$PATH GOROOT=/opt/go"
     run_on:
       - ubuntu1604-test
     tasks: 
@@ -158,6 +157,5 @@ buildvariants:
       disable_coverage: yes
       gobin: /cygdrive/c/go1.8/go/bin/go
       goroot: c:/go1.8/go
-      extension: ".exe"
     tasks:
       - name: ".test"

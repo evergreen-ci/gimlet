@@ -27,6 +27,7 @@ endif
 #   separately. This is a temporary solution: eventually we should
 #   vendorize all of these dependencies.
 lintDeps := github.com/alecthomas/gometalinter
+lintDeps += github.com/richardsamuels/evg-lint/...
 #   include test files and give linters 40s to run to avoid timeouts
 lintArgs := --tests --deadline=1m --vendor
 #   gotype produces false positives because it reads .a files which
@@ -72,7 +73,20 @@ $(gopath)/src/%:
 # end dependency installation tools
 
 
+# lint setup targets
+lintDeps := $(addprefix $(gopath)/src/,$(lintDeps))
+lintTargets := $(foreach target,$(packages),lint-$(target))
+$(buildDir)/.lintSetup:$(lintDeps)
+	@mkdir -p $(buildDir)
+	$(gopath)/bin/gometalinter --force --install >/dev/null && touch $@
+$(buildDir)/run-linter:buildscripts/run-linter.go $(buildDir)/.lintSetup
+	$(gobin) build -o $@ $<
+.PRECIOUS:$(buildDir)/output.lint
+# end lint setup targets
+
 # userfacing targets for basic build and development operations
+lint:$(buildDir)/output.lint
+
 lint:$(gopath)/src/$(projectPath) $(lintDeps)
 	$(gopath)/bin/gometalinter $(lintArgs) ./...
 lint-deps:$(lintDeps)
@@ -123,7 +137,7 @@ lint-%:$(buildDir)/output.%.lint
 #    tests have compile and runtime deps. This varable has everything
 #    that the tests actually need to run. (The "build" target is
 #    intentional and makes these targets rerun as expected.)
-testRunDeps := $(testSrcFiles) build
+testRunDeps := $(testSrcFiles)
 testArgs := -test.v
 ifneq (,$(RUN_TEST))
 testArgs += -test.run='$(RUN_TEST)'
@@ -144,19 +158,24 @@ endif
 $(buildDir)/coverage.%.html:$(buildDir)/coverage.%.out
 	$(gobin) tool cover -html=$(buildDir)/coverage.$(subst /,-,$*).out -o $(buildDir)/coverage.$(subst /,-,$*).html
 $(buildDir)/coverage.%.out:$(testRunDeps)
-	$(gobin) test $(testArgs) -covermode=count -coverprofile=$(buildDir)/coverage.$(subst /,-,$*).out $(projectPath)/$(subst -,/,$*)
+	GOPATH=$(gopath) $(gobin) test $(testArgs) -covermode=count -coverprofile=$(buildDir)/coverage.$(subst /,-,$*).out $(projectPath)/$(subst -,/,$*)
 	@-[ -f $(buildDir)/coverage.$(subst /,-,$*).out ] && go tool cover -func=$(buildDir)/coverage.$(subst /,-,$*).out | sed 's%$(projectPath)/%%' | column -t
 $(buildDir)/coverage.$(name).out:$(testRunDeps)
-	$(gobin) test -covermode=count -coverprofile=$@ $(projectPath)
+	GOPATH=$(gopath) $(gobin) test -covermode=count -coverprofile=$@ $(projectPath)
 	@-[ -f $@ ] && go tool cover -func=$@ | sed 's%$(projectPath)/%%' | column -t
-$(buildDir)/test.%.out:$(testRunDeps)
-	$(gobin) test $(testArgs) ./$(subst -,/,$*) | tee $(buildDir)/test.$(subst /,-,$*).out
-$(buildDir)/race.%.out:$(testRunDeps)
-	$(gobin) test $(testArgs) -race ./$(subst -,/,$*) | tee $(buildDir)/race.$(subst /,-,$*).out
-$(buildDir)/test.$(name).out:$(testRunDeps)
-	$(gobin) test $(testArgs) ./ | tee $@
-$(buildDir)/race.$(name).out:$(testRunDeps)
-	$(gobin) test $(testArgs) -race ./ | tee $@
+$(buildDir)/test.%.out:$(testRunDeps) .FORCE
+	GOPATH=$(gopath) $(gobin) test $(testArgs) ./$(subst -,/,$*) | tee $(buildDir)/test.$(subst /,-,$*).out
+$(buildDir)/race.%.out:$(testRunDeps) .FORCE
+	GOPATH=$(gopath) $(gobin) test $(testArgs) -race ./$(subst -,/,$*) | tee $(buildDir)/race.$(subst /,-,$*).out
+$(buildDir)/test.$(name).out:$(testRunDeps) .FORCE
+	GOPATH=$(gopath) $(gobin) test $(testArgs) ./ | tee $@
+$(buildDir)/race.$(name).out:$(testRunDeps) .FORCE
+	GOPATH=$(gopath) $(gobin) test $(testArgs) -race ./ | tee $@
+#  targets to generate gotest output from the linter.
+$(buildDir)/output.%.lint:$(buildDir)/run-linter $(testSrcFiles) .FORCE
+	@./$< --output=$@ --lintArgs='$(lintArgs)' --packages='$*'
+$(buildDir)/output.lint:$(buildDir)/run-linter .FORCE
+	@./$< --output="$@" --lintArgs='$(lintArgs)' --packages="$(packages)"
 # end test and coverage artifacts
 
 
@@ -175,4 +194,5 @@ phony += clean
 # end dependency targets
 
 # configure phony targets
+.FORCE:
 .PHONY:$(phony)
