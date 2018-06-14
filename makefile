@@ -29,10 +29,10 @@ endif
 lintDeps := github.com/alecthomas/gometalinter
 lintDeps += github.com/richardsamuels/evg-lint/...
 #   include test files and give linters 40s to run to avoid timeouts
-lintArgs := --tests --deadline=1m --vendor
+lintArgs := --tests --deadline=1m --vendor --aggregate --sort=line
 #   gotype produces false positives because it reads .a files which
 #   are rarely up to date.
-lintArgs := --tests --deadline=10m --vendor --aggregate --sort=line
+lintArgs += --disable="gotype" --enable=goimports
 lintArgs += --vendored-linters --enable-gc
 #  add and configure additional linters
 lintArgs += --line-length=100 --dupl-threshold=175 --cyclo-over=17
@@ -45,7 +45,6 @@ lintArgs += --exclude="error return value not checked \(defer .* \(errcheck\)$$"
 lintArgs += --exclude="declaration of \"assert\" shadows declaration at .*_test.go:"
 lintArgs += --exclude="declaration of \"require\" shadows declaration at .*_test.go:"
 lintArgs += --linter="evg:$(gopath)/bin/evg-lint:PATH:LINE:COL:MESSAGE" --enable=evg
-lintArgs += --enable=goimports
 # end lint suppressions
 
 ######################################################################
@@ -78,7 +77,7 @@ lintDeps := $(addprefix $(gopath)/src/,$(lintDeps))
 lintTargets := $(foreach target,$(packages),lint-$(target))
 $(buildDir)/.lintSetup:$(lintDeps)
 	@mkdir -p $(buildDir)
-	$(gopath)/bin/gometalinter --force --install >/dev/null && touch $@
+	@$(gopath)/bin/gometalinter --force --install >/dev/null && touch $@
 $(buildDir)/run-linter:buildscripts/run-linter.go
 	$(gobin) build -o $@ $<
 .PRECIOUS:$(buildDir)/output.lint
