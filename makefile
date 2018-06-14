@@ -79,16 +79,13 @@ lintTargets := $(foreach target,$(packages),lint-$(target))
 $(buildDir)/.lintSetup:$(lintDeps)
 	@mkdir -p $(buildDir)
 	$(gopath)/bin/gometalinter --force --install >/dev/null && touch $@
-$(buildDir)/run-linter:buildscripts/run-linter.go $(buildDir)/.lintSetup
+$(buildDir)/run-linter:buildscripts/run-linter.go
 	$(gobin) build -o $@ $<
 .PRECIOUS:$(buildDir)/output.lint
 # end lint setup targets
 
 # userfacing targets for basic build and development operations
 lint:$(buildDir)/output.lint
-
-lint:$(gopath)/src/$(projectPath) $(lintDeps)
-	$(gopath)/bin/gometalinter $(lintArgs) ./...
 lint-deps:$(lintDeps)
 build:$(deps) $(srcFiles) $(gopath)/src/$(projectPath)
 	@mkdir -p $(buildDir)
@@ -99,7 +96,7 @@ test:$(testOutput)
 race:$(raceOutput)
 coverage:$(coverageOutput)
 coverage-html:$(coverageHtmlOutput)
-phony := lint build build-race race test coverage coverage-html
+phony := build build-race race test coverage coverage-html
 phony += deps test-deps lint-deps
 .PRECIOUS: $(testOutput) $(raceOutput) $(coverageOutput) $(coverageHtmlOutput)
 # end front-ends
@@ -172,9 +169,9 @@ $(buildDir)/test.$(name).out:$(testRunDeps) .FORCE
 $(buildDir)/race.$(name).out:$(testRunDeps) .FORCE
 	GOPATH=$(gopath) $(gobin) test $(testArgs) -race ./ | tee $@
 #  targets to generate gotest output from the linter.
-$(buildDir)/output.%.lint:$(buildDir)/run-linter $(testSrcFiles) .FORCE
+$(buildDir)/output.%.lint:$(buildDir)/run-linter $(testSrcFiles)  $(buildDir)/.lintSetup .FORCE
 	@./$< --output=$@ --lintArgs='$(lintArgs)' --packages='$*'
-$(buildDir)/output.lint:$(buildDir)/run-linter .FORCE
+$(buildDir)/output.lint:$(buildDir)/run-linter $(buildDir)/.lintSetup .FORCE
 	@./$< --output="$@" --lintArgs='$(lintArgs)' --packages="$(packages)"
 # end test and coverage artifacts
 

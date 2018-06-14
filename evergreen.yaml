@@ -1,3 +1,10 @@
+stepback: false 
+command_type: test
+ignore:
+    - "*.md" # don't schedule tests if a commit only changes markdown files
+    - "*.rst"
+    - "buildscripts/*" # our scripts are untested, so don't schedule tests for them
+
 #######################################
 #         YAML Templates              #
 #######################################

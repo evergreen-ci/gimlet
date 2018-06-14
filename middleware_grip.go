@@ -40,6 +40,9 @@ type logAnnotation struct {
 	value interface{}
 }
 
+// AddLoggingAnnotation adds a key-value pair to be added to logging
+// messages used by the application logging information. There can be
+// only one annotation registered per-request.
 func AddLoggingAnnotation(r *http.Request, key string, data interface{}) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), loggingAnnotationsKey, &logAnnotation{key: key, value: data}))
 }
@@ -72,6 +75,9 @@ func getRequestStartAt(ctx context.Context) time.Time {
 	return time.Time{}
 }
 
+// GetLogger produces a special logger attached to the request. If no
+// request is attached, GetLogger returns a logger instance wrapping
+// the global sender.
 func GetLogger(ctx context.Context) grip.Journaler {
 	if rv := ctx.Value(loggerKey); rv != nil {
 		if l, ok := rv.(grip.Journaler); ok {
@@ -144,6 +150,8 @@ type appRecoveryLogger struct {
 	grip.Journaler
 }
 
+// NewRecoveryLogger logs request start, end, and recovers from panics
+// (logging the panic as well).
 func NewRecoveryLogger() Middleware { return &appRecoveryLogger{} }
 
 func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
