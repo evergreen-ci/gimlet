@@ -123,6 +123,7 @@ buildvariants:
     expansions:
       test_timeout: 15m
       gobin: /opt/go1.8/go/bin/go
+      goroot: /opt/go1.8/go
     tasks:
       - name: ".report"
         stepback: false
@@ -135,7 +136,7 @@ buildvariants:
       goroot: /opt/go1.8/go
     run_on:
       - ubuntu1604-test
-    tasks: 
+    tasks:
       - ".test"
 
   - name: macos
