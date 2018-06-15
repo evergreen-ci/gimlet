@@ -27,7 +27,6 @@ type basicUser struct {
 func (u *basicUser) Username() string    { return u.ID }
 func (u *basicUser) Email() string       { return u.EmailAddress }
 func (u *basicUser) DisplayName() string { return fmt.Sprintf("%s <%s>", u.ID, u.EmailAddress) }
-func (u *basicUser) IsNil() bool         { return u == nil }
 func (u *basicUser) GetAPIKey() string   { return u.Key }
 func (u *basicUser) Roles() []string {
 	out := make([]string, len(u.AccessRoles))

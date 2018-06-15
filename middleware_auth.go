@@ -91,7 +91,7 @@ func (rr *requiredRole) ServeHTTP(rw http.ResponseWriter, r *http.Request, next 
 	ctx := r.Context()
 
 	user := GetUser(ctx)
-	if user == nil || user.IsNil() {
+	if user == nil {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -132,7 +132,7 @@ func (rg *requiredGroup) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 	}
 
 	user := GetUser(ctx)
-	if user == nil || user.IsNil() {
+	if user == nil {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -171,7 +171,7 @@ func (*requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, ne
 	}
 
 	user := GetUser(ctx)
-	if user == nil || user.IsNil() {
+	if user == nil {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -210,7 +210,7 @@ func (ra *restrictedAccessHandler) ServeHTTP(rw http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 
 	user := GetUser(ctx)
-	if user == nil || user.IsNil() {
+	if user == nil {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}

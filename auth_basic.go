@@ -23,7 +23,7 @@ func NewBasicAuthenticator(users []User, groups map[string][]string) Authenticat
 	}
 
 	for _, u := range users {
-		if u != nil && !u.IsNil() {
+		if u != nil {
 			a.users[u.Username()] = u
 		}
 	}
