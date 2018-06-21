@@ -25,7 +25,7 @@ func setUserForRequest(r *http.Request, u User) *http.Request {
 // AttachUser adds a user to a context. This function is public to
 // support teasing workflows.
 func AttachUser(ctx context.Context, u User) context.Context {
-	return context.WithValue(r.Context(), userKey, u)
+	return context.WithValue(ctx, userKey, u)
 }
 
 // GetUser returns the user attached to the request. The User object
