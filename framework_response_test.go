@@ -200,7 +200,7 @@ func TestSimpleResponseBuilder(t *testing.T) {
 			NewJSONErrorResponse(st),
 			NewJSONInternalErrorResponse(st),
 		} {
-			assert.Equal(t, TEXT, resp.Format(), "%d", idx)
+			assert.Equal(t, JSON, resp.Format(), "%d", idx)
 			assert.Equal(t, http.StatusInternalServerError, resp.Status())
 		}
 	})
@@ -219,7 +219,7 @@ func TestSimpleResponseBuilder(t *testing.T) {
 			NewYAMLErrorResponse(st),
 			NewYAMLInternalErrorResponse(st),
 		} {
-			assert.Equal(t, TEXT, resp.Format(), "%d", idx)
+			assert.Equal(t, YAML, resp.Format(), "%d", idx)
 			assert.Equal(t, http.StatusInternalServerError, resp.Status())
 		}
 	})

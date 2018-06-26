@@ -2,9 +2,9 @@ package gimlet
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
+	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -32,22 +32,25 @@ func NewTextInternalErrorResponse(data interface{}) Responder {
 	}
 }
 
-func getJSONResponseBody(data interface{}) ([]byte, bool) {
+func getJSONResponseBody(data interface{}) ([]byte, error) {
 	out, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return convertToBytes(err.Error()), false
+		return nil, err
 	}
 
-	return out, true
+	return out, nil
 }
 
 func NewJSONResponse(data interface{}) Responder {
-	out, ok := getJSONResponseBody(data)
-	if !ok {
+	out, err := getJSONResponseBody(data)
+	if err != nil {
 		return &responderImpl{
-			data:   out,
+			data: ErrorResponse{
+				StatusCode: http.StatusInternalServerError,
+				Message:    err.Error(),
+			},
 			status: http.StatusInternalServerError,
-			format: TEXT,
+			format: JSON,
 		}
 	}
 
@@ -59,12 +62,15 @@ func NewJSONResponse(data interface{}) Responder {
 }
 
 func NewJSONErrorResponse(data interface{}) Responder {
-	out, ok := getJSONResponseBody(data)
-	if !ok {
+	out, err := getJSONResponseBody(data)
+	if err != nil {
 		return &responderImpl{
-			data:   out,
+			data: ErrorResponse{
+				StatusCode: http.StatusInternalServerError,
+				Message:    err.Error(),
+			},
 			status: http.StatusInternalServerError,
-			format: TEXT,
+			format: JSON,
 		}
 	}
 
@@ -76,12 +82,15 @@ func NewJSONErrorResponse(data interface{}) Responder {
 }
 
 func NewJSONInternalErrorResponse(data interface{}) Responder {
-	out, ok := getJSONResponseBody(data)
-	if !ok {
+	out, err := getJSONResponseBody(data)
+	if err != nil {
 		return &responderImpl{
-			data:   out,
+			data: ErrorResponse{
+				StatusCode: http.StatusInternalServerError,
+				Message:    err.Error(),
+			},
 			status: http.StatusInternalServerError,
-			format: TEXT,
+			format: JSON,
 		}
 	}
 
@@ -140,26 +149,28 @@ func NewHTMLInternalErrorResponse(data interface{}) Responder {
 	}
 }
 
-func getYAMLResponseBody(data interface{}) (out []byte, ok bool) {
+func getYAMLResponseBody(data interface{}) (out []byte, err error) {
 	defer func() {
 		if msg := recover(); msg != nil {
-			out = convertToBytes(fmt.Sprintf("problem yaml parsing message: %v", msg))
-			ok = false
+			out = nil
+			err = errors.Errorf("problem yaml parsing message: %v", msg)
 		}
 	}()
 
-	// ignoring the error because the yaml library always panics
-	out, _ = yaml.Marshal(data)
-	return out, true
+	out, err = yaml.Marshal(data)
+	return
 }
 
 func NewYAMLResponse(data interface{}) Responder {
-	out, ok := getYAMLResponseBody(data)
-	if !ok {
+	out, err := getYAMLResponseBody(data)
+	if err != nil {
 		return &responderImpl{
-			data:   out,
+			data: ErrorResponse{
+				StatusCode: http.StatusInternalServerError,
+				Message:    err.Error(),
+			},
 			status: http.StatusInternalServerError,
-			format: TEXT,
+			format: YAML,
 		}
 	}
 
@@ -171,12 +182,15 @@ func NewYAMLResponse(data interface{}) Responder {
 }
 
 func NewYAMLErrorResponse(data interface{}) Responder {
-	out, ok := getYAMLResponseBody(data)
-	if !ok {
+	out, err := getYAMLResponseBody(data)
+	if err != nil {
 		return &responderImpl{
-			data:   out,
+			data: ErrorResponse{
+				StatusCode: http.StatusInternalServerError,
+				Message:    err.Error(),
+			},
 			status: http.StatusInternalServerError,
-			format: TEXT,
+			format: YAML,
 		}
 	}
 
@@ -188,12 +202,15 @@ func NewYAMLErrorResponse(data interface{}) Responder {
 }
 
 func NewYAMLInternalErrorResponse(data interface{}) Responder {
-	out, ok := getYAMLResponseBody(data)
-	if !ok {
+	out, err := getYAMLResponseBody(data)
+	if err != nil {
 		return &responderImpl{
-			data:   out,
+			data: ErrorResponse{
+				StatusCode: http.StatusInternalServerError,
+				Message:    err.Error(),
+			},
 			status: http.StatusInternalServerError,
-			format: TEXT,
+			format: YAML,
 		}
 	}
 
