@@ -146,6 +146,21 @@ func (s *HandlerSuite) TestJSONOutputFormatCorrectlyPropogated() {
 	s.Contains(s.rw.HeaderMap["Content-Type"][0], JSON.ContentType())
 }
 
+func (s *HandlerSuite) TestYAMLOutputFormatCorrectlyPropogated() {
+	handler := handleHandler(&mockHandler{
+		responder: &mockResponder{
+			responderImpl: responderImpl{
+				format: YAML,
+				status: http.StatusTeapot,
+			},
+		},
+	})
+
+	s.NotPanics(func() { handler(s.rw, s.r) })
+	s.Equal(http.StatusTeapot, s.rw.Code)
+	s.Contains(s.rw.HeaderMap["Content-Type"][0], YAML.ContentType())
+}
+
 func (s *HandlerSuite) TestTextOutputFormatCorrectlyPropogated() {
 	handler := handleHandler(&mockHandler{
 		responder: &mockResponder{

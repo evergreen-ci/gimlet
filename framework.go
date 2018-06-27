@@ -3,8 +3,6 @@ package gimlet
 import (
 	"context"
 	"net/http"
-
-	"github.com/pkg/errors"
 )
 
 // RouteHandler provides an alternate method for defining routes with
@@ -79,22 +77,10 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 			WriteTextResponse(w, resp.Status(), resp.Data())
 		case HTML:
 			WriteHTMLResponse(w, resp.Status(), resp.Data())
+		case YAML:
+			WriteYAMLResponse(w, resp.Status(), resp.Data())
 		case BINARY:
 			WriteBinaryResponse(w, resp.Status(), resp.Data())
-		}
-	}
-}
-
-func getError(e error, defaultCode int) ErrorResponse {
-	switch eresp := errors.Cause(e).(type) {
-	case *ErrorResponse:
-		return *eresp
-	case ErrorResponse:
-		return eresp
-	default:
-		return ErrorResponse{
-			StatusCode: defaultCode,
-			Message:    e.Error(),
 		}
 	}
 }
