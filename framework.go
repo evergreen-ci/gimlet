@@ -2,10 +2,9 @@ package gimlet
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
-	"github.com/mongodb/grip"
+	"github.com/pkg/errors"
 )
 
 // RouteHandler provides an alternate method for defining routes with
@@ -46,20 +45,24 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 
 		ctx, err = handler.Parse(ctx, r)
 		if err != nil {
-			grip.Error(err)
-			WriteTextResponse(w, http.StatusBadRequest, err)
+			e := getError(err, http.StatusBadRequest)
+			WriteJSONResponse(w, e.StatusCode, e)
 			return
 		}
 
 		resp := handler.Run(ctx)
 		if resp == nil {
-			WriteTextResponse(w, http.StatusInternalServerError, errors.New("undefined response"))
+			e := ErrorResponse{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "undefined response",
+			}
+			WriteJSONResponse(w, e.StatusCode, e)
 			return
 		}
 
 		if err := resp.Validate(); err != nil {
-			grip.Error(err)
-			WriteTextResponse(w, http.StatusInternalServerError, err)
+			e := getError(err, http.StatusBadRequest)
+			WriteJSONResponse(w, e.StatusCode, e)
 			return
 		}
 
@@ -78,6 +81,20 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 			WriteHTMLResponse(w, resp.Status(), resp.Data())
 		case BINARY:
 			WriteBinaryResponse(w, resp.Status(), resp.Data())
+		}
+	}
+}
+
+func getError(e error, defaultCode int) ErrorResponse {
+	switch eresp := errors.Cause(e).(type) {
+	case *ErrorResponse:
+		return *eresp
+	case ErrorResponse:
+		return eresp
+	default:
+		return ErrorResponse{
+			StatusCode: defaultCode,
+			Message:    e.Error(),
 		}
 	}
 }
