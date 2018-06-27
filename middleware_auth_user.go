@@ -121,7 +121,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 
 		if len(authDataAPIKey) > 0 {
 			usr, err := u.manager.GetUserByID(authDataName)
-			logger.Error(message.WrapError(err, message.Fields{
+			logger.Debug(message.WrapError(err, message.Fields{
 				"message":   "problem getting user by id",
 				"operation": "header check",
 				"name":      authDataName,
