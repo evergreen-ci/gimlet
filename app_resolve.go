@@ -135,11 +135,11 @@ func (r *APIRoute) resolveVersionedRoute(app *APIApp, addAppPrefix bool) string 
 		output += firstPrefix
 	}
 
+	output += r.getVersionPart(app)
+
 	if r.prefix != firstPrefix && r.prefix != "" {
 		output += r.prefix
 	}
-
-	output += r.getVersionPart(app)
 
 	output += route
 
