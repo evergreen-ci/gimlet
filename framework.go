@@ -66,18 +66,6 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 			w.Header().Set("Link", resp.Pages().GetLinks(r.URL.Path))
 		}
 
-		// Write the response, based on the format specified.
-		switch resp.Format() {
-		case JSON:
-			WriteJSONResponse(w, resp.Status(), resp.Data())
-		case TEXT:
-			WriteTextResponse(w, resp.Status(), resp.Data())
-		case HTML:
-			WriteHTMLResponse(w, resp.Status(), resp.Data())
-		case YAML:
-			WriteYAMLResponse(w, resp.Status(), resp.Data())
-		case BINARY:
-			WriteBinaryResponse(w, resp.Status(), resp.Data())
-		}
+		WriteResponse(w, resp)
 	}
 }
