@@ -84,16 +84,7 @@ type responseBuilder struct {
 	pages  *ResponsePages
 }
 
-func (r *responseBuilder) Data() interface{} {
-	switch len(r.data) {
-	case 1:
-		return r.data[0]
-	case 0:
-		return struct{}{}
-	default:
-		return r.data
-	}
-}
+func (r *responseBuilder) Data() interface{} { return r.data }
 
 func (r *responseBuilder) Validate() error {
 	if !r.Format().IsValid() {

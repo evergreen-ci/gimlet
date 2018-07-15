@@ -79,16 +79,36 @@ func (s *ResponderSuite) TestSetData() {
 
 	// setting should work
 	s.NoError(s.resp.AddData(1))
-	s.Equal(1, s.resp.Data())
+	s.NotNil(s.resp.Data())
+
+	switch val := s.resp.Data().(type) {
+	case int:
+		s.True(val == 1)
+	case []interface{}:
+		s.Len(val, 1)
+		s.Equal(1, val[0])
+	default:
+		// should never get here
+		s.True(false)
+	}
 
 	// nil should error and not not rest error
 	s.Error(s.resp.AddData(nil))
-	s.Equal(1, s.resp.Data())
+
+	switch val := s.resp.Data().(type) {
+	case int:
+		s.True(val == 1)
+	case []interface{}:
+		s.Len(val, 1)
+		s.Equal(1, val[0])
+	default:
+		// should never get here
+		s.True(false)
+	}
 }
 
 func (s *ResponderSuite) TestMutabilityOfData() {
 	s.NoError(s.resp.AddData(1))
-	s.Equal(1, s.resp.Data())
 
 	switch r := s.resp.(type) {
 	case *responderImpl:
