@@ -113,15 +113,14 @@ func (a *APIApp) Run(ctx context.Context) error {
 	serviceWait := make(chan struct{})
 	go func() {
 		defer recovery.LogStackTraceAndContinue("app service")
-
-		grip.Noticef("starting app on: %s:$d", a.address, a.port)
+		grip.Noticef("starting app on: %s:%d", a.address, a.port)
 		catcher.Add(srv.ListenAndServe())
+		close(serviceWait)
 	}()
 
 	go func() {
 		defer recovery.LogStackTraceAndContinue("server shutdown")
 		catcher.Add(srv.Shutdown(ctx))
-		close(serviceWait)
 	}()
 
 	<-serviceWait
