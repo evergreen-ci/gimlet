@@ -42,7 +42,13 @@ func (l *LDAPAuthenticator) Authenticate(user, password string) error {
 
 // Authorize returns nil if the user is a member of the group, an error otherwise.
 func (l *LDAPAuthenticator) Authorize(user, group string) error {
-	return errors.New("not implemented")
+	if err := l.connect(); err != nil {
+		return errors.Wrap(err, "could not connect to LDAP server")
+	}
+	if err := l.isMemberOf(user, group); err != nil {
+		return errors.Wrap(err, "failed to validate user")
+	}
+	return nil
 }
 
 func (l *LDAPAuthenticator) connect() error {
@@ -58,4 +64,33 @@ func (l *LDAPAuthenticator) connect() error {
 func (l *LDAPAuthenticator) login(user, password string) error {
 	fullPath := fmt.Sprintf("uid=%s,%s", user, l.path)
 	return errors.Wrapf(l.conn.Bind(fullPath, password), "could not validate user '%s'", user)
+}
+
+func (l *LDAPAuthenticator) isMemberOf(user, group string) error {
+	result, err := l.conn.Search(
+		ldap.NewSearchRequest(
+			l.path,
+			ldap.ScopeWholeSubtree,
+			ldap.NeverDerefAliases,
+			0,
+			0,
+			false,
+			fmt.Sprintf("(uid=%s)", user),
+			[]string{"ismemberof"},
+			nil))
+	if err != nil {
+		return errors.Wrap(err, "problem searching ldap")
+	}
+	if len(result.Entries) == 0 {
+		return errors.Errorf("no entry returned for user '%s'", user)
+	}
+	if len(result.Entries[0].Attributes) == 0 {
+		return errors.Errorf("entry's attributes empty for user '%s'", user)
+	}
+	for i := range result.Entries[0].Attributes[0].Values {
+		if result.Entries[0].Attributes[0].Values[i] == group {
+			return nil
+		}
+	}
+	return errors.Errorf("user '%s' is not a member of group '%s'", user, group)
 }

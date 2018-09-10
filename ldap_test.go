@@ -33,12 +33,14 @@ func TestLDAPConstructorRequiresNonEmptyArgs(t *testing.T) {
 // 		url      = ""
 // 		port     = ""
 // 		path     = ""
-// 		username = ""
+// 		user     = ""
 // 		password = ""
+// 		group    = ""
 // 	)
 // 	assert := assert.New(t)
 // 	l, err := NewLDAPAuthenticator(url, port, path)
 // 	assert.NotNil(l)
 // 	assert.NoError(err)
-// 	assert.NoError(l.Authenticate())
+// 	assert.NoError(l.Authenticate(user, password))
+// 	assert.NoError(l.Authorize(user, group))
 // }
