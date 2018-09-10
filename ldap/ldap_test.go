@@ -1,4 +1,4 @@
-package gimlet
+package ldap
 
 import (
 	"testing"
