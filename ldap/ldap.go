@@ -18,6 +18,7 @@ type userService struct {
 	conn *ldap.Conn
 }
 
+// CreationOpts are options to pass to the service constructor.
 type CreationOpts struct {
 	URL  string
 	Port string
@@ -27,8 +28,8 @@ type CreationOpts struct {
 // NewUserService constructs a userService. It requires a URL and Port to the LDAP
 // server. It also requires a Path to user resources that can be passed to an LDAP query.
 func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
-	if opts.URL == "" || opts.Port == "" || opts.Path == "" {
-		return nil, errors.Errorf("URL ('%s'), Port ('%s'), and Path ('%s') must be provided", opts.URL, opts.Port, opts.Path)
+	if err := opts.validate(); err != nil {
+		return nil, err
 	}
 	u := &userService{}
 	u.CreationOpts = CreationOpts{
@@ -37,6 +38,13 @@ func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
 		Path: opts.Path,
 	}
 	return u, nil
+}
+
+func (opts CreationOpts) validate() error {
+	if opts.URL == "" || opts.Port == "" || opts.Path == "" {
+		return errors.Errorf("URL ('%s'), Port ('%s'), and Path ('%s') must be provided", opts.URL, opts.Port, opts.Path)
+	}
+	return nil
 }
 
 func (*userService) GetUserByToken(context.Context, string) (gimlet.User, error) {
