@@ -1,75 +1,101 @@
 package ldap
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"net/http"
 
+	"github.com/evergreen-ci/gimlet"
 	"github.com/pkg/errors"
 	ldap "gopkg.in/ldap.v2"
 )
 
-// LDAPAuthenticator provides authentication and authorization of users against an LDAP service.
-type LDAPAuthenticator struct {
-	url  string
-	port string
-	path string
+// userService provides authentication and authorization of users against an LDAP service. It
+// implements the gimlet.Authenticator interface.
+type userService struct {
+	CreationOpts
 	conn *ldap.Conn
 }
 
-// NewLDAPAuthenticator constructs an LDAPAuthenticator. It requires a url and port to the LDAP
-// server. It also requires a path to user resources that can be passed to an LDAP query.
-func NewLDAPAuthenticator(url, port, path string) (*LDAPAuthenticator, error) {
-	if url == "" || port == "" || path == "" {
-		return nil, errors.Errorf("url ('%s'), port ('%s'), and path ('%s') must be provided", url, port, path)
-	}
-	return &LDAPAuthenticator{
-		url:  url,
-		port: port,
-		path: path,
-	}, nil
+type CreationOpts struct {
+	URL  string
+	Port string
+	Path string
 }
 
-// Authenticate returns nil if the user and password are valid, an error otherwise.
-func (l *LDAPAuthenticator) Authenticate(user, password string) error {
-	if err := l.connect(); err != nil {
+// NewUserService constructs a userService. It requires a URL and Port to the LDAP
+// server. It also requires a Path to user resources that can be passed to an LDAP query.
+func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
+	if opts.URL == "" || opts.Port == "" || opts.Path == "" {
+		return nil, errors.Errorf("URL ('%s'), Port ('%s'), and Path ('%s') must be provided", opts.URL, opts.Port, opts.Path)
+	}
+	u := &userService{}
+	u.CreationOpts = CreationOpts{
+		URL:  opts.URL,
+		Port: opts.Port,
+		Path: opts.Path,
+	}
+	return u, nil
+}
+
+func (*userService) GetUserByToken(context.Context, string) (gimlet.User, error) {
+	return nil, errors.New("not yet implemented")
+}
+func (*userService) CreateUserToken(string, string) (string, error) {
+	return "", errors.New("not yet implemented")
+}
+func (*userService) GetLoginHandler(url string) http.HandlerFunc { return nil }
+func (*userService) GetLoginCallbackHandler() http.HandlerFunc   { return nil }
+func (*userService) IsRedirect() bool                            { return false }
+func (*userService) GetUserByID(string) (gimlet.User, error) {
+	return nil, errors.New("not yet implemented")
+}
+func (*userService) GetOrCreateUser(gimlet.User) (gimlet.User, error) {
+	return nil, errors.New("not yet implemented")
+}
+
+// authenticate returns nil if the user and password are valid, an error otherwise.
+func (u *userService) authenticate(user, password string) error {
+	if err := u.connect(); err != nil {
 		return errors.Wrap(err, "could not connect to LDAP server")
 	}
-	if err := l.login(user, password); err != nil {
+	if err := u.login(user, password); err != nil {
 		return errors.Wrap(err, "failed to validate user")
 	}
 	return nil
 }
 
-// Authorize returns nil if the user is a member of the group, an error otherwise.
-func (l *LDAPAuthenticator) Authorize(user, group string) error {
-	if err := l.connect(); err != nil {
+// authorize returns nil if the user is a member of the group, an error otherwise.
+func (u *userService) authorize(user, group string) error {
+	if err := u.connect(); err != nil {
 		return errors.Wrap(err, "could not connect to LDAP server")
 	}
-	if err := l.isMemberOf(user, group); err != nil {
+	if err := u.isMemberOf(user, group); err != nil {
 		return errors.Wrap(err, "failed to validate user")
 	}
 	return nil
 }
 
-func (l *LDAPAuthenticator) connect() error {
-	tlsConfig := &tls.Config{ServerName: l.url}
-	conn, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%s", l.url, l.port), tlsConfig)
+func (u *userService) connect() error {
+	tlsConfig := &tls.Config{ServerName: u.URL}
+	var err error
+	u.conn, err = ldap.DialTLS("tcp", fmt.Sprintf("%s:%s", u.URL, u.Port), tlsConfig)
 	if err != nil {
-		return errors.Wrapf(err, "problem connecting to ldap server %s:%s", l.url, l.port)
+		return errors.Wrapf(err, "problem connecting to ldap server %s:%s", u.URL, u.Port)
 	}
-	l.conn = conn
 	return nil
 }
 
-func (l *LDAPAuthenticator) login(user, password string) error {
-	fullPath := fmt.Sprintf("uid=%s,%s", user, l.path)
-	return errors.Wrapf(l.conn.Bind(fullPath, password), "could not validate user '%s'", user)
+func (u *userService) login(user, password string) error {
+	fullPath := fmt.Sprintf("uid=%s,%s", user, u.Path)
+	return errors.Wrapf(u.conn.Bind(fullPath, password), "could not validate user '%s'", user)
 }
 
-func (l *LDAPAuthenticator) isMemberOf(user, group string) error {
-	result, err := l.conn.Search(
+func (u *userService) isMemberOf(user, group string) error {
+	result, err := u.conn.Search(
 		ldap.NewSearchRequest(
-			l.path,
+			u.Path,
 			ldap.ScopeWholeSubtree,
 			ldap.NeverDerefAliases,
 			0,

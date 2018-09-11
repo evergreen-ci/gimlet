@@ -9,19 +9,19 @@ import (
 func TestLDAPConstructorRequiresNonEmptyArgs(t *testing.T) {
 	assert := assert.New(t)
 
-	l, err := NewLDAPAuthenticator("foo", "bar", "baz")
+	l, err := NewUserService(CreationOpts{"foo", "bar", "baz"})
 	assert.NotNil(l)
 	assert.NoError(err)
 
-	l, err = NewLDAPAuthenticator("", "bar", "baz")
+	l, err = NewUserService(CreationOpts{"", "bar", "baz"})
 	assert.Nil(l)
 	assert.Error(err)
 
-	l, err = NewLDAPAuthenticator("foo", "", "baz")
+	l, err = NewUserService(CreationOpts{"foo", "", "baz"})
 	assert.Nil(l)
 	assert.Error(err)
 
-	l, err = NewLDAPAuthenticator("foo", "bar", "")
+	l, err = NewUserService(CreationOpts{"foo", "bar", ""})
 	assert.Nil(l)
 	assert.Error(err)
 }
@@ -38,9 +38,9 @@ func TestLDAPConstructorRequiresNonEmptyArgs(t *testing.T) {
 // 		group    = ""
 // 	)
 // 	assert := assert.New(t)
-// 	l, err := NewLDAPAuthenticator(url, port, path)
+// 	l, err := NewUserService(CreationOpts{url, port, path})
 // 	assert.NotNil(l)
 // 	assert.NoError(err)
-// 	assert.NoError(l.Authenticate(user, password))
-// 	assert.NoError(l.Authorize(user, group))
+// 	assert.NoError(l.authenticate(user, password))
+// 	assert.NoError(l.authorize(user, group))
 // }
