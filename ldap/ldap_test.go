@@ -48,7 +48,7 @@ func (m *mockConn) StartTLS(config *tls.Config) error { return nil }
 func (m *mockConn) Close()                            { return }
 func (m *mockConn) SetTimeout(time.Duration)          { return }
 func (m *mockConn) Bind(username, password string) error {
-	if username == "uid=erh,path" && password == "hunter2" {
+	if username == "uid=foo,path" && password == "hunter2" {
 		return nil
 	}
 	return errors.Errorf("failed to Bind (%s, %s)", username, password)
@@ -73,15 +73,15 @@ func (m *mockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult
 					},
 					&ldap.EntryAttribute{
 						Name:   "uid",
-						Values: []string{"erh"},
+						Values: []string{"foo"},
 					},
 					&ldap.EntryAttribute{
 						Name:   "mail",
-						Values: []string{"erh@mongodb.com"},
+						Values: []string{"foo@mongodb.com"},
 					},
 					&ldap.EntryAttribute{
 						Name:   "cn",
-						Values: []string{"Eliot Horowitz"},
+						Values: []string{"Foo Bar"},
 					},
 				},
 			},
@@ -214,37 +214,37 @@ func (s *LDAPSuite) TestGetUserByToken() {
 	ctx := context.Background()
 
 	getControl = getErr
-	u, err := s.um.GetUserByToken(ctx, "erh")
+	u, err := s.um.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
 
 	getControl = getValidUser
-	u, err = s.um.GetUserByToken(ctx, "erh")
+	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.NoError(err)
-	s.Equal("erh", u.Username())
+	s.Equal("foo", u.Username())
 
 	getControl = getExpiredUser
-	u, err = s.um.GetUserByToken(ctx, "erh")
+	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.NoError(err)
-	s.Equal("erh", u.Username())
+	s.Equal("foo", u.Username())
 
 	getControl = getMissingUser
-	u, err = s.um.GetUserByToken(ctx, "erh")
+	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
 }
 
 func (s *LDAPSuite) TestCreateUserToken() {
-	token, err := s.um.CreateUserToken("erh", "badpassword")
+	token, err := s.um.CreateUserToken("foo", "badpassword")
 	s.Error(err)
 
 	token, err = s.um.CreateUserToken("nosuchuser", "")
 	s.Error(err)
 
-	token, err = s.um.CreateUserToken("erh", "hunter2")
+	token, err = s.um.CreateUserToken("foo", "hunter2")
 	s.NoError(err)
 	s.Equal("123456", token)
-	s.Equal("erh", mockPutUser.Username())
-	s.Equal("Eliot Horowitz", mockPutUser.DisplayName())
-	s.Equal("erh@mongodb.com", mockPutUser.Email())
+	s.Equal("foo", mockPutUser.Username())
+	s.Equal("Foo Bar", mockPutUser.DisplayName())
+	s.Equal("foo@mongodb.com", mockPutUser.Email())
 }
