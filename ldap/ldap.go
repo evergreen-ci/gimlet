@@ -231,30 +231,17 @@ func (u *userService) getUser(username string) (gimlet.User, error) {
 }
 
 func makeUser(result *ldap.SearchResult) gimlet.User {
-	user := &User{}
+	var id, name, email string
 	for _, entry := range result.Entries[0].Attributes {
 		if entry.Name == "uid" {
-			user.ID = entry.Values[0]
+			id = entry.Values[0]
 		}
 		if entry.Name == "cn" {
-			user.Name = entry.Values[0]
+			name = entry.Values[0]
 		}
 		if entry.Name == "mail" {
-			user.EmailAddress = entry.Values[0]
+			email = entry.Values[0]
 		}
 	}
-	return user
+	return gimlet.NewBasicUser(id, name, email, "", []string{})
 }
-
-type User struct {
-	ID           string
-	Name         string
-	EmailAddress string
-}
-
-func (u *User) DisplayName() string { return u.Name }
-func (u *User) Email() string       { return u.EmailAddress }
-func (u *User) Username() string    { return u.ID }
-func (u *User) IsNil() bool         { return u == nil }
-func (u *User) GetAPIKey() string   { return "" }
-func (u *User) Roles() []string     { return []string{} }
