@@ -23,6 +23,7 @@ func TestLDAPSuite(t *testing.T) {
 
 func (s *LDAPSuite) SetupTest() {
 	var err error
+	mockPutUser = nil
 	s.um, err = NewUserService(CreationOpts{
 		URL:     "url",
 		Port:    "port",
@@ -42,11 +43,16 @@ func mockConnect(url, port string) (ldap.Client, error) {
 
 type mockConn struct{}
 
-func (m *mockConn) Start()                               { return }
-func (m *mockConn) StartTLS(config *tls.Config) error    { return nil }
-func (m *mockConn) Close()                               { return }
-func (m *mockConn) SetTimeout(time.Duration)             { return }
-func (m *mockConn) Bind(username, password string) error { return nil }
+func (m *mockConn) Start()                            { return }
+func (m *mockConn) StartTLS(config *tls.Config) error { return nil }
+func (m *mockConn) Close()                            { return }
+func (m *mockConn) SetTimeout(time.Duration)          { return }
+func (m *mockConn) Bind(username, password string) error {
+	if username == "uid=erh,path" && password == "hunter2" {
+		return nil
+	}
+	return errors.Errorf("failed to Bind (%s, %s)", username, password)
+}
 func (m *mockConn) SimpleBind(simpleBindRequest *ldap.SimpleBindRequest) (*ldap.SimpleBindResult, error) {
 	return nil, nil
 }
@@ -65,6 +71,18 @@ func (m *mockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult
 					&ldap.EntryAttribute{
 						Values: []string{"10gen"},
 					},
+					&ldap.EntryAttribute{
+						Name:   "uid",
+						Values: []string{"erh"},
+					},
+					&ldap.EntryAttribute{
+						Name:   "mail",
+						Values: []string{"erh@mongodb.com"},
+					},
+					&ldap.EntryAttribute{
+						Name:   "cn",
+						Values: []string{"Eliot Horowitz"},
+					},
 				},
 			},
 		},
@@ -82,8 +100,11 @@ func (u *mockUser) Username() string    { return u.name }
 func (u *mockUser) GetAPIKey() string   { return "" }
 func (u *mockUser) Roles() []string     { return []string{} }
 
+var mockPutUser gimlet.User
+
 func mockPut(u gimlet.User) (string, error) {
-	return u.Username(), nil
+	mockPutUser = u
+	return "123456", nil
 }
 
 type getController int
@@ -211,4 +232,19 @@ func (s *LDAPSuite) TestGetUserByToken() {
 	u, err = s.um.GetUserByToken(ctx, "erh")
 	s.Error(err)
 	s.Nil(u)
+}
+
+func (s *LDAPSuite) TestCreateUserToken() {
+	token, err := s.um.CreateUserToken("erh", "badpassword")
+	s.Error(err)
+
+	token, err = s.um.CreateUserToken("nosuchuser", "")
+	s.Error(err)
+
+	token, err = s.um.CreateUserToken("erh", "hunter2")
+	s.NoError(err)
+	s.Equal("123456", token)
+	s.Equal("erh", mockPutUser.Username())
+	s.Equal("Eliot Horowitz", mockPutUser.DisplayName())
+	s.Equal("erh@mongodb.com", mockPutUser.Email())
 }
