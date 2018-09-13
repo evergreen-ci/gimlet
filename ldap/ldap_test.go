@@ -77,7 +77,7 @@ func (m *mockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult
 					},
 					&ldap.EntryAttribute{
 						Name:   "mail",
-						Values: []string{"foo@mongodb.com"},
+						Values: []string{"foo@example.com"},
 					},
 					&ldap.EntryAttribute{
 						Name:   "cn",
@@ -246,5 +246,5 @@ func (s *LDAPSuite) TestCreateUserToken() {
 	s.Equal("123456", token)
 	s.Equal("foo", mockPutUser.Username())
 	s.Equal("Foo Bar", mockPutUser.DisplayName())
-	s.Equal("foo@mongodb.com", mockPutUser.Email())
+	s.Equal("foo@example.com", mockPutUser.Email())
 }
