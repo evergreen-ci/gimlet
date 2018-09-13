@@ -80,6 +80,8 @@ func (opts CreationOpts) validate() error {
 	return nil
 }
 
+// GetUserByToken returns a user for a given token. If the user is invalid (e.g., if the user's TTL
+// has expired), it re-authorizes the user and re-puts the user in the cache.
 func (u *userService) GetUserByToken(_ context.Context, token string) (gimlet.User, error) {
 	user, valid, err := u.Get(token)
 	if err != nil {
@@ -99,9 +101,25 @@ func (u *userService) GetUserByToken(_ context.Context, token string) (gimlet.Us
 	return user, nil
 }
 
-func (u *userService) CreateUserToken(string, string) (string, error) {
-	return "", errors.New("not yet implemented")
+// CreateUserToken creates and returns a new user token from a username and password.
+func (u *userService) CreateUserToken(username, password string) (string, error) {
+	if err := u.authenticate(username, password); err != nil {
+		return "", errors.Wrapf(err, "failed to authenticate user '%s'", username)
+	}
+	if err := u.authorize(username); err != nil {
+		return "", errors.Wrapf(err, "failed to authorize user '%s'", username)
+	}
+	user, err := u.getUser(username)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to get user '%s'", username)
+	}
+	token, err := u.Put(user)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to put user into cache '%s'", username)
+	}
+	return token, nil
 }
+
 func (u *userService) GetLoginHandler(url string) http.HandlerFunc { return nil }
 func (u *userService) GetLoginCallbackHandler() http.HandlerFunc   { return nil }
 func (u *userService) IsRedirect() bool                            { return false }
@@ -113,23 +131,23 @@ func (u *userService) GetOrCreateUser(gimlet.User) (gimlet.User, error) {
 }
 
 // authenticate returns nil if the user and password are valid, an error otherwise.
-func (u *userService) authenticate(user, password string) error {
+func (u *userService) authenticate(username, password string) error {
 	if err := u.ensureConnected(); err != nil {
 		return errors.Wrap(err, "problem connecting to ldap server")
 	}
-	if err := u.login(user, password); err != nil {
-		return errors.Wrap(err, "failed to validate user")
+	if err := u.login(username, password); err != nil {
+		return errors.Wrapf(err, "failed to authenticate user '%s'", username)
 	}
 	return nil
 }
 
 // authorize returns nil if the user is a member of u.Group, an error otherwise.
-func (u *userService) authorize(user string) error {
+func (u *userService) authorize(username string) error {
 	if err := u.ensureConnected(); err != nil {
 		return errors.Wrap(err, "problem connecting to ldap server")
 	}
-	if err := u.isMemberOf(user, u.Group); err != nil {
-		return errors.Wrap(err, "failed to validate user")
+	if err := u.validateGroup(username); err != nil {
+		return errors.Wrapf(err, "failed to authorize user '%s'", username)
 	}
 	return nil
 }
@@ -154,12 +172,12 @@ func connect(url, port string) (ldap.Client, error) {
 	return conn, nil
 }
 
-func (u *userService) login(user, password string) error {
-	fullPath := fmt.Sprintf("uid=%s,%s", user, u.Path)
-	return errors.Wrapf(u.conn.Bind(fullPath, password), "could not validate user '%s'", user)
+func (u *userService) login(username, password string) error {
+	fullPath := fmt.Sprintf("uid=%s,%s", username, u.Path)
+	return errors.Wrapf(u.conn.Bind(fullPath, password), "could not validate user '%s'", username)
 }
 
-func (u *userService) isMemberOf(user, group string) error {
+func (u *userService) validateGroup(username string) error {
 	result, err := u.conn.Search(
 		ldap.NewSearchRequest(
 			u.Path,
@@ -168,22 +186,75 @@ func (u *userService) isMemberOf(user, group string) error {
 			0,
 			0,
 			false,
-			fmt.Sprintf("(uid=%s)", user),
+			fmt.Sprintf("(uid=%s)", username),
 			[]string{"ismemberof"},
 			nil))
 	if err != nil {
 		return errors.Wrap(err, "problem searching ldap")
 	}
 	if len(result.Entries) == 0 {
-		return errors.Errorf("no entry returned for user '%s'", user)
+		return errors.Errorf("no entry returned for user '%s'", username)
 	}
 	if len(result.Entries[0].Attributes) == 0 {
-		return errors.Errorf("entry's attributes empty for user '%s'", user)
+		return errors.Errorf("entry's attributes empty for user '%s'", username)
 	}
 	for i := range result.Entries[0].Attributes[0].Values {
-		if result.Entries[0].Attributes[0].Values[i] == group {
+		if result.Entries[0].Attributes[0].Values[i] == u.Group {
 			return nil
 		}
 	}
-	return errors.Errorf("user '%s' is not a member of group '%s'", user, group)
+	return errors.Errorf("user '%s' is not a member of group '%s'", username, u.Group)
 }
+
+func (u *userService) getUser(username string) (gimlet.User, error) {
+	result, err := u.conn.Search(
+		ldap.NewSearchRequest(
+			u.Path,
+			ldap.ScopeWholeSubtree,
+			ldap.NeverDerefAliases,
+			0,
+			0,
+			false,
+			fmt.Sprintf("(uid=%s)", username),
+			[]string{},
+			nil))
+	if err != nil {
+		return nil, errors.Wrap(err, "problem searching ldap")
+	}
+	if len(result.Entries) == 0 {
+		return nil, errors.Errorf("no entry returned for user '%s'", username)
+	}
+	if len(result.Entries[0].Attributes) == 0 {
+		return nil, errors.Errorf("entry's attributes empty for user '%s'", username)
+	}
+	return makeUser(result), nil
+}
+
+func makeUser(result *ldap.SearchResult) gimlet.User {
+	user := &User{}
+	for _, entry := range result.Entries[0].Attributes {
+		if entry.Name == "uid" {
+			user.ID = entry.Values[0]
+		}
+		if entry.Name == "cn" {
+			user.Name = entry.Values[0]
+		}
+		if entry.Name == "mail" {
+			user.EmailAddress = entry.Values[0]
+		}
+	}
+	return user
+}
+
+type User struct {
+	ID           string
+	Name         string
+	EmailAddress string
+}
+
+func (u *User) DisplayName() string { return u.Name }
+func (u *User) Email() string       { return u.EmailAddress }
+func (u *User) Username() string    { return u.ID }
+func (u *User) IsNil() bool         { return u == nil }
+func (u *User) GetAPIKey() string   { return "" }
+func (u *User) Roles() []string     { return []string{} }
