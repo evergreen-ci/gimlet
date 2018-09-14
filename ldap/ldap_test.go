@@ -31,8 +31,8 @@ func (s *LDAPSuite) SetupTest() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "10gen",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		connect:       mockConnect,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
@@ -45,9 +45,9 @@ func (s *LDAPSuite) SetupTest() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "badgroup",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
-		connect:       mockConnect,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		connect:       mockConnectErr,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -59,8 +59,8 @@ func (s *LDAPSuite) SetupTest() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "badgroup",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -69,7 +69,19 @@ func (s *LDAPSuite) SetupTest() {
 }
 
 func mockConnect(url, port string) (ldap.Client, error) {
-	return &mockConn{}, nil
+	return &mockConnSuccess{}, nil
+}
+
+func mockConnectErr(url, port string) (ldap.Client, error) {
+	return &mockConnErr{}, nil
+}
+
+type mockConnSuccess struct {
+	mockConn
+}
+
+type mockConnErr struct {
+	mockConn
 }
 
 type mockConn struct{}
@@ -95,21 +107,7 @@ func (m *mockConn) PasswordModify(passwordModifyRequest *ldap.PasswordModifyRequ
 	return nil, nil
 }
 
-type searchController int
-
-const (
-	searchUserErr searchController = iota
-	searchUserSuccess
-)
-
-var searchControl = searchUserSuccess
-
-func (m *mockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
-	if searchControl == searchUserErr {
-		if len(searchRequest.Attributes) == 0 || searchRequest.Attributes[0] != "ismemberof" {
-			return nil, errors.New("getUserErr")
-		}
-	}
+func (m *mockConnSuccess) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	return &ldap.SearchResult{
 		Entries: []*ldap.Entry{
 			&ldap.Entry{
@@ -134,6 +132,11 @@ func (m *mockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult
 		},
 	}, nil
 }
+
+func (m *mockConnErr) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
+	return nil, errors.New("mockConnErr")
+}
+
 func (m *mockConn) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error) {
 	return nil, nil
 }
@@ -146,49 +149,34 @@ func (u *mockUser) Username() string    { return u.name }
 func (u *mockUser) GetAPIKey() string   { return "" }
 func (u *mockUser) Roles() []string     { return []string{} }
 
+// TODO
 var mockPutUser gimlet.User
 
-type putController int
+func mockPutErr(u gimlet.User) (string, error) {
+	return "", errors.New("putErr")
+}
 
-const (
-	putErr putController = iota
-	putSuccess
-)
-
-var putControl = putErr
-
-func mockPut(u gimlet.User) (string, error) {
+func mockPutSuccess(u gimlet.User) (string, error) {
 	mockPutUser = u
 	if u.Username() == "badUser" {
 		return "", errors.New("got bad user")
 	}
-	if putControl == putErr {
-		return "", errors.New("putErr")
-	}
 	return "123456", nil
 }
 
-type getController int
+func mockGetErr(token string) (gimlet.User, bool, error) {
+	return nil, false, errors.New("error getting user")
+}
 
-const (
-	getErr getController = iota
-	getValidUser
-	getExpiredUser
-	getMissingUser
-)
+func mockGetValid(token string) (gimlet.User, bool, error) {
+	return &mockUser{name: token}, true, nil
+}
 
-var getControl = getErr
+func mockGetExpired(token string) (gimlet.User, bool, error) {
+	return &mockUser{name: token}, false, nil
+}
 
-func mockGet(token string) (gimlet.User, bool, error) {
-	if getControl == getErr {
-		return nil, false, errors.New("error getting user")
-	}
-	if getControl == getValidUser {
-		return &mockUser{name: token}, true, nil
-	}
-	if getControl == getExpiredUser {
-		return &mockUser{name: token}, false, nil
-	}
+func mockGetMissing(token string) (gimlet.User, bool, error) {
 	return nil, false, nil
 }
 
@@ -208,8 +196,8 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "group",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -221,8 +209,8 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "group",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -234,8 +222,8 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "",
 		Path:          "path",
 		Group:         "group",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -247,8 +235,8 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "port",
 		Path:          "",
 		Group:         "group",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -260,8 +248,8 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -274,7 +262,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Path:          "path",
 		Group:         "group",
 		PutCache:      nil,
-		GetCache:      mockGet,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -286,7 +274,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "group",
-		PutCache:      mockPut,
+		PutCache:      mockPutSuccess,
 		GetCache:      nil,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: mockGetOrCreateUser,
@@ -299,8 +287,8 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "group",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       nil,
 		GetCreateUser: mockGetOrCreateUser,
 	})
@@ -312,8 +300,8 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:          "port",
 		Path:          "path",
 		Group:         "group",
-		PutCache:      mockPut,
-		GetCache:      mockGet,
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
 		GetUser:       mockGetUserByID,
 		GetCreateUser: nil,
 	})
@@ -323,44 +311,49 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 
 func (s *LDAPSuite) TestGetUserByToken() {
 	ctx := context.Background()
-	searchControl = searchUserSuccess
-	putControl = putSuccess
 
-	getControl = getErr
+	impl, ok := s.um.(*userService)
+	s.True(ok)
+	impl.GetCache = mockGetErr
 	u, err := s.um.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
 
-	getControl = getValidUser
+	impl.GetCache = mockGetValid
 	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.NoError(err)
 	s.Equal("foo", u.Username())
 
-	getControl = getExpiredUser
+	impl.GetCache = mockGetExpired
 	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.NoError(err)
 	s.Equal("foo", u.Username())
+
+	badGroupImpl, ok := s.badGroupUm.(*userService)
+	s.True(ok)
+	badGroupImpl.GetCache = mockGetExpired
 	u, err = s.badGroupUm.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
+
 	u, err = s.um.GetUserByToken(ctx, "badUser")
 	s.Error(err)
 	s.Nil(u)
 
-	getControl = getMissingUser
+	impl.GetCache = mockGetMissing
 	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
 
-	getControl = getExpiredUser
+	realConnImpl, ok := s.realConnUm.(*userService)
+	s.True(ok)
+	realConnImpl.GetCache = mockGetExpired
 	u, err = s.realConnUm.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
 }
 
 func (s *LDAPSuite) TestCreateUserToken() {
-	searchControl = searchUserSuccess
-	putControl = putSuccess
 	token, err := s.um.CreateUserToken("foo", "badpassword")
 	s.Error(err)
 
@@ -378,13 +371,13 @@ func (s *LDAPSuite) TestCreateUserToken() {
 	s.Error(err)
 	s.Empty(token)
 
-	searchControl = searchUserErr
+	impl, ok := s.um.(*userService)
+	s.True(ok)
+	impl.PutCache = mockPutErr
 	token, err = s.um.CreateUserToken("foo", "hunter2")
 	s.Error(err)
 	s.Empty(token)
 
-	searchControl = searchUserSuccess
-	putControl = putErr
 	token, err = s.um.CreateUserToken("foo", "hunter2")
 	s.Error(err)
 	s.Empty(token)
