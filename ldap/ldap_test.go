@@ -13,7 +13,9 @@ import (
 )
 
 type LDAPSuite struct {
-	um gimlet.UserManager
+	um         gimlet.UserManager
+	badGroupUm gimlet.UserManager
+	realConnUm gimlet.UserManager
 	suite.Suite
 }
 
@@ -25,20 +27,61 @@ func (s *LDAPSuite) SetupTest() {
 	var err error
 	mockPutUser = nil
 	s.um, err = NewUserService(CreationOpts{
-		URL:     "url",
-		Port:    "port",
-		Path:    "path",
-		Group:   "10gen",
-		Put:     mockPut,
-		Get:     mockGet,
-		connect: mockConnect,
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "10gen",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		connect:       mockConnect,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
 	})
 	s.Require().NotNil(s.um)
+	s.Require().NoError(err)
+
+	s.badGroupUm, err = NewUserService(CreationOpts{
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "badgroup",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		connect:       mockConnectErr,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
+	})
+	s.Require().NotNil(s.badGroupUm)
+	s.Require().NoError(err)
+
+	s.realConnUm, err = NewUserService(CreationOpts{
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "badgroup",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
+	})
+	s.Require().NotNil(s.badGroupUm)
 	s.Require().NoError(err)
 }
 
 func mockConnect(url, port string) (ldap.Client, error) {
-	return &mockConn{}, nil
+	return &mockConnSuccess{}, nil
+}
+
+func mockConnectErr(url, port string) (ldap.Client, error) {
+	return &mockConnErr{}, nil
+}
+
+type mockConnSuccess struct {
+	mockConn
+}
+
+type mockConnErr struct {
+	mockConn
 }
 
 type mockConn struct{}
@@ -63,7 +106,8 @@ func (m *mockConn) Compare(dn, attribute, value string) (bool, error) { return f
 func (m *mockConn) PasswordModify(passwordModifyRequest *ldap.PasswordModifyRequest) (*ldap.PasswordModifyResult, error) {
 	return nil, nil
 }
-func (m *mockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
+
+func (m *mockConnSuccess) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	return &ldap.SearchResult{
 		Entries: []*ldap.Entry{
 			&ldap.Entry{
@@ -88,6 +132,11 @@ func (m *mockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult
 		},
 	}, nil
 }
+
+func (m *mockConnErr) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
+	return nil, errors.New("mockConnErr")
+}
+
 func (m *mockConn) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error) {
 	return nil, nil
 }
@@ -100,111 +149,161 @@ func (u *mockUser) Username() string    { return u.name }
 func (u *mockUser) GetAPIKey() string   { return "" }
 func (u *mockUser) Roles() []string     { return []string{} }
 
+// TODO
 var mockPutUser gimlet.User
 
-func mockPut(u gimlet.User) (string, error) {
+func mockPutErr(u gimlet.User) (string, error) {
+	return "", errors.New("putErr")
+}
+
+func mockPutSuccess(u gimlet.User) (string, error) {
 	mockPutUser = u
+	if u.Username() == "badUser" {
+		return "", errors.New("got bad user")
+	}
 	return "123456", nil
 }
 
-type getController int
+func mockGetErr(token string) (gimlet.User, bool, error) {
+	return nil, false, errors.New("error getting user")
+}
 
-const (
-	getErr getController = iota
-	getValidUser
-	getExpiredUser
-	getMissingUser
-)
+func mockGetValid(token string) (gimlet.User, bool, error) {
+	return &mockUser{name: token}, true, nil
+}
 
-var getControl = getErr
+func mockGetExpired(token string) (gimlet.User, bool, error) {
+	return &mockUser{name: token}, false, nil
+}
 
-func mockGet(token string) (gimlet.User, bool, error) {
-	if getControl == getErr {
-		return nil, false, errors.New("error getting user")
-	}
-	if getControl == getValidUser {
-		return &mockUser{name: token}, true, nil
-	}
-	if getControl == getExpiredUser {
-		return &mockUser{name: token}, false, nil
-	}
+func mockGetMissing(token string) (gimlet.User, bool, error) {
 	return nil, false, nil
+}
+
+func mockGetUserByID(id string) (gimlet.User, error) {
+	u := gimlet.NewBasicUser("foo", "", "", "", []string{})
+	return u, nil
+}
+
+func mockGetOrCreateUser(user gimlet.User) (gimlet.User, error) {
+	u := gimlet.NewBasicUser("foo", "", "", "", []string{})
+	return u, nil
 }
 
 func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 	l, err := NewUserService(CreationOpts{
-		URL:   "url",
-		Port:  "port",
-		Path:  "path",
-		Group: "group",
-		Put:   mockPut,
-		Get:   mockGet,
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "group",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
 	})
 	s.NotNil(l)
 	s.NoError(err)
 
 	l, err = NewUserService(CreationOpts{
-		URL:   "",
-		Port:  "port",
-		Path:  "path",
-		Group: "group",
-		Put:   mockPut,
-		Get:   mockGet,
+		URL:           "",
+		Port:          "port",
+		Path:          "path",
+		Group:         "group",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
 	})
 	s.Nil(l)
 	s.Error(err)
 
 	l, err = NewUserService(CreationOpts{
-		URL:   "url",
-		Port:  "",
-		Path:  "path",
-		Group: "group",
-		Put:   mockPut,
-		Get:   mockGet,
+		URL:           "url",
+		Port:          "",
+		Path:          "path",
+		Group:         "group",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
 	})
 	s.Nil(l)
 	s.Error(err)
 
 	l, err = NewUserService(CreationOpts{
-		URL:   "url",
-		Port:  "port",
-		Path:  "",
-		Group: "group",
-		Put:   mockPut,
-		Get:   mockGet,
+		URL:           "url",
+		Port:          "port",
+		Path:          "",
+		Group:         "group",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
 	})
 	s.Nil(l)
 	s.Error(err)
 
 	l, err = NewUserService(CreationOpts{
-		URL:   "url",
-		Port:  "port",
-		Path:  "path",
-		Group: "",
-		Put:   mockPut,
-		Get:   mockGet,
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
 	})
 	s.Nil(l)
 	s.Error(err)
 
 	l, err = NewUserService(CreationOpts{
-		URL:   "url",
-		Port:  "port",
-		Path:  "path",
-		Group: "group",
-		Put:   nil,
-		Get:   mockGet,
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "group",
+		PutCache:      nil,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
 	})
 	s.Nil(l)
 	s.Error(err)
 
 	l, err = NewUserService(CreationOpts{
-		URL:   "url",
-		Port:  "port",
-		Path:  "path",
-		Group: "group",
-		Put:   mockPut,
-		Get:   nil,
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "group",
+		PutCache:      mockPutSuccess,
+		GetCache:      nil,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: mockGetOrCreateUser,
+	})
+	s.Nil(l)
+	s.Error(err)
+
+	l, err = NewUserService(CreationOpts{
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "group",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       nil,
+		GetCreateUser: mockGetOrCreateUser,
+	})
+	s.Nil(l)
+	s.Error(err)
+
+	l, err = NewUserService(CreationOpts{
+		URL:           "url",
+		Port:          "port",
+		Path:          "path",
+		Group:         "group",
+		PutCache:      mockPutSuccess,
+		GetCache:      mockGetValid,
+		GetUser:       mockGetUserByID,
+		GetCreateUser: nil,
 	})
 	s.Nil(l)
 	s.Error(err)
@@ -213,23 +312,43 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 func (s *LDAPSuite) TestGetUserByToken() {
 	ctx := context.Background()
 
-	getControl = getErr
+	impl, ok := s.um.(*userService)
+	s.True(ok)
+	impl.GetCache = mockGetErr
 	u, err := s.um.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
 
-	getControl = getValidUser
+	impl.GetCache = mockGetValid
 	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.NoError(err)
 	s.Equal("foo", u.Username())
 
-	getControl = getExpiredUser
+	impl.GetCache = mockGetExpired
 	u, err = s.um.GetUserByToken(ctx, "foo")
 	s.NoError(err)
 	s.Equal("foo", u.Username())
 
-	getControl = getMissingUser
+	badGroupImpl, ok := s.badGroupUm.(*userService)
+	s.True(ok)
+	badGroupImpl.GetCache = mockGetExpired
+	u, err = s.badGroupUm.GetUserByToken(ctx, "foo")
+	s.Error(err)
+	s.Nil(u)
+
+	u, err = s.um.GetUserByToken(ctx, "badUser")
+	s.Error(err)
+	s.Nil(u)
+
+	impl.GetCache = mockGetMissing
 	u, err = s.um.GetUserByToken(ctx, "foo")
+	s.Error(err)
+	s.Nil(u)
+
+	realConnImpl, ok := s.realConnUm.(*userService)
+	s.True(ok)
+	realConnImpl.GetCache = mockGetExpired
+	u, err = s.realConnUm.GetUserByToken(ctx, "foo")
 	s.Error(err)
 	s.Nil(u)
 }
@@ -247,4 +366,48 @@ func (s *LDAPSuite) TestCreateUserToken() {
 	s.Equal("foo", mockPutUser.Username())
 	s.Equal("Foo Bar", mockPutUser.DisplayName())
 	s.Equal("foo@example.com", mockPutUser.Email())
+
+	token, err = s.badGroupUm.CreateUserToken("foo", "hunter2")
+	s.Error(err)
+	s.Empty(token)
+
+	impl, ok := s.um.(*userService)
+	s.True(ok)
+	impl.PutCache = mockPutErr
+	token, err = s.um.CreateUserToken("foo", "hunter2")
+	s.Error(err)
+	s.Empty(token)
+
+	token, err = s.um.CreateUserToken("foo", "hunter2")
+	s.Error(err)
+	s.Empty(token)
+
+	token, err = s.realConnUm.CreateUserToken("foo", "hunter2")
+	s.Empty(token)
+	s.Error(err)
+}
+
+func (s *LDAPSuite) TestGetLoginHandler() {
+	s.Nil(s.um.GetLoginHandler(""))
+}
+
+func (s *LDAPSuite) TestGetLoginCallbackHandler() {
+	s.Nil(s.um.GetLoginCallbackHandler())
+}
+
+func (s *LDAPSuite) TestIsRedirect() {
+	s.False(s.um.IsRedirect())
+}
+
+func (s *LDAPSuite) TestGetUser() {
+	user, err := s.um.GetUserByID("foo")
+	s.NoError(err)
+	s.Equal("foo", user.Username())
+}
+
+func (s *LDAPSuite) TestGetOrCreateUser() {
+	basicUser := gimlet.MakeBasicUser()
+	user, err := s.um.GetOrCreateUser(basicUser)
+	s.NoError(err)
+	s.Equal("foo", user.Username())
 }

@@ -1,3 +1,4 @@
+// Package ldap provides an LDAP authentication service.
 package ldap
 
 import (
@@ -20,12 +21,14 @@ type userService struct {
 
 // CreationOpts are options to pass to the service constructor.
 type CreationOpts struct {
-	URL   string          // URL of the LDAP server
-	Port  string          // Port of the LDAP server
-	Path  string          // Path to users LDAP OU
-	Group string          // LDAP group to authorize users
-	Put   PutUserGetToken // Put user to cache
-	Get   GetUserByToken  // Get user from cache
+	URL           string          // URL of the LDAP server
+	Port          string          // Port of the LDAP server
+	Path          string          // Path to users LDAP OU
+	Group         string          // LDAP group to authorize users
+	PutCache      PutUserGetToken // Put user to cache
+	GetCache      GetUserByToken  // Get user from cache
+	GetUser       GetUserByID     // Get user from storage
+	GetCreateUser GetOrCreateUser // Get or create user from storage
 
 	connect connectFunc // connect changes connection behavior for testing
 }
@@ -42,6 +45,13 @@ type PutUserGetToken func(gimlet.User) (string, error)
 // It returns (nil, false, nil) if the user is not present in the cache.
 type GetUserByToken func(string) (gimlet.User, bool, error)
 
+// GetUserByID is a function provided by the client to get a user from persistent storage.
+type GetUserByID func(string) (gimlet.User, error)
+
+// GetOrCreateUser is a function provided by the client to get a user from
+// persistent storage, or if the user does not exist, to create and save it.
+type GetOrCreateUser func(gimlet.User) (gimlet.User, error)
+
 type connectFunc func(url, port string) (ldap.Client, error)
 
 // NewUserService constructs a userService. It requires a URL and Port to the LDAP server. It also
@@ -52,12 +62,14 @@ func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
 	}
 	u := &userService{}
 	u.CreationOpts = CreationOpts{
-		URL:   opts.URL,
-		Port:  opts.Port,
-		Path:  opts.Path,
-		Group: opts.Group,
-		Put:   opts.Put,
-		Get:   opts.Get,
+		URL:           opts.URL,
+		Port:          opts.Port,
+		Path:          opts.Path,
+		Group:         opts.Group,
+		PutCache:      opts.PutCache,
+		GetCache:      opts.GetCache,
+		GetUser:       opts.GetUser,
+		GetCreateUser: opts.GetCreateUser,
 	}
 	if opts.connect == nil {
 		u.CreationOpts.connect = connect
@@ -74,8 +86,11 @@ func (opts CreationOpts) validate() error {
 	if opts.Group == "" {
 		return errors.New("LDAP group cannot be empty")
 	}
-	if opts.Put == nil || opts.Get == nil {
-		return errors.New("Put and Get must not be nil")
+	if opts.PutCache == nil || opts.GetCache == nil {
+		return errors.New("PutCache and GetCache must not be nil")
+	}
+	if opts.GetUser == nil || opts.GetCreateUser == nil {
+		return errors.New("GetUserByID and GetOrCreateUser must not be nil")
 	}
 	return nil
 }
@@ -83,7 +98,7 @@ func (opts CreationOpts) validate() error {
 // GetUserByToken returns a user for a given token. If the user is invalid (e.g., if the user's TTL
 // has expired), it re-authorizes the user and re-puts the user in the cache.
 func (u *userService) GetUserByToken(_ context.Context, token string) (gimlet.User, error) {
-	user, valid, err := u.Get(token)
+	user, valid, err := u.GetCache(token)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem getting cached user")
 	}
@@ -94,7 +109,7 @@ func (u *userService) GetUserByToken(_ context.Context, token string) (gimlet.Us
 		if err := u.authorize(user.Username()); err != nil {
 			return nil, errors.Wrap(err, "could not authorize user")
 		}
-		if _, err := u.Put(user); err != nil {
+		if _, err := u.PutCache(user); err != nil {
 			return nil, errors.Wrap(err, "problem putting user in cache")
 		}
 	}
@@ -113,21 +128,30 @@ func (u *userService) CreateUserToken(username, password string) (string, error)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get user '%s'", username)
 	}
-	token, err := u.Put(user)
+	token, err := u.PutCache(user)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to put user into cache '%s'", username)
 	}
 	return token, nil
 }
 
+// GetLoginHandler GetLoginHandler returns nil.
 func (u *userService) GetLoginHandler(url string) http.HandlerFunc { return nil }
-func (u *userService) GetLoginCallbackHandler() http.HandlerFunc   { return nil }
-func (u *userService) IsRedirect() bool                            { return false }
-func (u *userService) GetUserByID(string) (gimlet.User, error) {
-	return nil, errors.New("not yet implemented")
+
+// GetLoginCallbackHandler returns nil.
+func (u *userService) GetLoginCallbackHandler() http.HandlerFunc { return nil }
+
+// IsRedirect returns false.
+func (u *userService) IsRedirect() bool { return false }
+
+// GetUserByID gets a user from persistent storage.
+func (u *userService) GetUserByID(id string) (gimlet.User, error) {
+	return u.GetUser(id)
 }
-func (u *userService) GetOrCreateUser(gimlet.User) (gimlet.User, error) {
-	return nil, errors.New("not yet implemented")
+
+// GetOrCreateUser gets a user from persistent storage or creates one.
+func (u *userService) GetOrCreateUser(user gimlet.User) (gimlet.User, error) {
+	return u.GetCreateUser(user)
 }
 
 // authenticate returns nil if the user and password are valid, an error otherwise.
