@@ -33,9 +33,8 @@ type CreationOpts struct {
 	connect connectFunc // connect changes connection behavior for testing
 }
 
-// PutUserGetToken is a function provided by the client to cache users. If the user is already in the
-// cache, it returns the user's token from the cache. If the user is not in the cache, it generates,
-// saves, and returns a new token. Updating the user's TTL should happen in this function.
+// PutUserGetToken is a function provided by the client to cache users. It generates, saves, and
+// returns a new token. Updating the user's TTL should happen in this function.
 type PutUserGetToken func(gimlet.User) (string, error)
 
 // GetUserByToken is a function provided by the client to retrieve cached users by token.
