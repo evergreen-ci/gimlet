@@ -258,7 +258,13 @@ func (u *userService) getUserFromLDAP(username string) (gimlet.User, error) {
 }
 
 func makeUser(result *ldap.SearchResult) gimlet.User {
-	var id, name, email string
+	var (
+		id     string
+		name   string
+		email  string
+		groups []string
+	)
+
 	for _, entry := range result.Entries[0].Attributes {
 		if entry.Name == "uid" {
 			id = entry.Values[0]
@@ -269,6 +275,9 @@ func makeUser(result *ldap.SearchResult) gimlet.User {
 		if entry.Name == "mail" {
 			email = entry.Values[0]
 		}
+		if entry.Name == "group" {
+			groups = append(groups, entry.Values...)
+		}
 	}
-	return gimlet.NewBasicUser(id, name, email, "", []string{})
+	return gimlet.NewBasicUser(id, name, email, "", groups)
 }
