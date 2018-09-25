@@ -224,55 +224,98 @@ func (u *userService) login(username, password string) error {
 }
 
 func (u *userService) validateGroup(username string) error {
-	result, err := u.conn.Search(
-		ldap.NewSearchRequest(
-			u.userPath,
-			ldap.ScopeWholeSubtree,
-			ldap.NeverDerefAliases,
-			0,
-			0,
-			false,
-			fmt.Sprintf("(uid=%s)", username),
-			[]string{"ismemberof"},
-			nil))
-	if err != nil {
-		return errors.Wrap(err, "problem searching ldap")
-	}
-	if len(result.Entries) == 0 {
-		return errors.Errorf("no entry returned for user '%s'", username)
-	}
-	if len(result.Entries[0].Attributes) == 0 {
-		return errors.Errorf("entry's attributes empty for user '%s'", username)
-	}
-	for i := range result.Entries[0].Attributes[0].Values {
-		if result.Entries[0].Attributes[0].Values[i] == u.group {
-			return nil
+	var (
+		errs   [2]error
+		err    error
+		result *ldap.SearchResult
+	)
+	for idx, path := range []string{u.userPath, u.servicePath} {
+		if path == "" {
+			errs[idx] = errors.New("path is not specified")
+			continue
+		}
+
+		result, err = u.conn.Search(
+			ldap.NewSearchRequest(
+				path,
+				ldap.ScopeWholeSubtree,
+				ldap.NeverDerefAliases,
+				0,
+				0,
+				false,
+				fmt.Sprintf("(uid=%s)", username),
+				[]string{"ismemberof"},
+				nil))
+		if err != nil {
+			errs[idx] = errors.Wrap(err, "problem searching ldap")
+			continue
+		}
+		if len(result.Entries) == 0 {
+			errs[idx] = errors.Errorf("no entry returned for user '%s'", username)
+			continue
+		}
+		if len(result.Entries[0].Attributes) == 0 {
+			errs[idx] = errors.Errorf("entry's attributes empty for user '%s'", username)
+			continue
+		}
+
+		for i := range result.Entries[0].Attributes[0].Values {
+			if result.Entries[0].Attributes[0].Values[i] == u.group {
+				return nil
+			}
 		}
 	}
+
+	for _, err = range errs {
+		if err != nil {
+			return err
+		}
+	}
+
 	return errors.Errorf("user '%s' is not a member of group '%s'", username, u.group)
 }
 
 func (u *userService) getUserFromLDAP(username string) (gimlet.User, error) {
-	result, err := u.conn.Search(
-		ldap.NewSearchRequest(
-			u.userPath,
-			ldap.ScopeWholeSubtree,
-			ldap.NeverDerefAliases,
-			0,
-			0,
-			false,
-			fmt.Sprintf("(uid=%s)", username),
-			[]string{},
-			nil))
-	if err != nil {
-		return nil, errors.Wrap(err, "problem searching ldap")
+	var (
+		errs   [2]error
+		err    error
+		result *ldap.SearchResult
+	)
+
+	for idx, path := range []string{u.userPath, u.servicePath} {
+		result, err = u.conn.Search(
+			ldap.NewSearchRequest(
+				path,
+				ldap.ScopeWholeSubtree,
+				ldap.NeverDerefAliases,
+				0,
+				0,
+				false,
+				fmt.Sprintf("(uid=%s)", username),
+				[]string{},
+				nil))
+		if err != nil {
+			errs[idx] = errors.Wrap(err, "problem searching ldap")
+			continue
+		}
+		if len(result.Entries) == 0 {
+			errs[idx] = errors.Errorf("no entry returned for user '%s'", username)
+			continue
+		}
+		if len(result.Entries[0].Attributes) == 0 {
+			errs[idx] = errors.Errorf("entry's attributes empty for user '%s'", username)
+			continue
+		}
+
+		break
 	}
-	if len(result.Entries) == 0 {
-		return nil, errors.Errorf("no entry returned for user '%s'", username)
+
+	for _, err = range errs {
+		if err != nil {
+			return nil, err
+		}
 	}
-	if len(result.Entries[0].Attributes) == 0 {
-		return nil, errors.Errorf("entry's attributes empty for user '%s'", username)
-	}
+
 	return makeUser(result), nil
 }
 
