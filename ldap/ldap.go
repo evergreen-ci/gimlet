@@ -176,7 +176,7 @@ func (u *userService) GetOrCreateUser(user gimlet.User) (gimlet.User, error) {
 	return u.cache.GetOrCreate(user)
 }
 
-// bind wraps u.conn.Bind, calling it twice because the LDAP server can close the connection.
+// bind wraps u.conn.Bind, reconnecting if the LDAP server has closed the connection.
 // https://github.com/go-ldap/ldap/issues/113
 func (u *userService) bind(username, password string) error {
 	if err := u.ensureConnected(); err != nil {
@@ -193,7 +193,7 @@ func (u *userService) bind(username, password string) error {
 	return u.conn.Bind(username, password)
 }
 
-// bind wraps u.conn.Bind, calling it twice because the LDAP server can close the connection.
+// search wraps u.conn.Search, reconnecting if the LDAP server has closed the connection.
 // https://github.com/go-ldap/ldap/issues/113
 func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	if err := u.ensureConnected(); err != nil {
