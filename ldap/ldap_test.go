@@ -431,6 +431,7 @@ func (s *LDAPSuite) TestLoginUsesBothPaths() {
 	userManager, ok := s.um.(*userService)
 	s.True(ok)
 	s.NotNil(userManager)
-	err := userManager.login("foo", "hunter3")
-	s.NoError(err)
+	s.Error(userManager.login("foo", "hunter1"))
+	s.NoError(userManager.login("foo", "hunter2"))
+	s.NoError(userManager.login("foo", "hunter3"))
 }
