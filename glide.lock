@@ -8,7 +8,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: a83829b6f1293c91addabc89d0571c246397bbf4
 - name: github.com/mongodb/grip
-  version: 5d6dffc047e01c5553d48459d68a2d4f6c11a6ff
+  version: af5d4f01dce67c1dafa9c9a9334f9cae31b2b437
 - name: github.com/urfave/negroni
   version: 3444e69ea1ef03a77998d11fc56e7f0a34f7213c
 - name: github.com/stretchr/testify
