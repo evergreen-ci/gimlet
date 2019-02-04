@@ -29,9 +29,8 @@ import (
 //
 // If the context passed to a wait function is canceled then the wait
 // function should return immediately. You may wish to pass contexts
-// with different contexts to the wait function as you passed to the
-// function that returns the wait function, depending on  your use
-// case.
+// with a different timeout to the wait function from the one you
+// passed to the outer function to ensure correct waiting semantics.
 type WaitFunc func(context.Context)
 
 // APIApp is a structure representing a single API service.
