@@ -12,7 +12,6 @@ package gimlet
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -21,7 +20,19 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/recovery"
+	"github.com/pkg/errors"
 )
+
+// WaitFunc is a function type returned by some functions that allows
+// callers to wait on background processes started by the returning
+// function.
+//
+// If the context passed to a wait function is canceled then the wait
+// function should return immediately. You may wish to pass contexts
+// with different contexts to the wait function as you passed to the
+// function that returns the wait function, depending on  your use
+// case.
+type WaitFunc func(context.Context)
 
 // APIApp is a structure representing a single API service.
 type APIApp struct {
@@ -95,10 +106,29 @@ func (a *APIApp) RestWrappers() {
 // Run configured API service on the configured port. Before running
 // the application, Run also resolves any sub-apps, and adds all
 // routes.
+//
+// If you cancel the context that you pass to run, the application
+// will gracefully shutdown, and wait indefinitely until the
+// application has returned. To get different waiting behavior use
+// BackgroundRun.
 func (a *APIApp) Run(ctx context.Context) error {
+	wait, err := a.BackgroundRun(ctx)
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	wait(context.Background())
+
+	return nil
+}
+
+// BackgroundRun is a non-blocking form of Run that allows you to
+// manage a service running in the background.
+func (a *APIApp) BackgroundRun(ctx context.Context) (WaitFunc, error) {
 	n, err := a.getNegroni()
 	if err != nil {
-		return err
+		return nil, errors.WithStack(err)
 	}
 
 	srv := &http.Server{
@@ -123,9 +153,14 @@ func (a *APIApp) Run(ctx context.Context) error {
 		grip.Debug(srv.Shutdown(ctx))
 	}()
 
-	<-serviceWait
+	wait := func(wctx context.Context) {
+		select {
+		case <-wctx.Done():
+		case <-serviceWait:
+		}
+	}
 
-	return nil
+	return wait, nil
 }
 
 // SetPort allows users to configure a default port for the API
