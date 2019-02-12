@@ -8,6 +8,7 @@ import (
 )
 
 func TestNaiveUserManager(t *testing.T) {
+	const expectedToken = "0:baz:[56 88 246 34 48 172 60 145 95 48 12 102 67 18 198 63]"
 	assert := assert.New(t)
 	assert.Implements((*UserManager)(nil), &NaiveUserManager{})
 
@@ -18,7 +19,7 @@ func TestNaiveUserManager(t *testing.T) {
 			EmailAddress: "baz",
 		},
 	})
-	user, err := u.GetUserByToken(context.Background(), "0:baz:[56 88 246 34 48 172 60 145 95 48 12 102 67 18 198 63]")
+	user, err := u.GetUserByToken(context.Background(), expectedToken)
 	assert.NoError(err)
 	assert.NotNil(user)
 	assert.Equal("foo", user.Username())
@@ -30,7 +31,7 @@ func TestNaiveUserManager(t *testing.T) {
 
 	token, err := u.CreateUserToken("foo", "bar")
 	assert.NoError(err)
-	assert.Equal(token, "0:baz:[56 88 246 34 48 172 60 145 95 48 12 102 67 18 198 63]")
+	assert.Equal(token, expectedToken)
 
 	assert.Nil(u.GetLoginHandler(""))
 	assert.Nil(u.GetLoginCallbackHandler())
