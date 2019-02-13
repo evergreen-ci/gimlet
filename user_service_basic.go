@@ -27,10 +27,10 @@ func (u *NaiveUser) Roles() []string     { return []string{} }
 // and users who need high security authentication  mechanisms should rely on a
 // different authentication mechanism.
 type NaiveUserManager struct {
-	users []*NaiveUser
+	users []NaiveUser
 }
 
-func NewNaiveUserManager(users []*NaiveUser) (UserManager, error) {
+func NewNaiveUserManager(users []NaiveUser) (UserManager, error) {
 	return &NaiveUserManager{users}, nil
 }
 
@@ -43,7 +43,7 @@ func (um *NaiveUserManager) GetUserByToken(_ context.Context, token string) (Use
 		//check to see if token exists
 		possibleToken := fmt.Sprintf("%v:%v:%v", i, user.EmailAddress, md5.Sum([]byte(user.User+user.Pass)))
 		if token == possibleToken {
-			return user, nil
+			return &user, nil
 		}
 	}
 	return nil, errors.New("No valid user found")
@@ -70,7 +70,7 @@ func (*NaiveUserManager) IsRedirect() bool                          { return fal
 func (um *NaiveUserManager) GetUserByID(id string) (User, error) {
 	for _, user := range um.users {
 		if user.User == id {
-			return user, nil
+			return &user, nil
 		}
 	}
 	return nil, errors.Errorf("user %s not found!", id)
@@ -82,12 +82,12 @@ func (um *NaiveUserManager) GetOrCreateUser(u User) (User, error) {
 		return existingUser, nil
 	}
 
-	newUser := &NaiveUser{
+	newUser := NaiveUser{
 		User:         u.Username(),
 		EmailAddress: u.Email(),
 	}
 	um.users = append(um.users, newUser)
-	return newUser, nil
+	return &newUser, nil
 }
 
 func (b *NaiveUserManager) ClearUser(u User, all bool) error {

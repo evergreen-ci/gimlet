@@ -12,7 +12,7 @@ func TestNaiveUserManager(t *testing.T) {
 	assert := assert.New(t)
 	assert.Implements((*UserManager)(nil), &NaiveUserManager{})
 
-	u, err := NewNaiveUserManager([]*NaiveUser{
+	u, err := NewNaiveUserManager([]NaiveUser{
 		{
 			User:         "foo",
 			Pass:         "bar",
