@@ -8,7 +8,7 @@ func NewBasicUser(opts *BasicUserOpts) User {
 
 // MakeBasicUser constructs an empty basic user structure to ease
 // serialization.
-func MakeBasicUser() User { return &basicUser{&BasicUserOpts{}} }
+func MakeBasicUser() User { return &basicUser{} }
 
 type basicUser struct {
 	*BasicUserOpts
