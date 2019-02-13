@@ -77,7 +77,7 @@ func TestBasicAuthenticator(t *testing.T) {
 	// authenticated users are all non-nil users that have
 	// usernames
 	assert.False(auth.CheckAuthenticated(nil))
-	assert.False(auth.CheckAuthenticated(&basicUser{}))
+	assert.False(auth.CheckAuthenticated(&basicUser{&BasicUserOpts{}}))
 	usr := NewBasicUser(&BasicUserOpts{"id", "name", "email", "key", []string{}, ""})
 	assert.True(auth.CheckAuthenticated(usr))
 
