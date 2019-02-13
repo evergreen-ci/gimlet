@@ -7,18 +7,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBasicUserManager(t *testing.T) {
+func TestNaiveUserManager(t *testing.T) {
 	const expectedToken = "0:baz:[56 88 246 34 48 172 60 145 95 48 12 102 67 18 198 63]"
 	assert := assert.New(t)
-	assert.Implements((*UserManager)(nil), &basicUserManager{})
+	assert.Implements((*UserManager)(nil), &NaiveUserManager{})
 
-	u, err := NewBasicUserManager([]basicUser{
-		basicUser{
-			&BasicUserOpts{
-				ID:           "foo",
-				Password:     "bar",
-				EmailAddress: "baz",
-			},
+	u, err := NewNaiveUserManager([]NaiveUser{
+		{
+			User:         "foo",
+			Pass:         "bar",
+			EmailAddress: "baz",
 		},
 	})
 	user, err := u.GetUserByToken(context.Background(), expectedToken)
@@ -49,14 +47,14 @@ func TestBasicUserManager(t *testing.T) {
 	assert.Equal("foo", user.Username())
 	assert.Equal("baz", user.Email())
 
-	newUser := &basicUser{&BasicUserOpts{ID: "foo"}}
+	newUser := &NaiveUser{User: "foo"}
 	user, err = u.GetOrCreateUser(newUser)
 	assert.NoError(err)
 	assert.NotNil(user)
 	assert.Equal("foo", user.Username())
 	assert.Equal("baz", user.Email())
 
-	newUser = &basicUser{&BasicUserOpts{ID: "new_user", Password: "password", EmailAddress: "email@example.com"}}
+	newUser = &NaiveUser{User: "new_user", Pass: "password", EmailAddress: "email@example.com"}
 	user, err = u.GetOrCreateUser(newUser)
 	assert.NoError(err)
 	assert.NotNil(user)

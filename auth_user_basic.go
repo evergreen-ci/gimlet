@@ -2,8 +2,14 @@ package gimlet
 
 // NewBasicUser constructs a simple user. The underlying type has
 // serialization tags.
-func NewBasicUser(opts *BasicUserOpts) User {
-	return &basicUser{opts}
+func NewBasicUser(id, name, email, key string, roles []string) User {
+	return &basicUser{
+		ID:           id,
+		Name:         name,
+		EmailAddress: email,
+		Key:          key,
+		AccessRoles:  roles,
+	}
 }
 
 // MakeBasicUser constructs an empty basic user structure to ease
@@ -11,16 +17,11 @@ func NewBasicUser(opts *BasicUserOpts) User {
 func MakeBasicUser() User { return &basicUser{} }
 
 type basicUser struct {
-	*BasicUserOpts
-}
-
-type BasicUserOpts struct {
 	ID           string   `bson:"_id" json:"id" yaml:"id"`
 	EmailAddress string   `bson:"email" json:"email" yaml:"email"`
 	Name         string   `bson:"name" json:"name" yaml:"name"`
 	Key          string   `bson:"key" json:"key" yaml:"key"`
 	AccessRoles  []string `bson:"roles" json:"roles" yaml:"roles"`
-	Password     string   `bson:"pass" json:"pass" yaml:"pass"`
 }
 
 func (u *basicUser) Username() string    { return u.ID }
