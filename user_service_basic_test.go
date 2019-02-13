@@ -12,13 +12,13 @@ func TestBasicUserManager(t *testing.T) {
 	assert := assert.New(t)
 	assert.Implements((*UserManager)(nil), &BasicUserManager{})
 
-	u, err := NewBasicUserManager([]basicUser{
+	u := BasicUserManager{users: []basicUser{
 		{
 			ID:           "foo",
 			Password:     "bar",
 			EmailAddress: "baz",
 		},
-	})
+	}}
 	user, err := u.GetUserByToken(context.Background(), expectedToken)
 	assert.NoError(err)
 	assert.NotNil(user)

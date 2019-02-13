@@ -6,20 +6,31 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/mongodb/grip"
 	"github.com/pkg/errors"
 )
 
 // BasicUserManager implements the UserManager interface and has a list of
-// BasicUsers which is stored in the settings configuration file.
-// Note: This use of the UserManager is recommended for dev/test purposes only
-// and users who need high security authentication  mechanisms should rely on a
-// different authentication mechanism.
+// BasicUsers which is passed into the constructor.
 type BasicUserManager struct {
 	users []basicUser
 }
 
-func NewBasicUserManager(users []basicUser) (UserManager, error) {
-	return &BasicUserManager{users}, nil
+// NewBasicUserManager is a constructor to create a BasicUserManager from
+// a list of basic users. It requires the basicUser concrete type.
+func NewBasicUserManager(users []User) (UserManager, error) {
+	catcher := grip.NewBasicCatcher()
+	basicUsers := []basicUser{}
+	var bu *basicUser
+	var ok bool
+	for _, u := range users {
+		if bu, ok = u.(*basicUser); !ok {
+			catcher.Add(errors.Errorf("%T is not a basicUser", u))
+			continue
+		}
+		basicUsers = append(basicUsers, *bu)
+	}
+	return &BasicUserManager{basicUsers}, nil
 }
 
 // GetUserByToken does a find by creating a temporary token from the index of
