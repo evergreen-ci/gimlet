@@ -17,7 +17,7 @@ type BasicUserManager struct {
 }
 
 // NewBasicUserManager is a constructor to create a BasicUserManager from
-// a list of basic users. It requires the basicUser concrete type.
+// a list of basic users. It requires a user created by NewBasicUser.
 func NewBasicUserManager(users []User) (UserManager, error) {
 	catcher := grip.NewBasicCatcher()
 	basicUsers := []basicUser{}
@@ -25,10 +25,13 @@ func NewBasicUserManager(users []User) (UserManager, error) {
 	var ok bool
 	for _, u := range users {
 		if bu, ok = u.(*basicUser); !ok {
-			catcher.Add(errors.Errorf("%T is not a basicUser", u))
+			catcher.Errorf("%T is not a basicUser", u)
 			continue
 		}
 		basicUsers = append(basicUsers, *bu)
+	}
+	if catcher.HasErrors() {
+		return nil, catcher.Resolve()
 	}
 	return &BasicUserManager{basicUsers}, nil
 }
