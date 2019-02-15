@@ -26,16 +26,16 @@ func GetPProfApp() *APIApp {
 	app.SetPrefix("/debug/pprof")
 	app.NoVersions = true
 
-	app.AddRoute("/").Get().Handler(pprofIndex)
-	app.AddRoute("/heap").Get().Handler(pprofIndex)
-	app.AddRoute("/block").Get().Handler(pprofIndex)
-	app.AddRoute("/goroutine").Get().Handler(pprofIndex)
-	app.AddRoute("/mutex").Get().Handler(pprofIndex)
-	app.AddRoute("/threadcreate").Get().Handler(pprofIndex)
-	app.AddRoute("/cmdline").Get().Handler(pprofCmdline)
-	app.AddRoute("/profile").Get().Handler(pprofProfile)
-	app.AddRoute("/symbol").Get().Handler(pprofSymbol)
-	app.AddRoute("/trace").Get().Handler(pprofTrace)
+	app.AddRoute("/").Version(1).Get().Handler(pprofIndex)
+	app.AddRoute("/heap").Version(1).Get().Handler(pprofIndex)
+	app.AddRoute("/block").Version(1).Get().Handler(pprofIndex)
+	app.AddRoute("/goroutine").Version(1).Get().Handler(pprofIndex)
+	app.AddRoute("/mutex").Version(1).Get().Handler(pprofIndex)
+	app.AddRoute("/threadcreate").Version(1).Get().Handler(pprofIndex)
+	app.AddRoute("/cmdline").Version(1).Get().Handler(pprofCmdline)
+	app.AddRoute("/profile").Version(1).Get().Handler(pprofProfile)
+	app.AddRoute("/symbol").Version(1).Get().Handler(pprofSymbol)
+	app.AddRoute("/trace").Version(1).Get().Handler(pprofTrace)
 
 	return app
 }
