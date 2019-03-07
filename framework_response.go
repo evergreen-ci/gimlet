@@ -74,7 +74,7 @@ func NewResponseBuilder() Responder {
 	return &responseBuilder{
 		status: http.StatusOK,
 		format: JSON,
-		data:   make([]interface{}, 0),
+		data:   []interface{}{},
 	}
 }
 
