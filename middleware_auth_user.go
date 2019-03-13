@@ -40,7 +40,7 @@ func (umc *UserMiddlewareConfiguration) Validate() error {
 		if umc.CookiePath == "" {
 			umc.CookiePath = "/"
 		} else if !strings.HasPrefix(umc.CookiePath, "/") {
-			catcher.New("cookie path must have")
+			catcher.New("cookie path must begin with '/'")
 		}
 	}
 
