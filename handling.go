@@ -41,6 +41,9 @@ func writePayload(w io.Writer, data interface{}) (int, error) {
 	case io.Reader:
 		size, err := io.Copy(w, data)
 		return int(size), errors.WithStack(err)
+	case []io.Reader:
+		size, err := io.Copy(w, io.MultiReader(data...))
+		return int(size), errors.WithStack(err)
 	default:
 		return w.Write([]byte(fmt.Sprintf("%v", data)))
 	}
