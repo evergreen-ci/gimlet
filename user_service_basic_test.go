@@ -12,7 +12,7 @@ func TestBasicUserManager(t *testing.T) {
 	assert := assert.New(t)
 	assert.Implements((*UserManager)(nil), &BasicUserManager{})
 
-	u := BasicUserManager{users: []*basicUser{
+	u := BasicUserManager{users: []basicUser{
 		{
 			ID:           "foo",
 			Password:     "bar",
