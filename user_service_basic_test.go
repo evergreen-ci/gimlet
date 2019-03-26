@@ -12,7 +12,7 @@ func TestBasicUserManager(t *testing.T) {
 	assert := assert.New(t)
 	assert.Implements((*UserManager)(nil), &BasicUserManager{})
 
-	u := BasicUserManager{users: []basicUser{
+	u := BasicUserManager{users: []*basicUser{
 		{
 			ID:           "foo",
 			Password:     "bar",
@@ -60,6 +60,13 @@ func TestBasicUserManager(t *testing.T) {
 	assert.NotNil(user)
 	assert.Equal("new_user", user.Username())
 	assert.Equal("email@example.com", user.Email())
+
+	assert.False(u.IsInvalid(user.Username()))
+	u.SetInvalid(user.Username(), true)
+	assert.True(u.IsInvalid(user.Username()))
+	u.SetInvalid(user.Username(), false)
+	assert.False(u.IsInvalid(user.Username()))
+	assert.True(u.IsInvalid("DNE"))
 
 	assert.Error(u.ClearUser(newUser, false))
 }

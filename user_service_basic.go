@@ -13,14 +13,14 @@ import (
 // BasicUserManager implements the UserManager interface and has a list of
 // BasicUsers which is passed into the constructor.
 type BasicUserManager struct {
-	users []basicUser
+	users []*basicUser
 }
 
 // NewBasicUserManager is a constructor to create a BasicUserManager from
 // a list of basic users. It requires a user created by NewBasicUser.
 func NewBasicUserManager(users []User) (UserManager, error) {
 	catcher := grip.NewBasicCatcher()
-	basicUsers := []basicUser{}
+	basicUsers := []*basicUser{}
 	var bu *basicUser
 	var ok bool
 	for _, u := range users {
@@ -28,7 +28,7 @@ func NewBasicUserManager(users []User) (UserManager, error) {
 			catcher.Errorf("%T is not a basicUser", u)
 			continue
 		}
-		basicUsers = append(basicUsers, *bu)
+		basicUsers = append(basicUsers, bu)
 	}
 	if catcher.HasErrors() {
 		return nil, catcher.Resolve()
@@ -45,7 +45,7 @@ func (um *BasicUserManager) GetUserByToken(_ context.Context, token string) (Use
 		//check to see if token exists
 		possibleToken := fmt.Sprintf("%v:%v:%v", i, user.EmailAddress, md5.Sum([]byte(user.ID+user.Password)))
 		if token == possibleToken {
-			return &user, nil
+			return user, nil
 		}
 	}
 	return nil, errors.New("No valid user found")
@@ -69,10 +69,29 @@ func (*BasicUserManager) GetLoginHandler(string) http.HandlerFunc   { return nil
 func (*BasicUserManager) GetLoginCallbackHandler() http.HandlerFunc { return nil }
 func (*BasicUserManager) IsRedirect() bool                          { return false }
 
+func (um *BasicUserManager) IsInvalid(username string) bool {
+	for _, user := range um.users {
+		if user.ID == username {
+			return user.Invalid
+		}
+	}
+
+	return true
+}
+
+func (um *BasicUserManager) SetInvalid(username string, invalid bool) {
+	for _, user := range um.users {
+		if user.ID == username {
+			user.Invalid = invalid
+			return
+		}
+	}
+}
+
 func (um *BasicUserManager) GetUserByID(id string) (User, error) {
 	for _, user := range um.users {
 		if user.ID == id {
-			return &user, nil
+			return user, nil
 		}
 	}
 	return nil, errors.Errorf("user %s not found!", id)
@@ -84,12 +103,12 @@ func (um *BasicUserManager) GetOrCreateUser(u User) (User, error) {
 		return existingUser, nil
 	}
 
-	newUser := basicUser{
+	newUser := &basicUser{
 		ID:           u.Username(),
 		EmailAddress: u.Email(),
 	}
 	um.users = append(um.users, newUser)
-	return &newUser, nil
+	return newUser, nil
 }
 
 func (b *BasicUserManager) ClearUser(u User, all bool) error {
