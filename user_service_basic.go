@@ -91,6 +91,9 @@ func (um *BasicUserManager) SetInvalid(username string, invalid bool) {
 func (um *BasicUserManager) GetUserByID(id string) (User, error) {
 	for _, user := range um.users {
 		if user.ID == id {
+			if user.Invalid {
+				return nil, errors.Errorf("user %s not authorized!", id)
+			}
 			return user, nil
 		}
 	}
