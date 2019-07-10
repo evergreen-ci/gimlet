@@ -236,6 +236,11 @@ func (r *APIRoute) Head() *APIRoute {
 	return r
 }
 
+func (r *APIRoute) Options() *APIRoute {
+	r.methods = append(r.methods, options)
+	return r
+}
+
 // Method makes it possible to specify an HTTP method pragmatically.
 func (r *APIRoute) Method(m string) *APIRoute {
 	switch m {

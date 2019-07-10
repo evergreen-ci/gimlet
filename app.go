@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mongodb/grip"
 	"github.com/pkg/errors"
+	"github.com/rs/cors"
 )
 
 // WaitFunc is a function type returned by some functions that allows
@@ -99,6 +100,11 @@ func (a *APIApp) ResetMiddleware() {
 // current application.
 func (a *APIApp) RestWrappers() {
 	a.wrappers = []Middleware{}
+}
+
+func (a *APIApp) AddCORS(opts cors.Options) {
+	c := cors.New(opts)
+	a.AddMiddleware(c)
 }
 
 // Run configured API service on the configured port. Before running

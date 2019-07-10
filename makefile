@@ -180,6 +180,7 @@ vendor-clean:
 	rm -rf vendor/github.com/mongodb/grip/vendor/github.com/pkg/
 	rm -rf vendor/github.com/mongodb/grip/vendor/github.com/stretchr/
 	rm -rf vendor/gopkg.in/asn1-ber.v1/tests/
+	rm -rf vendor/github.com/rs/cors/examples/
 	find vendor/ -name "*.gif" -o -name "*.gz" -o -name "*.png" -o -name "*.ico" -o -name "*.dat" -o -name "*testdata" | xargs rm -rf
 phony += vendor-clean
 # end vendoring tooling configuration
