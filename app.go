@@ -102,9 +102,10 @@ func (a *APIApp) RestWrappers() {
 	a.wrappers = []Middleware{}
 }
 
-func (a *APIApp) AddCORS(opts cors.Options) {
+func (a *APIApp) AddCORS(opts cors.Options) *APIApp {
 	c := cors.New(opts)
 	a.AddMiddleware(c)
+	return a
 }
 
 // Run configured API service on the configured port. Before running
