@@ -32,7 +32,8 @@ func (s *LDAPSuite) SetupTest() {
 		Port:          "port",
 		UserPath:      "path",
 		ServicePath:   "bots",
-		UserGroup:     "10gen",
+		UserGroup:     "cn=10gen,ou=groups,dc=mongodb,dc=com",
+		GroupOuName:   "groups",
 		PutCache:      mockPutSuccess,
 		GetCache:      mockGetValid,
 		ClearCache:    mockClearCache,
@@ -49,7 +50,8 @@ func (s *LDAPSuite) SetupTest() {
 		UserPath:      "path",
 		ServicePath:   "bots",
 		UserGroup:     "badgroup",
-		ServiceGroup:  "10gen",
+		ServiceGroup:  "cn=10gen,ou=groups,dc=mongodb,dc=com",
+		GroupOuName:   "groups",
 		PutCache:      mockPutSuccess,
 		GetCache:      mockGetValid,
 		ClearCache:    mockClearCache,
@@ -66,6 +68,7 @@ func (s *LDAPSuite) SetupTest() {
 		UserPath:      "path",
 		ServicePath:   "bots",
 		UserGroup:     "badgroup",
+		GroupOuName:   "groups",
 		PutCache:      mockPutSuccess,
 		GetCache:      mockGetValid,
 		ClearCache:    mockClearCache,
@@ -82,6 +85,7 @@ func (s *LDAPSuite) SetupTest() {
 		UserPath:      "path",
 		ServicePath:   "bots",
 		UserGroup:     "badgroup",
+		GroupOuName:   "groups",
 		PutCache:      mockPutSuccess,
 		GetCache:      mockGetValid,
 		ClearCache:    mockClearCache,
@@ -140,7 +144,7 @@ func (m *mockConnSuccess) Search(searchRequest *ldap.SearchRequest) (*ldap.Searc
 			&ldap.Entry{
 				Attributes: []*ldap.EntryAttribute{
 					&ldap.EntryAttribute{
-						Values: []string{"10gen"},
+						Values: []string{"cn=10gen,ou=groups,dc=mongodb,dc=com"},
 					},
 					&ldap.EntryAttribute{
 						Name:   "uid",
@@ -541,5 +545,11 @@ func (s *LDAPSuite) TestClearCache() {
 	s.Require().NoError(err)
 
 	err = s.um.ClearUser(user, false)
+	s.NoError(err)
+}
+
+func (s *LDAPSuite) TestGetGroupsForUser() {
+	groups, err := s.um.GetGroupsForUser("foo")
+	s.Equal("10gen", groups[0])
 	s.NoError(err)
 }

@@ -54,4 +54,7 @@ type UserManager interface {
 
 	// Log out user or all users
 	ClearUser(user User, all bool) error
+
+	// Returns the groups or roles to which a user belongs
+	GetGroupsForUser(string) ([]string, error)
 }

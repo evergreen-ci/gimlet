@@ -117,3 +117,13 @@ func (um *BasicUserManager) GetOrCreateUser(u User) (User, error) {
 func (b *BasicUserManager) ClearUser(u User, all bool) error {
 	return errors.New("Naive Authentication does not support Clear User")
 }
+
+func (b *BasicUserManager) GetGroupsForUser(userId string) ([]string, error) {
+	for _, user := range b.users {
+		if user.ID == userId {
+			return user.AccessRoles, nil
+		}
+	}
+
+	return nil, errors.Errorf("user %s not found", userId)
+}
