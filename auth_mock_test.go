@@ -125,3 +125,7 @@ func (m *MockUserManager) GetOrCreateUser(u User) (User, error) {
 func (m *MockUserManager) ClearUser(u User, all bool) error {
 	return errors.New("MockUserManager does not support Clear User")
 }
+
+func (m *MockUserManager) GetGroupsForUser(username string) ([]string, error) {
+	return nil, errors.New("not implemented")
+}
