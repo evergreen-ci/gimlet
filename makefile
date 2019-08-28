@@ -1,7 +1,7 @@
 # start project configuration
 name := gimlet
 buildDir := build
-packages := $(name) ldap
+packages := $(name) ldap apps
 orgPath := github.com/evergreen-ci
 projectPath := $(orgPath)/$(name)
 # end project configuration
