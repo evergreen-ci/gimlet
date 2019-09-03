@@ -1,4 +1,4 @@
-package apps
+package prebuilt
 
 import (
 	"context"
@@ -17,44 +17,6 @@ type Role struct {
 	Scope       *string           `json:"scope"`
 	Permissions map[string]string `json:"permissions"`
 	Owners      []string          `json:"owners"`
-}
-
-type RoleHandlers struct {
-	gimlet.APIApp
-
-	readFunc     func() (*Role, error)
-	updateFunc   func(Role) error
-	validateFunc func(Role) error
-}
-
-// NewRoleHandlers returns an empty role handler app
-func NewRoleHandlers() RoleHandlers {
-	return RoleHandlers{}
-}
-
-func (r *RoleHandlers) ReadFunc(f func() (*Role, error)) *RoleHandlers {
-	r.readFunc = f
-	r.formApp()
-	return r
-}
-
-func (r *RoleHandlers) UpdateFunc(f func(Role) error) *RoleHandlers {
-	r.updateFunc = f
-	r.formApp()
-	return r
-}
-
-func (r *RoleHandlers) ValidateFunc(f func(Role) error) *RoleHandlers {
-	r.validateFunc = f
-	r.formApp()
-	return r
-}
-
-func (r *RoleHandlers) formApp() {
-	app := *gimlet.NewApp()
-	app.AddRoute("/roles").Get().RouteHandler(newGetAllRolesHandler(r.readFunc))
-	app.AddRoute("/roles").Post().RouteHandler(newUpdateRoleHandler(r.updateFunc, r.validateFunc))
-	r.APIApp = app
 }
 
 type updateRoleHandler struct {
