@@ -7,52 +7,49 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/mongodb/grip"
+
+	"github.com/evergreen-ci/gimlet"
+	"github.com/evergreen-ci/gimlet/rolemanager"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRoleRouteHandlers(t *testing.T) {
-	t.Run("TestRoleUpdate", TestRoleUpdate)
-	t.Run("TestRoleRead", TestRoleRead)
+	m := rolemanager.NewInMemoryRoleManager()
+	t.Run("TestRoleUpdate", testRoleUpdate(t, m))
+	t.Run("TestRoleRead", testRoleRead(t, m))
 }
 
-func TestRoleUpdate(t *testing.T) {
-	body := map[string]interface{}{
-		"id":          "myRole",
-		"permissions": map[string]string{"p1": "true"},
-		"owners":      []string{"me"},
-	}
-	var updateWasCalled, validateWasCalled bool
-	update := func(r Role) error {
-		updateWasCalled = true
-		assert.Equal(t, body["id"], *r.ID)
-		assert.Equal(t, body["owners"], r.Owners)
-		assert.Equal(t, body["permissions"], r.Permissions)
-		return nil
-	}
-	validate := func(Role) error {
-		validateWasCalled = true
-		return nil
-	}
-	handler := newUpdateRoleHandler(update, validate)
+func testRoleUpdate(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
+	return func(t *testing.T) {
+		body := map[string]interface{}{
+			"id":          "myRole",
+			"permissions": map[string]int{"p1": 1},
+			"owners":      []string{"me"},
+		}
+		var validateWasCalled bool
+		validate := func(gimlet.Role) error {
+			validateWasCalled = true
+			return nil
+		}
+		handler := newUpdateRoleHandler(m, validate)
 
-	jsonBody, err := json.Marshal(body)
-	assert.NoError(t, err)
-	buffer := bytes.NewBuffer(jsonBody)
-	request, err := http.NewRequest(http.MethodPost, "/roles", buffer)
-	assert.NoError(t, handler.Parse(context.Background(), request))
-	assert.True(t, validateWasCalled)
-	_ = handler.Run(context.Background())
-	assert.True(t, updateWasCalled)
+		jsonBody, err := json.Marshal(body)
+		assert.NoError(t, err)
+		buffer := bytes.NewBuffer(jsonBody)
+		request, err := http.NewRequest(http.MethodPost, "/roles", buffer)
+		assert.NoError(t, handler.Parse(context.Background(), request))
+		assert.True(t, validateWasCalled)
+		resp := handler.Run(context.Background())
+		assert.Equal(t, 200, resp.Status())
+	}
 }
 
-func TestRoleRead(t *testing.T) {
-	var readWasCalled bool
-	read := func() (*Role, error) {
-		readWasCalled = true
-		return nil, nil
+func testRoleRead(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
+	return func(t *testing.T) {
+		handler := newGetAllRolesHandler(m)
+		assert.NoError(t, handler.Parse(context.Background(), nil))
+		resp := handler.Run(context.Background())
+		grip.Info(resp.Data())
 	}
-	handler := newGetAllRolesHandler(read)
-	assert.NoError(t, handler.Parse(context.Background(), nil))
-	_ = handler.Run(context.Background())
-	assert.True(t, readWasCalled)
 }

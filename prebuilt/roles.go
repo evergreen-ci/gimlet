@@ -9,25 +9,15 @@ import (
 	"github.com/evergreen-ci/gimlet"
 )
 
-// Role is the data structure used to read and manipulate user roles in these routes
-type Role struct {
-	ID          *string           `json:"id"`
-	Name        *string           `json:"name"`
-	ScopeType   *string           `json:"scope_type"`
-	Scope       *string           `json:"scope"`
-	Permissions map[string]string `json:"permissions"`
-	Owners      []string          `json:"owners"`
-}
-
 type updateRoleHandler struct {
-	role         *Role
-	updateFunc   func(Role) error
-	validateFunc func(Role) error
+	manager      gimlet.RoleManager
+	role         *gimlet.Role
+	validateFunc func(gimlet.Role) error
 }
 
-func newUpdateRoleHandler(updateFunc func(Role) error, validateFunc func(Role) error) gimlet.RouteHandler {
+func newUpdateRoleHandler(m gimlet.RoleManager, validateFunc func(gimlet.Role) error) gimlet.RouteHandler {
 	return &updateRoleHandler{
-		updateFunc:   updateFunc,
+		manager:      m,
 		validateFunc: validateFunc,
 	}
 }
@@ -37,7 +27,7 @@ func (h *updateRoleHandler) Factory() gimlet.RouteHandler {
 }
 
 func (h *updateRoleHandler) Parse(ctx context.Context, r *http.Request) error {
-	h.role = &Role{}
+	h.role = &gimlet.Role{}
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return err
@@ -50,7 +40,7 @@ func (h *updateRoleHandler) Parse(ctx context.Context, r *http.Request) error {
 }
 
 func (h *updateRoleHandler) Run(ctx context.Context) gimlet.Responder {
-	err := h.updateFunc(*h.role)
+	err := h.manager.UpdateRole(*h.role)
 	if err != nil {
 		return gimlet.NewJSONErrorResponse(err)
 	}
@@ -59,12 +49,12 @@ func (h *updateRoleHandler) Run(ctx context.Context) gimlet.Responder {
 }
 
 type getAllRolesHandler struct {
-	readFunc func() (*Role, error)
+	manager gimlet.RoleManager
 }
 
-func newGetAllRolesHandler(readFunc func() (*Role, error)) gimlet.RouteHandler {
+func newGetAllRolesHandler(m gimlet.RoleManager) gimlet.RouteHandler {
 	return &getAllRolesHandler{
-		readFunc: readFunc,
+		manager: m,
 	}
 }
 
@@ -77,7 +67,7 @@ func (h *getAllRolesHandler) Parse(ctx context.Context, r *http.Request) error {
 }
 
 func (h *getAllRolesHandler) Run(ctx context.Context) gimlet.Responder {
-	roles, err := h.readFunc()
+	roles, err := h.manager.GetAllRoles()
 	if err != nil {
 		return gimlet.MakeJSONInternalErrorResponder(err)
 	}

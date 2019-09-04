@@ -16,6 +16,7 @@ type User interface {
 	Username() string
 	GetAPIKey() string
 	Roles() []string
+	HasPermission(string, int) (bool, error)
 }
 
 // Authenticator represents a service that answers specific
@@ -57,4 +58,10 @@ type UserManager interface {
 
 	// Returns the groups or roles to which a user belongs
 	GetGroupsForUser(string) ([]string, error)
+}
+
+type RoleManager interface {
+	GetAllRoles() ([]Role, error)
+	GetRoles([]string) ([]Role, error)
+	UpdateRole(Role) error
 }
