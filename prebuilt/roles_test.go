@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/mongodb/grip"
-
 	"github.com/evergreen-ci/gimlet"
 	"github.com/evergreen-ci/gimlet/rolemanager"
 	"github.com/stretchr/testify/assert"
@@ -50,6 +48,8 @@ func testRoleRead(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
 		handler := newGetAllRolesHandler(m)
 		assert.NoError(t, handler.Parse(context.Background(), nil))
 		resp := handler.Run(context.Background())
-		grip.Info(resp.Data())
+		roles, valid := resp.Data().([]gimlet.Role)
+		assert.True(t, valid)
+		assert.Equal(t, "myRole", roles[0].ID)
 	}
 }
