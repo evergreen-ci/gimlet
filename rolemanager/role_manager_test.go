@@ -18,7 +18,7 @@ func TestRoleManager(t *testing.T) {
 	require.NoError(t, client.Connect(context.Background()))
 
 	dbManager := NewMongoBackedRoleManager(MongoBackedRoleManagerOpts{
-		Client:         *client,
+		Client:         client,
 		DBName:         dbName,
 		RoleCollection: collectionName,
 	})

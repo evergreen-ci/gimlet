@@ -8,27 +8,27 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type MongoBackedRoleManager struct {
-	client mongo.Client
+type mongoBackedRoleManager struct {
+	client *mongo.Client
 	db     string
 	coll   string
 }
 
 type MongoBackedRoleManagerOpts struct {
-	Client         mongo.Client
+	Client         *mongo.Client
 	DBName         string
 	RoleCollection string
 }
 
 func NewMongoBackedRoleManager(opts MongoBackedRoleManagerOpts) gimlet.RoleManager {
-	return &MongoBackedRoleManager{
+	return &mongoBackedRoleManager{
 		client: opts.Client,
 		db:     opts.DBName,
 		coll:   opts.RoleCollection,
 	}
 }
 
-func (m *MongoBackedRoleManager) GetAllRoles() ([]gimlet.Role, error) {
+func (m *mongoBackedRoleManager) GetAllRoles() ([]gimlet.Role, error) {
 	out := []gimlet.Role{}
 	ctx := context.Background()
 	cursor, err := m.client.Database(m.db).Collection(m.coll).Find(ctx, bson.M{})
@@ -42,7 +42,7 @@ func (m *MongoBackedRoleManager) GetAllRoles() ([]gimlet.Role, error) {
 	return out, nil
 }
 
-func (m *MongoBackedRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
+func (m *mongoBackedRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 	out := []gimlet.Role{}
 	ctx := context.Background()
 	cursor, err := m.client.Database(m.db).Collection(m.coll).Find(ctx, bson.M{
@@ -60,7 +60,7 @@ func (m *MongoBackedRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 	return out, nil
 }
 
-func (m *MongoBackedRoleManager) UpdateRole(role gimlet.Role) error {
+func (m *mongoBackedRoleManager) UpdateRole(role gimlet.Role) error {
 	ctx := context.Background()
 	coll := m.client.Database(m.db).Collection(m.coll)
 	result := coll.FindOneAndReplace(ctx, bson.M{"_id": role.ID}, role)
@@ -71,17 +71,17 @@ func (m *MongoBackedRoleManager) UpdateRole(role gimlet.Role) error {
 	return err
 }
 
-type InMemoryRoleManager struct {
+type inMemoryRoleManager struct {
 	roles map[string]gimlet.Role
 }
 
 func NewInMemoryRoleManager() gimlet.RoleManager {
-	return &InMemoryRoleManager{
+	return &inMemoryRoleManager{
 		roles: map[string]gimlet.Role{},
 	}
 }
 
-func (m *InMemoryRoleManager) GetAllRoles() ([]gimlet.Role, error) {
+func (m *inMemoryRoleManager) GetAllRoles() ([]gimlet.Role, error) {
 	out := []gimlet.Role{}
 	for _, role := range m.roles {
 		out = append(out, role)
@@ -89,7 +89,7 @@ func (m *InMemoryRoleManager) GetAllRoles() ([]gimlet.Role, error) {
 	return out, nil
 }
 
-func (m *InMemoryRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
+func (m *inMemoryRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 	foundRoles := []gimlet.Role{}
 	for _, id := range ids {
 		role, found := m.roles[id]
@@ -100,7 +100,7 @@ func (m *InMemoryRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 	return foundRoles, nil
 }
 
-func (m *InMemoryRoleManager) UpdateRole(role gimlet.Role) error {
+func (m *inMemoryRoleManager) UpdateRole(role gimlet.Role) error {
 	m.roles[role.ID] = role
 	return nil
 }

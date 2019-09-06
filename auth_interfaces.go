@@ -60,8 +60,16 @@ type UserManager interface {
 	GetGroupsForUser(string) ([]string, error)
 }
 
+// RoleManager provides methods to get and set role data and is often used
+// along with Users to check permissions
 type RoleManager interface {
+	// GetAllRoles returns all roles known by the manager
 	GetAllRoles() ([]Role, error)
+
+	// GetAllRoles returns roles matching the specified IDs
 	GetRoles([]string) ([]Role, error)
+
+	// UpdateRole adds the given role to the manager if it does not exist, or updates the role
+	// with the same ID
 	UpdateRole(Role) error
 }

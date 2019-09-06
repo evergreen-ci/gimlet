@@ -2,7 +2,7 @@ package gimlet
 
 // NewBasicUser constructs a simple user. The underlying type has
 // serialization tags.
-func NewBasicUser(id, name, email, password, key string, roles []string, invalid bool) User {
+func NewBasicUser(id, name, email, password, key string, roles []string, invalid bool, rm RoleManager) User {
 	return &basicUser{
 		ID:           id,
 		Name:         name,
@@ -11,6 +11,7 @@ func NewBasicUser(id, name, email, password, key string, roles []string, invalid
 		Key:          key,
 		AccessRoles:  roles,
 		Invalid:      invalid,
+		roleManager:  rm,
 	}
 }
 
