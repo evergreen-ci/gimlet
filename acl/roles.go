@@ -15,7 +15,7 @@ type updateRoleHandler struct {
 	validateFunc func(gimlet.Role) error
 }
 
-func newUpdateRoleHandler(m gimlet.RoleManager, validateFunc func(gimlet.Role) error) gimlet.RouteHandler {
+func NewUpdateRoleHandler(m gimlet.RoleManager, validateFunc func(gimlet.Role) error) gimlet.RouteHandler {
 	return &updateRoleHandler{
 		manager:      m,
 		validateFunc: validateFunc,
@@ -52,7 +52,7 @@ type getAllRolesHandler struct {
 	manager gimlet.RoleManager
 }
 
-func newGetAllRolesHandler(m gimlet.RoleManager) gimlet.RouteHandler {
+func NewGetAllRolesHandler(m gimlet.RoleManager) gimlet.RouteHandler {
 	return &getAllRolesHandler{
 		manager: m,
 	}

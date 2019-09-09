@@ -30,7 +30,7 @@ func testRoleUpdate(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
 			validateWasCalled = true
 			return nil
 		}
-		handler := newUpdateRoleHandler(m, validate)
+		handler := NewUpdateRoleHandler(m, validate)
 
 		jsonBody, err := json.Marshal(body)
 		assert.NoError(t, err)
@@ -45,7 +45,7 @@ func testRoleUpdate(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
 
 func testRoleRead(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
 	return func(t *testing.T) {
-		handler := newGetAllRolesHandler(m)
+		handler := NewGetAllRolesHandler(m)
 		assert.NoError(t, handler.Parse(context.Background(), nil))
 		resp := handler.Run(context.Background())
 		roles, valid := resp.Data().([]gimlet.Role)
