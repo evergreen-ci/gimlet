@@ -2,7 +2,7 @@ package gimlet
 
 // NewBasicUser constructs a simple user. The underlying type has
 // serialization tags.
-func NewBasicUser(id, name, email, password, key string, roles []string, invalid bool) User {
+func NewBasicUser(id, name, email, password, key string, roles []string, invalid bool, rm RoleManager) User {
 	return &basicUser{
 		ID:           id,
 		Name:         name,
@@ -11,6 +11,7 @@ func NewBasicUser(id, name, email, password, key string, roles []string, invalid
 		Key:          key,
 		AccessRoles:  roles,
 		Invalid:      invalid,
+		roleManager:  rm,
 	}
 }
 
@@ -26,6 +27,7 @@ type basicUser struct {
 	Key          string   `bson:"key" json:"key" yaml:"key"`
 	AccessRoles  []string `bson:"roles" json:"roles" yaml:"roles"`
 	Invalid      bool     `bson:"invalid" json:"invalid" yaml:"invalid"`
+	roleManager  RoleManager
 }
 
 func (u *basicUser) Username() string    { return u.ID }
@@ -36,6 +38,19 @@ func (u *basicUser) Roles() []string {
 	out := make([]string, len(u.AccessRoles))
 	copy(out, u.AccessRoles)
 	return out
+}
+func (u *basicUser) HasPermission(resource string, requiredLevel int) (bool, error) {
+	roles, err := u.roleManager.GetRoles(u.Roles())
+	if err != nil {
+		return false, err
+	}
+	for _, role := range roles {
+		level, hasPermission := role.Permissions[resource]
+		if hasPermission && level >= requiredLevel {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // userHasRole determines if the user has the defined role.
