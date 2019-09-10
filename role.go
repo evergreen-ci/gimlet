@@ -3,9 +3,20 @@ package gimlet
 // Role is the data structure used to read and manipulate user roles and permissions
 type Role struct {
 	ID          string         `json:"id" bson:"_id"`
-	Name        string         `json:"name" bson:"name,omitempty"`
-	ScopeType   string         `json:"scope_type" bson:"scope_type,omitempty"`
-	Scope       string         `json:"scope" bson:"scope,omitempty"`
-	Permissions map[string]int `json:"permissions" bson:"permissions,omitempty"`
-	Owners      []string       `json:"owners" bson:"owners,omitempty"`
+	Name        string         `json:"name" bson:"name"`
+	Scope       string         `json:"scope" bson:"scope"`
+	Permissions map[string]int `json:"permissions" bson:"permissions"`
+	Owners      []string       `json:"owners" bson:"owners"`
+}
+
+// Scope describes one or more resources and can be used to roll up certain resources into others
+type Scope struct {
+	ID          string   `json:"id" bson:"_id"`
+	Name        string   `json:"name" bson:"name"`
+	Type        string   `json:"type" bson:"type"`
+	Resources   []string `json:"resources" bson:"resources"`
+	ParentScope string   `json:"parent" bson:"parent"`
+
+	// Parents is only used to compute scope rollups in aggregations and should not be used directly
+	Parents []Scope `bson:"parents_temp"`
 }

@@ -9,29 +9,32 @@ import (
 )
 
 type mongoBackedRoleManager struct {
-	client *mongo.Client
-	db     string
-	coll   string
+	client    *mongo.Client
+	db        string
+	roleColl  string
+	scopeColl string
 }
 
 type MongoBackedRoleManagerOpts struct {
-	Client         *mongo.Client
-	DBName         string
-	RoleCollection string
+	Client          *mongo.Client
+	DBName          string
+	RoleCollection  string
+	ScopeCollection string
 }
 
 func NewMongoBackedRoleManager(opts MongoBackedRoleManagerOpts) gimlet.RoleManager {
 	return &mongoBackedRoleManager{
-		client: opts.Client,
-		db:     opts.DBName,
-		coll:   opts.RoleCollection,
+		client:    opts.Client,
+		db:        opts.DBName,
+		roleColl:  opts.RoleCollection,
+		scopeColl: opts.ScopeCollection,
 	}
 }
 
 func (m *mongoBackedRoleManager) GetAllRoles() ([]gimlet.Role, error) {
 	out := []gimlet.Role{}
 	ctx := context.Background()
-	cursor, err := m.client.Database(m.db).Collection(m.coll).Find(ctx, bson.M{})
+	cursor, err := m.client.Database(m.db).Collection(m.roleColl).Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +48,7 @@ func (m *mongoBackedRoleManager) GetAllRoles() ([]gimlet.Role, error) {
 func (m *mongoBackedRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 	out := []gimlet.Role{}
 	ctx := context.Background()
-	cursor, err := m.client.Database(m.db).Collection(m.coll).Find(ctx, bson.M{
+	cursor, err := m.client.Database(m.db).Collection(m.roleColl).Find(ctx, bson.M{
 		"_id": bson.M{
 			"$in": ids,
 		},
@@ -62,7 +65,7 @@ func (m *mongoBackedRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 
 func (m *mongoBackedRoleManager) UpdateRole(role gimlet.Role) error {
 	ctx := context.Background()
-	coll := m.client.Database(m.db).Collection(m.coll)
+	coll := m.client.Database(m.db).Collection(m.roleColl)
 	result := coll.FindOneAndReplace(ctx, bson.M{"_id": role.ID}, role)
 	err := result.Err()
 	if err == mongo.ErrNoDocuments {
@@ -71,13 +74,78 @@ func (m *mongoBackedRoleManager) UpdateRole(role gimlet.Role) error {
 	return err
 }
 
+func (m *mongoBackedRoleManager) DeleteRole(id string) error {
+	ctx := context.Background()
+	coll := m.client.Database(m.db).Collection(m.roleColl)
+	_, err := coll.DeleteOne(ctx, bson.M{"_id": id})
+	return err
+}
+
+func (m *mongoBackedRoleManager) FilterForResource(roles []gimlet.Role, resource string) ([]gimlet.Role, error) {
+	coll := m.client.Database(m.db).Collection(m.scopeColl)
+	ctx := context.Background()
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"resources": resource,
+			},
+		},
+		{
+			"$graphLookup": bson.M{
+				"from":             m.scopeColl,
+				"startWith":        "$parent",
+				"connectFromField": "parent",
+				"connectToField":   "_id",
+				"as":               "parents_temp",
+			},
+		},
+	}
+	cursor, err := coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	tempScopes := []gimlet.Scope{}
+	err = cursor.All(ctx, &tempScopes)
+	if err != nil {
+		return nil, err
+	}
+	scopes := map[string]bool{}
+	for _, scope := range tempScopes {
+		scopes[scope.ID] = true
+		for _, parent := range scope.Parents {
+			scopes[parent.ID] = true
+		}
+	}
+
+	filtered := []gimlet.Role{}
+	for _, role := range roles {
+		if scopes[role.Scope] {
+			filtered = append(filtered, role)
+		}
+	}
+
+	return filtered, nil
+}
+
+func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
+	_, err := m.client.Database(m.db).Collection(m.scopeColl).InsertOne(context.Background(), scope)
+	return err
+}
+
+func (m *mongoBackedRoleManager) DeleteScope(id string) error {
+	_, err := m.client.Database(m.db).Collection(m.scopeColl).DeleteOne(context.Background(), bson.M{"_id": id})
+	return err
+}
+
 type inMemoryRoleManager struct {
-	roles map[string]gimlet.Role
+	roles  map[string]gimlet.Role
+	scopes map[string]gimlet.Scope
 }
 
 func NewInMemoryRoleManager() gimlet.RoleManager {
 	return &inMemoryRoleManager{
-		roles: map[string]gimlet.Role{},
+		roles:  map[string]gimlet.Role{},
+		scopes: map[string]gimlet.Scope{},
 	}
 }
 
@@ -103,4 +171,57 @@ func (m *inMemoryRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 func (m *inMemoryRoleManager) UpdateRole(role gimlet.Role) error {
 	m.roles[role.ID] = role
 	return nil
+}
+
+func (m *inMemoryRoleManager) DeleteRole(id string) error {
+	delete(m.roles, id)
+	return nil
+}
+
+func (m *inMemoryRoleManager) FilterForResource(roles []gimlet.Role, resource string) ([]gimlet.Role, error) {
+	scopes := map[string]bool{}
+	for _, scope := range m.scopes {
+		if stringSliceContains(scope.Resources, resource) {
+			toAdd := m.findScopesRecursive(scope)
+			for _, scopeID := range toAdd {
+				scopes[scopeID] = true
+			}
+		}
+	}
+
+	filtered := []gimlet.Role{}
+	for _, role := range roles {
+		if scopes[role.Scope] {
+			filtered = append(filtered, role)
+		}
+	}
+
+	return filtered, nil
+}
+
+func (m *inMemoryRoleManager) AddScope(scope gimlet.Scope) error {
+	m.scopes[scope.ID] = scope
+	return nil
+}
+
+func (m *inMemoryRoleManager) DeleteScope(id string) error {
+	delete(m.scopes, id)
+	return nil
+}
+
+func (m *inMemoryRoleManager) findScopesRecursive(currScope gimlet.Scope) []string {
+	scopes := []string{currScope.ID}
+	if currScope.ParentScope == "" {
+		return scopes
+	}
+	return append(scopes, m.findScopesRecursive(m.scopes[currScope.ParentScope])...)
+}
+
+func stringSliceContains(slice []string, toFind string) bool {
+	for _, str := range slice {
+		if str == toFind {
+			return true
+		}
+	}
+	return false
 }
