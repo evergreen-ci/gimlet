@@ -99,22 +99,41 @@ func (m *mongoBackedRoleManager) FilterForResource(roles []gimlet.Role, resource
 				"as":               "parents_temp",
 			},
 		},
+		{
+			"$addFields": bson.M{
+				"parents_temp": bson.M{
+					"$concatArrays": []interface{}{"$parents_temp", []string{"$$ROOT"}},
+				},
+			},
+		},
+		{
+			"$project": bson.M{
+				"_id":     0,
+				"results": "$parents_temp",
+			},
+		},
+		{
+			"$unwind": "$results",
+		},
+		{
+			"$replaceRoot": bson.M{
+				"newRoot": "$results",
+			},
+		},
 	}
 	cursor, err := coll.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
-	tempScopes := []gimlet.Scope{}
-	err = cursor.All(ctx, &tempScopes)
+	applicableScopes := []gimlet.Scope{}
+	err = cursor.All(ctx, &applicableScopes)
 	if err != nil {
 		return nil, err
 	}
+
 	scopes := map[string]bool{}
-	for _, scope := range tempScopes {
+	for _, scope := range applicableScopes {
 		scopes[scope.ID] = true
-		for _, parent := range scope.Parents {
-			scopes[parent.ID] = true
-		}
 	}
 
 	filtered := []gimlet.Role{}

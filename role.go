@@ -16,7 +16,4 @@ type Scope struct {
 	Type        string   `json:"type" bson:"type"`
 	Resources   []string `json:"resources" bson:"resources"`
 	ParentScope string   `json:"parent" bson:"parent"`
-
-	// Parents is only used to compute scope rollups in aggregations and should not be used directly
-	Parents []Scope `bson:"parents_temp"`
 }
