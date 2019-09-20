@@ -16,7 +16,7 @@ type User interface {
 	Username() string
 	GetAPIKey() string
 	Roles() []string
-	HasPermission(string, int) (bool, error)
+	HasPermission(string, string, int) (bool, error)
 }
 
 // Authenticator represents a service that answers specific
@@ -69,7 +69,19 @@ type RoleManager interface {
 	// GetAllRoles returns roles matching the specified IDs
 	GetRoles([]string) ([]Role, error)
 
+	// DeleteRole deletes a single role
+	DeleteRole(string) error
+
 	// UpdateRole adds the given role to the manager if it does not exist, or updates the role
 	// with the same ID
 	UpdateRole(Role) error
+
+	// FilterForResource takes a list of roles and returns the subset of those applicable for a certain resource
+	FilterForResource([]Role, string) ([]Role, error)
+
+	// AddScope adds a scope to the manager
+	AddScope(Scope) error
+
+	// DeleteScope removes a scope from the manager
+	DeleteScope(string) error
 }

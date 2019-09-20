@@ -192,6 +192,22 @@ clean:
 phony += clean
 # end dependency targets
 
+# mongodb utility targets
+mongodb/.get-mongodb:
+	rm -rf mongodb
+	mkdir -p mongodb
+	cd mongodb && curl "$(MONGODB_URL)" -o mongodb.tgz && $(DECOMPRESS) mongodb.tgz && chmod +x ./mongodb-*/bin/*
+	cd mongodb && mv ./mongodb-*/bin/* . && rm -rf db_files && rm -rf db_logs && mkdir -p db_files && mkdir -p db_logs
+get-mongodb: mongodb/.get-mongodb
+	@touch $<
+start-mongod: mongodb/.get-mongodb
+	./mongodb/mongod --dbpath ./mongodb/db_files --port 27017 --smallfiles --oplogSize 10
+	@echo "waiting for mongod to start up"
+check-mongod: mongodb/.get-mongodb
+	./mongodb/mongo --nodb --eval "assert.soon(function(x){try{var d = new Mongo(\"localhost:27017\"); return true}catch(e){return false}}, \"timed out connecting\")"
+	@echo "mongod is up"
+# end mongodb targets
+
 # configure phony targets
 .FORCE:
 .PHONY:$(phony)

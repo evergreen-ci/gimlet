@@ -39,13 +39,18 @@ func (u *basicUser) Roles() []string {
 	copy(out, u.AccessRoles)
 	return out
 }
-func (u *basicUser) HasPermission(resource string, requiredLevel int) (bool, error) {
+func (u *basicUser) HasPermission(resource, permission string, requiredLevel int) (bool, error) {
 	roles, err := u.roleManager.GetRoles(u.Roles())
 	if err != nil {
 		return false, err
 	}
+	roles, err = u.roleManager.FilterForResource(roles, resource)
+	if err != nil {
+		return false, err
+	}
+
 	for _, role := range roles {
-		level, hasPermission := role.Permissions[resource]
+		level, hasPermission := role.Permissions[permission]
 		if hasPermission && level >= requiredLevel {
 			return true, nil
 		}

@@ -114,10 +114,11 @@ type mockConnErr struct {
 
 type mockConn struct{}
 
-func (m *mockConn) Start()                            { return }
-func (m *mockConn) StartTLS(config *tls.Config) error { return nil }
-func (m *mockConn) Close()                            { return }
-func (m *mockConn) SetTimeout(time.Duration)          { return }
+func (m *mockConn) Start()                               { return }
+func (m *mockConn) StartTLS(config *tls.Config) error    { return nil }
+func (m *mockConn) Close()                               { return }
+func (m *mockConn) SetTimeout(time.Duration)             { return }
+func (m *mockConn) ModifyDN(*ldap.ModifyDNRequest) error { return nil }
 func (m *mockConn) Bind(username, password string) error {
 	if username == "uid=foo,path" && password == "hunter2" {
 		return nil
@@ -179,7 +180,7 @@ func (u *mockUser) Email() string       { return "" }
 func (u *mockUser) Username() string    { return u.name }
 func (u *mockUser) GetAPIKey() string   { return "" }
 func (u *mockUser) Roles() []string     { return []string{} }
-func (u *mockUser) HasPermission(string, int) (bool, error) {
+func (u *mockUser) HasPermission(string, string, int) (bool, error) {
 	return true, nil
 }
 
