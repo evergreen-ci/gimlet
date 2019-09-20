@@ -2,6 +2,9 @@ package rolemanager
 
 import (
 	"context"
+	"errors"
+
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/evergreen-ci/gimlet"
 	"go.mongodb.org/mongo-driver/bson"
@@ -66,12 +69,12 @@ func (m *mongoBackedRoleManager) GetRoles(ids []string) ([]gimlet.Role, error) {
 func (m *mongoBackedRoleManager) UpdateRole(role gimlet.Role) error {
 	ctx := context.Background()
 	coll := m.client.Database(m.db).Collection(m.roleColl)
-	result := coll.FindOneAndReplace(ctx, bson.M{"_id": role.ID}, role)
-	err := result.Err()
-	if err == mongo.ErrNoDocuments {
-		_, err = coll.InsertOne(ctx, role)
+	upsert := true
+	result := coll.FindOneAndReplace(ctx, bson.M{"_id": role.ID}, role, &options.FindOneAndReplaceOptions{Upsert: &upsert})
+	if result == nil {
+		return errors.New("did not receive a response from MongoDB")
 	}
-	return err
+	return result.Err()
 }
 
 func (m *mongoBackedRoleManager) DeleteRole(id string) error {
