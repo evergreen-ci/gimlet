@@ -84,4 +84,7 @@ type RoleManager interface {
 
 	// DeleteScope removes a scope from the manager
 	DeleteScope(string) error
+
+	// DeleteScope removes a scope from the manager
+	RegisterPermissions([]string) error
 }
