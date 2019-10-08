@@ -184,7 +184,14 @@ func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
 	}
 	s.NoError(s.m.UpdateRole(role1))
 	resourceLevels := []string{"resource_id"}
-	permissionMiddleware := gimlet.RequiresPermission(s.m, "edit", "project", 1, resourceLevels)
+	opts := gimlet.RequiresPermissionMiddlewareOpts{
+		RM:             s.m,
+		PermissionKey:  "edit",
+		ResourceType:   "project",
+		RequiredLevel:  1,
+		ResourceLevels: resourceLevels,
+	}
+	permissionMiddleware := gimlet.RequiresPermission(opts)
 	checkPermission := func(rw http.ResponseWriter, r *http.Request) {
 		permissionMiddleware.ServeHTTP(rw, r, counterFunc)
 	}
