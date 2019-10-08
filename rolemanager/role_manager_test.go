@@ -59,29 +59,39 @@ func (s *RoleManagerSuite) SetupSuite() {
 		ID:          "1",
 		Resources:   []string{"resource1", "resource2"},
 		ParentScope: "3",
+		Type:        "project",
 	}
 	s.NoError(s.m.AddScope(scope1))
 	scope2 := gimlet.Scope{
 		ID:          "2",
 		Resources:   []string{"resource3"},
 		ParentScope: "3",
+		Type:        "project",
 	}
 	s.NoError(s.m.AddScope(scope2))
 	scope3 := gimlet.Scope{
 		ID:          "3",
 		ParentScope: "root",
+		Type:        "project",
 	}
 	s.NoError(s.m.AddScope(scope3))
 	scope4 := gimlet.Scope{
 		ID:          "4",
 		Resources:   []string{"resource4"},
 		ParentScope: "root",
+		Type:        "project",
 	}
 	s.NoError(s.m.AddScope(scope4))
 	root := gimlet.Scope{
-		ID: "root",
+		ID:   "root",
+		Type: "project",
 	}
 	s.NoError(s.m.AddScope(root))
+	wrongType := gimlet.Scope{
+		ID:   "wrongType",
+		Type: "foo",
+	}
+	s.NoError(s.m.AddScope(wrongType))
 
 	permissions := []string{"edit", "read"}
 	s.NoError(s.m.RegisterPermissions(permissions))
@@ -139,18 +149,23 @@ func (s *RoleManagerSuite) TestFilterForResource() {
 		Scope: "root",
 	}
 	s.NoError(s.m.UpdateRole(roleRoot))
-	allRoles := []gimlet.Role{role1, role2, role3, role4, roleRoot}
+	wrongType := gimlet.Role{
+		ID:    "wrong",
+		Scope: "wrongType",
+	}
+	s.NoError(s.m.UpdateRole(wrongType))
+	allRoles := []gimlet.Role{role1, role2, role3, role4, roleRoot, wrongType}
 
-	filtered, err := s.m.FilterForResource(allRoles, "resource1")
+	filtered, err := s.m.FilterForResource(allRoles, "resource1", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role1, role3, roleRoot}, filtered)
-	filtered, err = s.m.FilterForResource(allRoles, "resource2")
+	filtered, err = s.m.FilterForResource(allRoles, "resource2", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role1, role3, roleRoot}, filtered)
-	filtered, err = s.m.FilterForResource(allRoles, "resource3")
+	filtered, err = s.m.FilterForResource(allRoles, "resource3", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role2, role3, roleRoot}, filtered)
-	filtered, err = s.m.FilterForResource(allRoles, "resource4")
+	filtered, err = s.m.FilterForResource(allRoles, "resource4", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role4, roleRoot}, filtered)
 }
@@ -169,7 +184,7 @@ func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
 	}
 	s.NoError(s.m.UpdateRole(role1))
 	resourceLevels := []string{"resource_id"}
-	permissionMiddleware := gimlet.RequiresPermission(s.m, "edit", 1, resourceLevels)
+	permissionMiddleware := gimlet.RequiresPermission(s.m, "edit", "project", 1, resourceLevels)
 	checkPermission := func(rw http.ResponseWriter, r *http.Request) {
 		permissionMiddleware.ServeHTTP(rw, r, counterFunc)
 	}

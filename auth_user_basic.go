@@ -39,12 +39,12 @@ func (u *basicUser) Roles() []string {
 	copy(out, u.AccessRoles)
 	return out
 }
-func (u *basicUser) HasPermission(resource, permission string, requiredLevel int) (bool, error) {
+func (u *basicUser) HasPermission(resource, resourceType, permission string, requiredLevel int) (bool, error) {
 	roles, err := u.roleManager.GetRoles(u.Roles())
 	if err != nil {
 		return false, err
 	}
-	roles, err = u.roleManager.FilterForResource(roles, resource)
+	roles, err = u.roleManager.FilterForResource(roles, resource, resourceType)
 	if err != nil {
 		return false, err
 	}

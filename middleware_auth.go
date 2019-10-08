@@ -240,6 +240,7 @@ func (ra *restrictedAccessHandler) ServeHTTP(rw http.ResponseWriter, r *http.Req
 type requiresPermissionHandler struct {
 	rm             RoleManager
 	permissionKey  string
+	resourceType   string
 	requiredLevel  int
 	resourceLevels []string
 }
@@ -247,10 +248,11 @@ type requiresPermissionHandler struct {
 // RequiresPermission allows a route to specify that access to a given resource in the route requires a certain permission
 // at a certain level. The resource ID must be defined somewhere in the URL as mux.Vars. The specific URL params to check
 // need to be sent in the last parameter of this function, in order of most to least specific
-func RequiresPermission(rm RoleManager, permissionKey string, requiredLevel int, resourceLevels []string) Middleware {
+func RequiresPermission(rm RoleManager, permissionKey, resourceType string, requiredLevel int, resourceLevels []string) Middleware {
 	return &requiresPermissionHandler{
 		rm:             rm,
 		permissionKey:  permissionKey,
+		resourceType:   resourceType,
 		requiredLevel:  requiredLevel,
 		resourceLevels: resourceLevels,
 	}
@@ -285,7 +287,7 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 		}
 	}
 
-	hasPermission, err := user.HasPermission(resource, rp.permissionKey, rp.requiredLevel)
+	hasPermission, err := user.HasPermission(resource, rp.resourceType, rp.permissionKey, rp.requiredLevel)
 	if err != nil {
 		grip.Error(message.WrapError(err, message.Fields{
 			"message":    "error checking permissions",
