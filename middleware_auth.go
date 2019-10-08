@@ -236,3 +236,67 @@ func (ra *restrictedAccessHandler) ServeHTTP(rw http.ResponseWriter, r *http.Req
 
 	rw.WriteHeader(http.StatusUnauthorized)
 }
+
+type requiresPermissionHandler struct {
+	rm             RoleManager
+	permissionKey  string
+	requiredLevel  int
+	resourceLevels []string
+}
+
+// RequiresPermission allows a route to specify that access to a given resource in the route requires a certain permission
+// at a certain level. The resource ID must be defined somewhere in the URL as mux.Vars. The specific URL params to check
+// need to be sent in the last parameter of this function, in order of most to least specific
+func RequiresPermission(rm RoleManager, permissionKey string, requiredLevel int, resourceLevels []string) Middleware {
+	return &requiresPermissionHandler{
+		rm:             rm,
+		permissionKey:  permissionKey,
+		requiredLevel:  requiredLevel,
+		resourceLevels: resourceLevels,
+	}
+}
+
+func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	ctx := r.Context()
+
+	user := GetUser(ctx)
+	if user == nil {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	authenticator := GetAuthenticator(ctx)
+	if authenticator == nil {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if !authenticator.CheckAuthenticated(user) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	vars := GetVars(r)
+	var resource string
+	for _, level := range rp.resourceLevels {
+		if resourceVal, exists := vars[level]; exists {
+			resource = resourceVal
+			break
+		}
+	}
+
+	hasPermission, err := user.HasPermission(resource, rp.permissionKey, rp.requiredLevel)
+	if err != nil {
+		grip.Error(message.WrapError(err, message.Fields{
+			"message":    "error checking permissions",
+			"user":       user.Username(),
+			"permission": rp.permissionKey,
+		}))
+	}
+	if hasPermission {
+		next(rw, r)
+		return
+	}
+
+	rw.WriteHeader(http.StatusUnauthorized)
+}

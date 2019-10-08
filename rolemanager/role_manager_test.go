@@ -2,9 +2,12 @@ package rolemanager
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/evergreen-ci/gimlet"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -150,4 +153,70 @@ func (s *RoleManagerSuite) TestFilterForResource() {
 	filtered, err = s.m.FilterForResource(allRoles, "resource4")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role4, roleRoot}, filtered)
+}
+
+func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
+	//setup
+	counter := 0
+	counterFunc := func(rw http.ResponseWriter, r *http.Request) {
+		counter++
+		rw.WriteHeader(http.StatusOK)
+	}
+	role1 := gimlet.Role{
+		ID:          "r1",
+		Scope:       "1",
+		Permissions: map[string]int{"edit": 1},
+	}
+	s.NoError(s.m.UpdateRole(role1))
+	resourceLevels := []string{"resource_id"}
+	permissionMiddleware := gimlet.RequiresPermission(s.m, "edit", 1, resourceLevels)
+	checkPermission := func(rw http.ResponseWriter, r *http.Request) {
+		permissionMiddleware.ServeHTTP(rw, r, counterFunc)
+	}
+	authenticator := gimlet.NewBasicAuthenticator(nil, nil)
+	user := gimlet.NewBasicUser("user", "name", "email", "password", "key", nil, false, s.m)
+	um, err := gimlet.NewBasicUserManager([]gimlet.User{user}, s.m)
+	s.NoError(err)
+	authHandler := gimlet.NewAuthenticationHandler(authenticator, um)
+	req := httptest.NewRequest("GET", "http://foo.com/bar", nil)
+	req = mux.SetURLVars(req, map[string]string{"resource_id": "resource1"})
+
+	// no user attached should 401
+	rw := httptest.NewRecorder()
+	authHandler.ServeHTTP(rw, req, checkPermission)
+	s.Equal(http.StatusUnauthorized, rw.Code)
+	s.Equal(0, counter)
+
+	// attach a user, but with no permissions yet
+	ctx := gimlet.AttachUser(req.Context(), user)
+	req = req.WithContext(ctx)
+	rw = httptest.NewRecorder()
+	authHandler.ServeHTTP(rw, req, checkPermission)
+	s.Equal(http.StatusUnauthorized, rw.Code)
+	s.Equal(0, counter)
+
+	// give user the right permissions
+	user = gimlet.NewBasicUser("user", "name", "email", "password", "key", []string{role1.ID}, false, s.m)
+	_, err = um.GetOrCreateUser(user)
+	s.NoError(err)
+	ctx = gimlet.AttachUser(req.Context(), user)
+	req = req.WithContext(ctx)
+	rw = httptest.NewRecorder()
+	authHandler.ServeHTTP(rw, req, checkPermission)
+	s.Equal(http.StatusOK, rw.Code)
+	s.Equal(1, counter)
+
+	// request for a resource the user doesn't have access to
+	rw = httptest.NewRecorder()
+	req = mux.SetURLVars(req, map[string]string{"resource_id": "resource3"})
+	authHandler.ServeHTTP(rw, req, checkPermission)
+	s.Equal(http.StatusUnauthorized, rw.Code)
+	s.Equal(1, counter)
+
+	// request for an unrelated endpoint that has incorrectly configured middleware
+	rw = httptest.NewRecorder()
+	req = mux.SetURLVars(req, map[string]string{})
+	authHandler.ServeHTTP(rw, req, checkPermission)
+	s.Equal(http.StatusUnauthorized, rw.Code)
+	s.Equal(1, counter)
 }
