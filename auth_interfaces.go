@@ -16,7 +16,15 @@ type User interface {
 	Username() string
 	GetAPIKey() string
 	Roles() []string
-	HasPermission(string, string, string, int) (bool, error)
+	HasPermission(PermissionOpts) (bool, error)
+}
+
+// PermissionOpts is the required data to be provided when asking if a user has permission for a resource
+type PermissionOpts struct {
+	Resource      string
+	ResourceType  string
+	Permission    string
+	RequiredLevel int
 }
 
 // Authenticator represents a service that answers specific

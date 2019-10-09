@@ -243,6 +243,8 @@ type requiresPermissionHandler struct {
 
 type FindResourceFunc func(*http.Request) string
 
+// RequiresPermissionMiddlewareOpts defines what permissions the middleware shoud check and how. The ResourceFunc parameter
+// can be used to specify custom behavior to extract a valid resource name from request variables
 type RequiresPermissionMiddlewareOpts struct {
 	RM             RoleManager
 	PermissionKey  string
@@ -294,18 +296,22 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 		}
 	}
 
-	hasPermission, err := user.HasPermission(resource, rp.opts.ResourceType, rp.opts.PermissionKey, rp.opts.RequiredLevel)
-	if err != nil {
-		grip.Error(message.WrapError(err, message.Fields{
-			"message":    "error checking permissions",
-			"user":       user.Username(),
-			"permission": rp.opts.PermissionKey,
-		}))
+	opts := PermissionOpts{
+		Resource:      resource,
+		ResourceType:  rp.opts.ResourceType,
+		Permission:    rp.opts.PermissionKey,
+		RequiredLevel: rp.opts.RequiredLevel,
 	}
-	if hasPermission {
-		next(rw, r)
-		return
+	hasPermission, err := user.HasPermission(opts)
+	grip.Error(message.WrapError(err, message.Fields{
+		"message":    "error checking permissions",
+		"user":       user.Username(),
+		"permission": rp.opts.PermissionKey,
+	}))
+
+	if !hasPermission {
+		rw.WriteHeader(http.StatusUnauthorized)
 	}
 
-	rw.WriteHeader(http.StatusUnauthorized)
+	next(rw, r)
 }
