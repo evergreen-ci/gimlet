@@ -311,6 +311,7 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 
 	if !hasPermission {
 		rw.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	next(rw, r)
