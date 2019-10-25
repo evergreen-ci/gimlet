@@ -17,6 +17,7 @@ type User interface {
 	GetAPIKey() string
 	Roles() []string
 	HasPermission(PermissionOpts) (bool, error)
+	PermissionsForResource(PermissionOpts) (map[string]int, error)
 }
 
 // PermissionOpts is the required data to be provided when asking if a user has permission for a resource

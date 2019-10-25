@@ -57,6 +57,26 @@ func (u *basicUser) HasPermission(opts PermissionOpts) (bool, error) {
 	}
 	return false, nil
 }
+func (u *basicUser) PermissionsForResource(opts PermissionOpts) (map[string]int, error) {
+	roles, err := u.roleManager.GetRoles(u.Roles())
+	if err != nil {
+		return nil, err
+	}
+	roles, err = u.roleManager.FilterForResource(roles, opts.Resource, opts.ResourceType)
+	if err != nil {
+		return nil, err
+	}
+	highestPermissions := map[string]int{}
+	for _, role := range roles {
+		for permission, level := range role.Permissions {
+			highestLevel, exists := highestPermissions[permission]
+			if !exists || level > highestLevel {
+				highestPermissions[permission] = level
+			}
+		}
+	}
+	return highestPermissions, nil
+}
 
 // userHasRole determines if the user has the defined role.
 func userHasRole(u User, role string) bool {
