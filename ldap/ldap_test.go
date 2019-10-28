@@ -183,9 +183,6 @@ func (u *mockUser) Roles() []string     { return []string{} }
 func (u *mockUser) HasPermission(gimlet.PermissionOpts) (bool, error) {
 	return true, nil
 }
-func (u *mockUser) PermissionsForResource(gimlet.PermissionOpts) (map[string]int, error) {
-	return nil, nil
-}
 
 // TODO
 var mockPutUser gimlet.User

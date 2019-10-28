@@ -41,9 +41,6 @@ func (u *MockUser) Roles() []string     { return u.RoleNames }
 func (u *MockUser) HasPermission(PermissionOpts) (bool, error) {
 	return true, nil
 }
-func (u *MockUser) PermissionsForResource(PermissionOpts) (map[string]int, error) {
-	return nil, nil
-}
 
 type MockAuthenticator struct {
 	ResourceUserMapping     map[string]string
