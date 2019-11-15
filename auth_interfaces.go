@@ -102,4 +102,8 @@ type RoleManager interface {
 	// RegisterPermissions adds a list of strings to the role manager as valid permission keys. Returns an
 	// error if the same permission is registered more than once
 	RegisterPermissions([]string) error
+
+	// FindRolesWithPermissions returns a role that exactly matches the given resources and permissions
+	// TODO: there should also be a method to create such a role
+	FindRoleWithPermissions([]string, Permissions) (*Role, error)
 }

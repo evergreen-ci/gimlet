@@ -73,6 +73,7 @@ func (s *RoleManagerSuite) SetupSuite() {
 		ID:          "3",
 		ParentScope: "root",
 		Type:        "project",
+		Resources:   []string{"resource1", "resource2", "resource3"},
 	}
 	s.NoError(s.m.AddScope(scope3))
 	scope4 := gimlet.Scope{
@@ -90,8 +91,9 @@ func (s *RoleManagerSuite) SetupSuite() {
 	}
 	s.NoError(s.m.AddScope(scope5))
 	root := gimlet.Scope{
-		ID:   "root",
-		Type: "project",
+		ID:        "root",
+		Type:      "project",
+		Resources: []string{"resource1", "resource2", "resource3", "resource4"},
 	}
 	s.NoError(s.m.AddScope(root))
 	wrongType := gimlet.Scope{
@@ -339,6 +341,58 @@ func (s *RoleManagerSuite) TestHighestPermissionsForRoles() {
 	s.NoError(err)
 	s.Len(permissions, 2)
 	s.EqualValues(map[string]int{"edit": 50, "read": 20}, permissions)
+}
+
+func (s *RoleManagerSuite) TestFindRoleWithPermissions() {
+	r1 := gimlet.Role{
+		ID:    "r1",
+		Scope: "1",
+		Permissions: map[string]int{
+			"edit": 20,
+			"read": 20,
+		},
+	}
+	s.NoError(s.m.UpdateRole(r1))
+	r2 := gimlet.Role{
+		ID:    "r2",
+		Scope: "1",
+		Permissions: map[string]int{
+			"edit": 50,
+		},
+	}
+	s.NoError(s.m.UpdateRole(r2))
+	r3 := gimlet.Role{
+		ID:    "r3",
+		Scope: "2",
+		Permissions: map[string]int{
+			"edit": 20,
+			"read": 20,
+		},
+	}
+	s.NoError(s.m.UpdateRole(r3))
+
+	// test that we can find the role with the correct criteria
+	r, err := s.m.FindRoleWithPermissions([]string{"resource1", "resource2"}, gimlet.Permissions{"read": 20, "edit": 20})
+	s.NoError(err)
+	s.Equal(r.ID, "r1")
+	// make sure that order does not matter
+	r, err = s.m.FindRoleWithPermissions([]string{"resource2", "resource1"}, gimlet.Permissions{"edit": 20, "read": 20})
+	s.NoError(err)
+	s.Equal(r.ID, "r1")
+	// non-matching permissions should find nothing
+	r, err = s.m.FindRoleWithPermissions([]string{"resource2", "resource1"}, gimlet.Permissions{"edit": 10, "read": 20})
+	s.NoError(err)
+	s.Nil(r)
+	// wrong resources should find nothing
+	r, err = s.m.FindRoleWithPermissions([]string{"resource2"}, gimlet.Permissions{"edit": 20, "read": 20})
+	s.NoError(err)
+	s.Nil(r)
+	r, err = s.m.FindRoleWithPermissions([]string{"resource2", "resource3"}, gimlet.Permissions{"edit": 20, "read": 20})
+	s.NoError(err)
+	s.Nil(r)
+	r, err = s.m.FindRoleWithPermissions([]string{"resource2", "resource3"}, gimlet.Permissions{})
+	s.NoError(err)
+	s.Nil(r)
 }
 
 func (s *RoleManagerSuite) TestHighestPermissionsForRolesAndResourceType() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"reflect"
 
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -99,49 +100,14 @@ func (m *mongoBackedRoleManager) DeleteRole(id string) error {
 func (m *mongoBackedRoleManager) FilterForResource(roles []gimlet.Role, resource, resourceType string) ([]gimlet.Role, error) {
 	coll := m.client.Database(m.db).Collection(m.scopeColl)
 	ctx := context.Background()
-	pipeline := []bson.M{
-		{
-			"$match": bson.M{
-				"resources": resource,
-				"type":      resourceType,
-			},
-		},
-		{
-			"$graphLookup": bson.M{
-				"from":             m.scopeColl,
-				"startWith":        "$parent",
-				"connectFromField": "parent",
-				"connectToField":   "_id",
-				"as":               "parents_temp",
-			},
-		},
-		{
-			"$addFields": bson.M{
-				"parents_temp": bson.M{
-					"$concatArrays": []interface{}{"$parents_temp", []string{"$$ROOT"}},
-				},
-			},
-		},
-		{
-			"$project": bson.M{
-				"_id":     0,
-				"results": "$parents_temp",
-			},
-		},
-		{
-			"$unwind": "$results",
-		},
-		{
-			"$replaceRoot": bson.M{
-				"newRoot": "$results",
-			},
-		},
-	}
-	cursor, err := coll.Aggregate(ctx, pipeline)
+	applicableScopes := []gimlet.Scope{}
+
+	cursor, err := coll.Find(ctx, bson.M{
+		"resources": resource,
+	})
 	if err != nil {
 		return nil, err
 	}
-	applicableScopes := []gimlet.Scope{}
 	err = cursor.All(ctx, &applicableScopes)
 	if err != nil {
 		return nil, err
@@ -189,6 +155,70 @@ func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
 func (m *mongoBackedRoleManager) DeleteScope(id string) error {
 	_, err := m.client.Database(m.db).Collection(m.scopeColl).DeleteOne(context.Background(), bson.M{"_id": id})
 	return err
+}
+
+func (m *mongoBackedRoleManager) FindRoleWithPermissions(resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
+	ctx := context.Background()
+	var permissionMatch bson.M
+	if len(permissions) > 0 {
+		andClause := []bson.M{}
+		for key, level := range permissions {
+			andClause = append(andClause, bson.M{fmt.Sprintf("permissions.%s", key): level})
+		}
+		permissionMatch = bson.M{
+			"$and": andClause,
+		}
+	} else {
+		permissionMatch = bson.M{
+			"permissions": nil,
+		}
+	}
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"$and": []bson.M{
+					{"resources": bson.M{
+						"$all": resources,
+					}},
+					{"resources": bson.M{
+						"$size": len(resources),
+					}},
+				},
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from":         m.roleColl,
+				"localField":   "_id",
+				"foreignField": "scope",
+				"as":           "temp_roles",
+			},
+		},
+		{
+			"$replaceRoot": bson.M{
+				"newRoot": bson.M{
+					"$arrayElemAt": []interface{}{"$temp_roles", 0},
+				},
+			},
+		},
+		{
+			"$match": permissionMatch,
+		},
+	}
+	cursor, err := m.client.Database(m.db).Collection(m.scopeColl).Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	var roles []gimlet.Role
+	err = cursor.All(ctx, &roles)
+	if err != nil {
+		return nil, err
+	}
+	if len(roles) == 0 {
+		return nil, nil
+	}
+
+	return &roles[0], nil
 }
 
 type inMemoryRoleManager struct {
@@ -297,6 +327,23 @@ func (m *inMemoryRoleManager) findScopesRecursive(currScope gimlet.Scope) []stri
 	return append(scopes, m.findScopesRecursive(m.scopes[currScope.ParentScope])...)
 }
 
+func (m *inMemoryRoleManager) FindRoleWithPermissions(resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
+	validScopes := []string{}
+	for _, scope := range m.scopes {
+		 if slicesContainSameElements(resources, scope.Resources) {
+			 validScopes = append(validScopes, scope.ID)
+		 }
+	}
+	for _, role := range m.roles {
+		if stringSliceContains(validScopes, role.Scope) {
+			if reflect.DeepEqual(role.Permissions, permissions) {
+				return &role, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
 func stringSliceContains(slice []string, toFind string) bool {
 	for _, str := range slice {
 		if str == toFind {
@@ -304,6 +351,18 @@ func stringSliceContains(slice []string, toFind string) bool {
 		}
 	}
 	return false
+}
+
+func slicesContainSameElements(slice1 []string, slice2 []string) bool {
+	elements1 := map[string]int{}
+	elements2 := map[string]int{}
+	for _, elem := range slice1 {
+		elements1[elem]++
+	}
+	for _, elem := range slice2 {
+		elements2[elem]++
+	}
+	return reflect.DeepEqual(elements1, elements2)
 }
 
 type base struct {
