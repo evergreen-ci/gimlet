@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/evergreen-ci/gimlet"
@@ -13,7 +14,7 @@ import (
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
-	ldap "gopkg.in/ldap.v2"
+	ldap "gopkg.in/ldap.v3"
 )
 
 // userService provides authentication and authorization of users against an LDAP service. It
@@ -75,6 +76,7 @@ type connectFunc func(url, port string) (ldap.Client, error)
 // NewUserService constructs a userService. It requires a URL and Port to the LDAP server. It also
 // requires a Path to user resources that can be passed to an LDAP query.
 func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
+	opts.ServiceUserPath = "foo"
 	if err := opts.validate(); err != nil {
 		return nil, err
 	}
@@ -111,14 +113,18 @@ func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
 func (opts CreationOpts) validate() error {
 	catcher := grip.NewBasicCatcher()
 
-	if opts.URL == "" || opts.Port == "" || opts.UserPath == "" || opts.ServicePath == "" {
-		catcher.Errorf("URL ('%s'), Port ('%s'), UserPath ('%s') and ServicePath ('%s') must be provided",
-			opts.URL, opts.Port, opts.UserPath, opts.ServicePath)
+	if opts.URL == "" || opts.UserPath == "" || opts.ServicePath == "" {
+		catcher.Add(errors.Errorf("URL ('%s'), UserPath ('%s') and ServicePath ('%s') must be provided",
+			opts.URL, opts.UserPath, opts.ServicePath))
 	}
 
-	if opts.UserGroup == "" {
-		catcher.New("LDAP user group cannot be empty")
+	if opts.ServiceUserName != "" {
+		catcher.NewWhen(opts.ServiceUserPassword == "" || opts.ServiceUserPath == "", "if using service user, LDAP service user name, password, and path must be provided")
+	} else {
+		catcher.NewWhen(opts.ServiceUserPassword != "" || opts.ServiceUserPath != "", "if using service user, LDAP service user name, password, and path must be provided")
 	}
+
+	catcher.NewWhen(opts.UserGroup == "", "LDAP user group cannot be empty")
 
 	if opts.UserCache == nil && opts.ExternalCache == nil {
 		catcher.New("must specify user cache")
@@ -158,15 +164,31 @@ func (u *userService) reauthorizeUser(user gimlet.User) error {
 // CreateUserToken creates and returns a new user token from a username and password.
 func (u *userService) CreateUserToken(username, password string) (string, error) {
 	if err := u.login(username, password); err != nil {
+		grip.Notice(message.WrapError(err, message.Fields{
+			"message": "kim: failed to authenticate user",
+			"user":    username,
+		}))
 		return "", errors.Wrapf(err, "failed to authenticate user '%s'", username)
 	}
 	if err := u.validateGroup(username); err != nil {
+		grip.Notice(message.WrapError(err, message.Fields{
+			"message": "kim: failed to validate group",
+			"user":    username,
+		}))
 		return "", errors.Wrapf(err, "failed to authorize user '%s'", username)
 	}
 	user, err := u.getUserFromLDAP(username)
 	if err != nil {
+		grip.Notice(message.Fields{
+			"message": "kim: failed to get user from LDAP",
+			"user":    username,
+		})
 		return "", errors.Wrapf(err, "failed to get user '%s'", username)
 	}
+	grip.Notice(message.Fields{
+		"message": "kim: succeeded in user auth with LDAP",
+		"user":    username,
+	})
 	user, err = u.GetOrCreateUser(user)
 	if err != nil {
 		return "", errors.Wrap(err, "problem getting or creating user")
@@ -251,6 +273,9 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 	if err := u.ensureConnected(); err != nil {
 		return nil, errors.Wrap(err, "problem connecting to ldap server")
 	}
+	if err := u.loginServiceUserIfNeeded(); err != nil {
+		return nil, errors.Wrap(err, "could not bind service account")
+	}
 	start := time.Now()
 	s, err := u.conn.Search(searchRequest)
 	grip.Info(message.Fields{
@@ -288,17 +313,27 @@ func (u *userService) ensureConnected() error {
 }
 
 func connect(url, port string) (ldap.Client, error) {
-	tlsConfig := &tls.Config{ServerName: url}
-	conn, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%s", url, port), tlsConfig)
-	if err != nil {
-		return nil, errors.Wrapf(err, "problem connecting to ldap server %s:%s", url, port)
+	fullURL := url
+	if port != "" {
+		fullURL += ":" + port
+	}
+	var conn *ldap.Conn
+	var err error
+	if strings.Contains(fullURL, "://") {
+		conn, err = ldap.DialURL(fullURL)
+		if err != nil {
+			return nil, errors.Wrapf(err, "problem connecting to ldap server %s", url)
+		}
+	} else {
+		tlsConfig := &tls.Config{ServerName: url}
+		conn, err = ldap.DialTLS("tcp", fullURL, tlsConfig)
 	}
 	return conn, nil
 }
 
 func (u *userService) login(username, password string) error {
 	var err error
-	for _, path := range []string{u.userPath, u.servicePath} {
+	for _, path := range []string{u.userPath, u.servicePath, u.serviceUserPath} {
 		fullPath := fmt.Sprintf("uid=%s,%s", username, path)
 		err = u.bind(fullPath, password)
 		if err == nil {
@@ -308,10 +343,19 @@ func (u *userService) login(username, password string) error {
 	return errors.Wrapf(err, "could not validate user '%s'", username)
 }
 
+// loginServiceUserIfNeeded logs in the service user if it is being used.
+func (u *userService) loginServiceUserIfNeeded() error {
+	if u.serviceUserName == "" || u.serviceUserPassword == "" || u.serviceUserPath == "" {
+		return nil
+	}
+	fullPath := fmt.Sprintf("uid=%s,%s", u.serviceUserName, u.serviceUserPath)
+	return errors.Wrapf(u.bind(fullPath, u.serviceUserPassword), "could not validate service user %s", u.serviceUserName)
+}
+
 // GetGroupsForUser returns the groups to which a user belongs, defined by a given cn and search path
 func (u *userService) GetGroupsForUser(username string) ([]string, error) {
 	groups := []string{}
-	for _, path := range []string{u.userPath, u.servicePath} {
+	for _, path := range []string{u.serviceUserPath, u.userPath, u.servicePath} {
 		if path == "" {
 			return nil, errors.New("path is not specified")
 		}
@@ -373,11 +417,11 @@ func findCnsWithGroup(dnString, ouName string) []string {
 
 func (u *userService) validateGroup(username string) error {
 	var (
-		errs   [2]error
+		errs   [3]error
 		err    error
 		result *ldap.SearchResult
 	)
-	for idx, path := range []string{u.userPath, u.servicePath} {
+	for idx, path := range []string{u.serviceUserPath, u.userPath, u.servicePath} {
 		if path == "" {
 			errs[idx] = errors.New("path is not specified")
 			continue
@@ -392,8 +436,13 @@ func (u *userService) validateGroup(username string) error {
 				0,
 				false,
 				fmt.Sprintf("(uid=%s)", username),
-				[]string{"ismemberof"},
+				[]string{"isMemberOf"},
 				nil))
+		grip.Notice(message.Fields{
+			"message": "kim: validating group for path",
+			"path":    path,
+			"user":    username,
+		})
 		if err != nil {
 			errs[idx] = errors.Wrap(err, "problem searching ldap")
 			continue
@@ -434,7 +483,7 @@ func (u *userService) getUserFromLDAP(username string) (gimlet.User, error) {
 		result *ldap.SearchResult
 	)
 
-	for _, path := range []string{u.userPath, u.servicePath} {
+	for _, path := range []string{u.serviceUserPath, u.userPath, u.servicePath} {
 		result, err = u.search(
 			ldap.NewSearchRequest(
 				path,
