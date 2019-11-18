@@ -114,6 +114,13 @@ func (opts CreationOpts) validate() error {
 			opts.URL, opts.Port, opts.UserPath, opts.ServicePath))
 	}
 
+	if opts.ServiceUserName == "" {
+		catcher.Add(errors.New("LDAP service user name cannot be empty"))
+	}
+	if opts.ServiceUserPassword == "" {
+		catcher.Add(errors.New("LDAP service user password cannot be empty"))
+	}
+
 	if opts.UserGroup == "" {
 		catcher.Add(errors.New("LDAP user group cannot be empty"))
 	}
@@ -237,7 +244,7 @@ func (u *userService) bind(username, password string) error {
 // search wraps u.conn.Search, reconnecting if the LDAP server has closed the connection.
 // https://github.com/go-ldap/ldap/issues/113
 func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
-	if err := u.bind(u.serviceUserName, u.serviceUserPassword); err != nil {
+	if err := u.login(u.serviceUserName, u.serviceUserPassword); err != nil {
 		return nil, errors.Wrap(err, "could not bind service account")
 	}
 	s, err := u.conn.Search(searchRequest)
