@@ -16,16 +16,18 @@ import (
 // userService provides authentication and authorization of users against an LDAP service. It
 // implements the gimlet.Authenticator interface.
 type userService struct {
-	url          string
-	port         string
-	userPath     string
-	servicePath  string
-	userGroup    string
-	serviceGroup string
-	groupOuName  string
-	cache        UserCache
-	connect      connectFunc
-	conn         ldap.Client
+	url                 string
+	port                string
+	userPath            string
+	servicePath         string
+	userGroup           string
+	serviceGroup        string
+	groupOuName         string
+	serviceUserName     string
+	serviceUserPassword string
+	cache               UserCache
+	connect             connectFunc
+	conn                ldap.Client
 }
 
 // CreationOpts are options to pass to the service constructor.
@@ -37,6 +39,9 @@ type CreationOpts struct {
 	UserGroup    string // LDAP userGroup to authorize users
 	ServiceGroup string // LDAP serviceGroup to authorize services
 	GroupOuName  string // name of the OU that lists a user's groups
+
+	ServiceUserName     string // name of the service user for performing ismemberof
+	ServiceUserPassword string // password for the service user
 
 	UserCache UserCache
 	// Functions to produce a UserCache
@@ -80,15 +85,17 @@ func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
 		return nil, err
 	}
 	u := &userService{
-		cache:        opts.MakeUserCache(),
-		connect:      connect,
-		url:          opts.URL,
-		port:         opts.Port,
-		userPath:     opts.UserPath,
-		servicePath:  opts.ServicePath,
-		userGroup:    opts.UserGroup,
-		serviceGroup: opts.ServiceGroup,
-		groupOuName:  opts.GroupOuName,
+		cache:               opts.MakeUserCache(),
+		connect:             connect,
+		url:                 opts.URL,
+		port:                opts.Port,
+		userPath:            opts.UserPath,
+		servicePath:         opts.ServicePath,
+		userGroup:           opts.UserGroup,
+		serviceGroup:        opts.ServiceGroup,
+		groupOuName:         opts.GroupOuName,
+		serviceUserName:     opts.ServiceUserName,
+		serviceUserPassword: opts.ServiceUserPassword,
 	}
 
 	// override, typically, for testing
@@ -245,6 +252,7 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 	return u.conn.Search(searchRequest)
 }
 
+// kim: might need to bind() in this
 func (u *userService) ensureConnected() error {
 	if u.conn == nil {
 		conn, err := u.connect(u.url, u.port)
@@ -278,6 +286,8 @@ func (u *userService) login(username, password string) error {
 }
 
 // GetGroupsForUser returns the groups to which a user belongs, defined by a given cn and search path
+// kim: second (service) user to do bind.
+// kim: bind as different user before calling GetGroupsForUser().
 func (u *userService) GetGroupsForUser(username string) ([]string, error) {
 	groups := []string{}
 	for _, path := range []string{u.userPath, u.servicePath} {
