@@ -62,10 +62,10 @@ gopath := $(shell go env GOPATH)
 lintDeps := $(addprefix $(gopath)/src/,$(lintDeps))
 srcFiles := makefile $(shell find . -name "*.go" -not -path "./$(buildDir)/*" -not -name "*_test.go")
 testSrcFiles := makefile $(shell find . -name "*.go" -not -path "./$(buildDir)/*")
-testOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/test.$(target).out))
-raceOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/race.$(target).out))
-coverageOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/coverage.$(target).out))
-coverageHtmlOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/coverage.$(target).html))
+testOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).test))
+raceOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).race))
+coverageOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).coverage))
+coverageHtmlOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).coverage.html))
 $(gopath)/src/%:
 	@-[ ! -d $(gopath) ] && mkdir -p $(gopath) || true
 	$(gobin) get $(subst $(gopath)/src/,,$@)
@@ -159,13 +159,13 @@ $(buildDir)/coverage.%.out:$(testRunDeps)
 $(buildDir)/coverage.$(name).out:$(testRunDeps)
 	GOPATH=$(gopath) $(gobin) test -covermode=count -coverprofile=$@ $(projectPath)
 	@-[ -f $@ ] && go tool cover -func=$@ | sed 's%$(projectPath)/%%' | column -t
-$(buildDir)/test.%.out:$(testRunDeps) .FORCE
-	GOPATH=$(gopath) $(gobin) test $(testArgs) ./$(subst -,/,$*) | tee $(buildDir)/test.$(subst /,-,$*).out
-$(buildDir)/race.%.out:$(testRunDeps) .FORCE
-	GOPATH=$(gopath) $(gobin) test $(testArgs) -race ./$(subst -,/,$*) | tee $(buildDir)/race.$(subst /,-,$*).out
-$(buildDir)/test.$(name).out:$(testRunDeps) .FORCE
+$(buildDir)/output.%.test:$(testRunDeps) .FORCE
+	GOPATH=$(gopath) $(gobin) test $(testArgs) ./$(subst -,/,$*) | tee $(buildDir)/output.$(subst /,-,$*).test
+$(buildDir)/output.%.race:$(testRunDeps) .FORCE
+	GOPATH=$(gopath) $(gobin) test $(testArgs) -race ./$(subst -,/,$*) | tee $(buildDir)/output.$(subst /,-,$*).race
+$(buildDir)/output.$(name).test:$(testRunDeps) .FORCE
 	GOPATH=$(gopath) $(gobin) test $(testArgs) ./ | tee $@
-$(buildDir)/race.$(name).out:$(testRunDeps) .FORCE
+$(buildDir)/output.$(name).race:$(testRunDeps) .FORCE
 	GOPATH=$(gopath) $(gobin) test $(testArgs) -race ./ | tee $@
 #  targets to generate gotest output from the linter.
 $(buildDir)/output.%.lint:$(buildDir)/run-linter $(testSrcFiles)  $(buildDir)/.lintSetup .FORCE

@@ -25,6 +25,7 @@ type userService struct {
 	groupOuName         string
 	serviceUserName     string
 	serviceUserPassword string
+	serviceUserPath     string
 	cache               UserCache
 	connect             connectFunc
 	conn                ldap.Client
@@ -42,6 +43,7 @@ type CreationOpts struct {
 
 	ServiceUserName     string // name of the service user for performing ismemberof
 	ServiceUserPassword string // password for the service user
+	ServiceUserPath     string // path to the service user
 
 	UserCache UserCache
 	// Functions to produce a UserCache
@@ -96,6 +98,7 @@ func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
 		groupOuName:         opts.GroupOuName,
 		serviceUserName:     opts.ServiceUserName,
 		serviceUserPassword: opts.ServiceUserPassword,
+		serviceUserPath:     opts.ServiceUserPath,
 	}
 
 	// override, typically, for testing
@@ -114,16 +117,11 @@ func (opts CreationOpts) validate() error {
 			opts.URL, opts.Port, opts.UserPath, opts.ServicePath))
 	}
 
-	if opts.ServiceUserName == "" {
-		catcher.Add(errors.New("LDAP service user name cannot be empty"))
-	}
-	if opts.ServiceUserPassword == "" {
-		catcher.Add(errors.New("LDAP service user password cannot be empty"))
-	}
+	catcher.NewWhen(opts.ServiceUserName == "", "LDAP service user name cannot be empty")
+	catcher.NewWhen(opts.ServiceUserPassword == "", "LDAP service user password cannot be empty")
+	catcher.NewWhen(opts.ServiceUserPath == "", "LDAP service user path cannot be empty")
 
-	if opts.UserGroup == "" {
-		catcher.Add(errors.New("LDAP user group cannot be empty"))
-	}
+	catcher.NewWhen(opts.UserGroup == "", "LDAP user group cannot be empty")
 
 	if opts.UserCache == nil {
 		if opts.PutCache == nil || opts.GetCache == nil || opts.ClearCache == nil {
@@ -244,7 +242,7 @@ func (u *userService) bind(username, password string) error {
 // search wraps u.conn.Search, reconnecting if the LDAP server has closed the connection.
 // https://github.com/go-ldap/ldap/issues/113
 func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
-	if err := u.login(u.serviceUserName, u.serviceUserPassword); err != nil {
+	if err := u.loginServiceUser(); err != nil {
 		return nil, errors.Wrap(err, "could not bind service account")
 	}
 	s, err := u.conn.Search(searchRequest)
@@ -289,6 +287,11 @@ func (u *userService) login(username, password string) error {
 		}
 	}
 	return errors.Wrapf(err, "could not validate user '%s'", username)
+}
+
+func (u *userService) loginServiceUser() error {
+	fullPath := fmt.Sprintf("uid=%s,%s", u.serviceUserName, u.serviceUserPath)
+	return errors.Wrapf(u.bind(fullPath, u.serviceUserPassword), "could not validate service user %s", u.serviceUserName)
 }
 
 // GetGroupsForUser returns the groups to which a user belongs, defined by a given cn and search path

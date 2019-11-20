@@ -32,6 +32,7 @@ func (s *LDAPSuite) SetupTest() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "cn=10gen,ou=groups,dc=mongodb,dc=com",
@@ -51,6 +52,7 @@ func (s *LDAPSuite) SetupTest() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "badgroup",
@@ -71,6 +73,7 @@ func (s *LDAPSuite) SetupTest() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "badgroup",
@@ -90,6 +93,7 @@ func (s *LDAPSuite) SetupTest() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "badgroup",
@@ -128,10 +132,7 @@ func (m *mockConn) Close()                               { return }
 func (m *mockConn) SetTimeout(time.Duration)             { return }
 func (m *mockConn) ModifyDN(*ldap.ModifyDNRequest) error { return nil }
 func (m *mockConn) Bind(username, password string) error {
-	if username == "uid=service_user,path" && password == "service_password" {
-		return nil
-	}
-	if username == "uid=service_user,bots" && password == "service_password" {
+	if username == "uid=service_user,service_user_path" && password == "service_password" {
 		return nil
 	}
 	if username == "uid=foo,path" && password == "hunter2" {
@@ -249,6 +250,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -266,6 +268,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -283,6 +286,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -300,6 +304,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -317,6 +322,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "",
@@ -334,6 +340,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -351,6 +358,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -368,6 +376,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -385,6 +394,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -402,6 +412,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -419,6 +430,7 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "",
 		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "service_user_path",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -436,6 +448,25 @@ func (s *LDAPSuite) TestLDAPConstructorRequiresNonEmptyArgs() {
 		Port:                "port",
 		ServiceUserName:     "service_user",
 		ServiceUserPassword: "",
+		ServiceUserPath:     "service_user_path",
+		UserPath:            "path",
+		ServicePath:         "bots",
+		UserGroup:           "group",
+		PutCache:            mockPutSuccess,
+		GetCache:            mockGetValid,
+		ClearCache:          mockClearCache,
+		GetUser:             mockGetUserByID,
+		GetCreateUser:       mockGetOrCreateUser,
+	})
+	s.Error(err)
+	s.Nil(l)
+
+	l, err = NewUserService(CreationOpts{
+		URL:                 "url",
+		Port:                "port",
+		ServiceUserName:     "service_user",
+		ServiceUserPassword: "service_password",
+		ServiceUserPath:     "",
 		UserPath:            "path",
 		ServicePath:         "bots",
 		UserGroup:           "group",
@@ -466,7 +497,7 @@ func (s *LDAPSuite) TestGetUserByToken() {
 
 	impl.get = mockGetExpired
 	u, err = s.um.GetUserByToken(ctx, "foo")
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal("foo", u.Username())
 
 	serviceGroupImpl, ok := s.serviceGroupUm.(*userService).cache.(*externalUserCache)
@@ -561,7 +592,7 @@ func (s *LDAPSuite) TestGetUser() {
 
 	impl.find = mockGetExpired
 	u, err = s.um.GetUserByID("foo")
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Equal("foo", u.Username())
 
 	serviceGroupImpl, ok := s.serviceGroupUm.(*userService).cache.(*externalUserCache)
@@ -622,6 +653,6 @@ func (s *LDAPSuite) TestClearCache() {
 
 func (s *LDAPSuite) TestGetGroupsForUser() {
 	groups, err := s.um.GetGroupsForUser("foo")
+	s.Require().NoError(err)
 	s.Equal("10gen", groups[0])
-	s.NoError(err)
 }
