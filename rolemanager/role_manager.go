@@ -162,16 +162,16 @@ func (m *mongoBackedRoleManager) FilterForResource(roles []gimlet.Role, resource
 	return filtered, nil
 }
 
-func (m *mongoBackedRoleManager) FilterScopesByResourceType(ScopeIDs []string, resourceType string) ([]gimlet.Scope, error) {
+func (m *mongoBackedRoleManager) FilterScopesByResourceType(scopeIDs []string, resourceType string) ([]gimlet.Scope, error) {
 	coll := m.client.Database(m.db).Collection(m.scopeColl)
 	ctx := context.Background()
 	query := bson.M{
-		"_id":  bson.M{"$in": ScopeIDs},
+		"_id":  bson.M{"$in": scopeIDs},
 		"type": resourceType,
 	}
 	cursor, err := coll.Find(ctx, query)
 	if err != nil {
-		return nil, errors.Wrap(err, "problem filtering ScopeIDs by resource type in db")
+		return nil, errors.Wrap(err, "problem filtering scopeIDs by resource type in db")
 	}
 	scopes := []gimlet.Scope{}
 	if err = cursor.All(ctx, &scopes); err != nil {
@@ -263,9 +263,9 @@ func (m *inMemoryRoleManager) FilterForResource(roles []gimlet.Role, resource, r
 	return filtered, nil
 }
 
-func (m *inMemoryRoleManager) FilterScopesByResourceType(ScopeIDs []string, resourceType string) ([]gimlet.Scope, error) {
+func (m *inMemoryRoleManager) FilterScopesByResourceType(scopeIDs []string, resourceType string) ([]gimlet.Scope, error) {
 	scopeIdMap := map[string]bool{}
-	for _, id := range ScopeIDs {
+	for _, id := range scopeIDs {
 		scopeIdMap[id] = true
 	}
 
@@ -362,12 +362,15 @@ func HighestPermissionsForRoles(rolesIDs []string, rm gimlet.RoleManager, opts g
 // roles to their highest permissions based on those roles.
 func HighestPermissionsForRolesAndResourceType(roleIDs []string, resourceType string, rm gimlet.RoleManager) (map[string]gimlet.Permissions, error) {
 	roles, err := rm.GetRoles(roleIDs)
-	ScopeIDs := make([]string, len(roles))
+	if err != nil {
+		return nil, errors.Wrap(err, "problem getting roles")
+	}
+	scopeIDs := make([]string, len(roles))
 	for i, role := range roles {
-		ScopeIDs[i] = role.Scope
+		scopeIDs[i] = role.Scope
 	}
 
-	scopes, err := rm.FilterScopesByResourceType(ScopeIDs, resourceType)
+	scopes, err := rm.FilterScopesByResourceType(scopeIDs, resourceType)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem filtering scopes by resource types")
 	}
