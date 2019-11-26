@@ -165,19 +165,20 @@ func (m *mongoBackedRoleManager) FindScopeForResources(resourceType string, reso
 			}},
 		},
 	}
-	cursor, err := coll.Find(ctx, query)
+	result := coll.FindOne(ctx, query)
+	err := result.Err()
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
 		return nil, err
 	}
-	scopes := []gimlet.Scope{}
-	if err = cursor.All(ctx, &scopes); err != nil {
+	scope := &gimlet.Scope{}
+	if err := result.Decode(scope); err != nil {
 		return nil, err
-	}
-	if len(scopes) == 0 {
-		return nil, nil
 	}
 
-	return &scopes[0], nil
+	return scope, nil
 }
 
 func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
