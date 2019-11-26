@@ -3,8 +3,12 @@ package rolemanager
 import (
 	"context"
 	"fmt"
-	"sync"
 	"reflect"
+	"sync"
+
+	"github.com/mongodb/grip"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -147,6 +151,35 @@ func (m *mongoBackedRoleManager) FilterScopesByResourceType(ScopeIDs []string, r
 	return scopes, nil
 }
 
+func (m *mongoBackedRoleManager) FindScopeForResources(resourceType string, resources ...string) (*gimlet.Scope, error) {
+	coll := m.client.Database(m.db).Collection(m.scopeColl)
+	ctx := context.Background()
+	query := bson.M{
+		"type": resourceType,
+		"$and": []bson.M{
+			{"resources": bson.M{
+				"$all": resources,
+			}},
+			{"resources": bson.M{
+				"$size": len(resources),
+			}},
+		},
+	}
+	cursor, err := coll.Find(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	scopes := []gimlet.Scope{}
+	if err = cursor.All(ctx, &scopes); err != nil {
+		return nil, err
+	}
+	if len(scopes) == 0 {
+		return nil, nil
+	}
+
+	return &scopes[0], nil
+}
+
 func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
 	_, err := m.client.Database(m.db).Collection(m.scopeColl).InsertOne(context.Background(), scope)
 	return err
@@ -157,7 +190,7 @@ func (m *mongoBackedRoleManager) DeleteScope(id string) error {
 	return err
 }
 
-func (m *mongoBackedRoleManager) FindRoleWithPermissions(resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
+func (m *mongoBackedRoleManager) FindRoleWithPermissions(resourceType string, resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
 	ctx := context.Background()
 	var permissionMatch bson.M
 	if len(permissions) > 0 {
@@ -183,6 +216,9 @@ func (m *mongoBackedRoleManager) FindRoleWithPermissions(resources []string, per
 					{"resources": bson.M{
 						"$size": len(resources),
 					}},
+					{
+						"type": resourceType,
+					},
 				},
 			},
 		},
@@ -219,6 +255,14 @@ func (m *mongoBackedRoleManager) FindRoleWithPermissions(resources []string, per
 	}
 
 	return &roles[0], nil
+}
+
+func (m *mongoBackedRoleManager) Clear() error {
+	ctx := context.Background()
+	catcher := grip.NewBasicCatcher()
+	catcher.Add(m.client.Database(m.db).Collection(m.scopeColl).Drop(ctx))
+	catcher.Add(m.client.Database(m.db).Collection(m.roleColl).Drop(ctx))
+	return catcher.Resolve()
 }
 
 type inMemoryRoleManager struct {
@@ -309,6 +353,15 @@ func (m *inMemoryRoleManager) FilterScopesByResourceType(ScopeIDs []string, reso
 	return scopes, nil
 }
 
+func (m *inMemoryRoleManager) FindScopeForResources(resourceType string, resources ...string) (*gimlet.Scope, error) {
+	for _, scope := range m.scopes {
+		if scope.Type == resourceType && slicesContainSameElements(resources, scope.Resources) {
+			return &scope, nil
+		}
+	}
+	return nil, nil
+}
+
 func (m *inMemoryRoleManager) AddScope(scope gimlet.Scope) error {
 	m.scopes[scope.ID] = scope
 	return nil
@@ -316,6 +369,12 @@ func (m *inMemoryRoleManager) AddScope(scope gimlet.Scope) error {
 
 func (m *inMemoryRoleManager) DeleteScope(id string) error {
 	delete(m.scopes, id)
+	return nil
+}
+
+func (m *inMemoryRoleManager) Clear() error {
+	m.roles = map[string]gimlet.Role{}
+	m.scopes = map[string]gimlet.Scope{}
 	return nil
 }
 
@@ -327,12 +386,12 @@ func (m *inMemoryRoleManager) findScopesRecursive(currScope gimlet.Scope) []stri
 	return append(scopes, m.findScopesRecursive(m.scopes[currScope.ParentScope])...)
 }
 
-func (m *inMemoryRoleManager) FindRoleWithPermissions(resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
+func (m *inMemoryRoleManager) FindRoleWithPermissions(resourceType string, resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
 	validScopes := []string{}
 	for _, scope := range m.scopes {
-		 if slicesContainSameElements(resources, scope.Resources) {
-			 validScopes = append(validScopes, scope.ID)
-		 }
+		if slicesContainSameElements(resources, scope.Resources) && scope.Type == resourceType {
+			validScopes = append(validScopes, scope.ID)
+		}
 	}
 	for _, role := range m.roles {
 		if stringSliceContains(validScopes, role.Scope) {
@@ -452,4 +511,41 @@ func HighestPermissionsForRolesAndResourceType(roleIDs []string, resourceType st
 	}
 
 	return highestPermissions, nil
+}
+
+func MakeRoleWithPermissions(rm gimlet.RoleManager, resourceType string, resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
+	existing, err := rm.FindRoleWithPermissions(resourceType, resources, permissions)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+
+	scope, err := rm.FindScopeForResources(resourceType, resources...)
+	if err != nil {
+		return nil, err
+	}
+	if scope == nil {
+		scope = &gimlet.Scope{
+			ID:        primitive.NewObjectID().Hex(),
+			Type:      resourceType,
+			Resources: resources,
+		}
+		err = rm.AddScope(*scope)
+		if err != nil {
+			return nil, err
+		}
+	}
+	newRole := gimlet.Role{
+		ID:          primitive.NewObjectID().Hex(),
+		Scope:       scope.ID,
+		Permissions: permissions,
+	}
+	err = rm.UpdateRole(newRole)
+	if err != nil {
+		return nil, err
+	}
+
+	return &newRole, nil
 }
