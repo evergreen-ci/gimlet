@@ -6,9 +6,11 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/evergreen-ci/gimlet"
 	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
 	ldap "gopkg.in/ldap.v2"
 )
@@ -228,7 +230,14 @@ func (u *userService) bind(username, password string) error {
 	if err := u.ensureConnected(); err != nil {
 		return errors.Wrap(err, "problem connecting to ldap server")
 	}
-	if err := u.conn.Bind(username, password); err == nil {
+	start := time.Now()
+	err := u.conn.Bind(username, password)
+	grip.Info(message.Fields{
+		"op":       "bind",
+		"context":  "LDAP user service",
+		"duration": time.Since(start),
+	})
+	if err == nil {
 		return nil
 	}
 	conn, err := u.connect(u.url, u.port)
@@ -236,7 +245,14 @@ func (u *userService) bind(username, password string) error {
 		return errors.Wrap(err, "could not connect to LDAP server")
 	}
 	u.conn = conn
-	return u.conn.Bind(username, password)
+	start = time.Now()
+	err = u.conn.Bind(username, password)
+	grip.Info(message.Fields{
+		"op":       "bind",
+		"context":  "LDAP user service",
+		"duration": time.Since(start),
+	})
+	return err
 }
 
 // search wraps u.conn.Search, reconnecting if the LDAP server has closed the connection.
@@ -245,7 +261,13 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 	if err := u.loginServiceUser(); err != nil {
 		return nil, errors.Wrap(err, "could not bind service account")
 	}
+	start := time.Now()
 	s, err := u.conn.Search(searchRequest)
+	grip.Info(message.Fields{
+		"op":       "search",
+		"context":  "LDAP user service",
+		"duration": time.Since(start),
+	})
 	if err == nil {
 		return s, nil
 	}
@@ -254,7 +276,14 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 		return nil, errors.Wrap(err, "could not connect to LDAP server")
 	}
 	u.conn = conn
-	return u.conn.Search(searchRequest)
+	start = time.Now()
+	s, err = u.conn.Search(searchRequest)
+	grip.Info(message.Fields{
+		"op":       "search",
+		"context":  "LDAP user service",
+		"duration": time.Since(start),
+	})
+	return s, err
 }
 
 func (u *userService) ensureConnected() error {

@@ -532,10 +532,10 @@ func (s *LDAPSuite) TestGetUserByToken() {
 }
 
 func (s *LDAPSuite) TestCreateUserToken() {
-	token, err := s.um.CreateUserToken("foo", "badpassword")
+	_, err := s.um.CreateUserToken("foo", "badpassword")
 	s.Error(err)
 
-	token, err = s.um.CreateUserToken("nosuchuser", "")
+	_, err = s.um.CreateUserToken("nosuchuser", "")
 	s.Error(err)
 
 	token, err = s.um.CreateUserToken("foo", "hunter2")
