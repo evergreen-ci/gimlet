@@ -538,7 +538,7 @@ func (s *LDAPSuite) TestCreateUserToken() {
 	_, err = s.um.CreateUserToken("nosuchuser", "")
 	s.Error(err)
 
-	token, err = s.um.CreateUserToken("foo", "hunter2")
+	token, err := s.um.CreateUserToken("foo", "hunter2")
 	s.Require().NoError(err)
 	s.Equal("123456", token)
 	s.Equal("foo", mockPutUser.Username())
