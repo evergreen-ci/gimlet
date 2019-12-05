@@ -77,21 +77,11 @@ func (r *APIRoute) Proxy(opts ProxyOptions) *APIRoute {
 		return r
 	}
 
-	r.handler = (&reverseProxy{
-		proxy: &httputil.ReverseProxy{
-			ErrorLog: grip.MakeStandardLogger(level.Warning),
-			Director: opts.director,
-		},
-		opts: opts,
+	r.handler = (&httputil.ReverseProxy{
+		ErrorLog: grip.MakeStandardLogger(level.Warning),
+		Director: opts.director,
 	}).ServeHTTP
 	return r
-}
-
-func (rp *reverseProxy) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	// do setup
-	// do logging
-
-	rp.proxy.ServeHTTP(rw, r)
 }
 
 func singleJoiningSlash(a, b string) string {
