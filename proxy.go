@@ -11,11 +11,6 @@ import (
 	"github.com/mongodb/grip/message"
 )
 
-type reverseProxy struct {
-	proxy *httputil.ReverseProxy
-	opts  ProxyOptions
-}
-
 // ProxyOptions describes a simple reverse proxy service that can be
 // the handler for a route in an application. The proxy implementation
 // can modify the headers of the request. Requests are delgated to
@@ -30,23 +25,27 @@ type ProxyOptions struct {
 
 // Validate checks the default configuration of a proxy configuration.
 func (opts *ProxyOptions) Validate() error {
+	if !strings.HasPrefix(opts.RemotePrefix, "/") {
+		opts.RemotePrefix = "/" + opts.RemotePrefix
+	}
+
 	catcher := grip.NewBasicCatcher()
 	catcher.NewWhen(len(opts.TargetPool) == 0, "must specify one or more target services")
-	return catcher.REsolve()
+	return catcher.Resolve()
 }
 
-func (opts *ProxyOptions) director(r *http.Request) {
+func (opts *ProxyOptions) director(req *http.Request) {
 	for k, v := range opts.HeadersToAdd {
-		r.Header.Add(k, v)
+		req.Header.Add(k, v)
 	}
 
 	for _, k := range opts.HeadersToDelete {
-		r.Header.Del(k)
+		req.Header.Del(k)
 	}
 
-	if _, ok := r.Header["User-Agent"]; !ok {
+	if _, ok := req.Header["User-Agent"]; !ok {
 		// explicitly disable User-Agent so it's not set to default value
-		r.Header.Set("User-Agent", "")
+		req.Header.Set("User-Agent", "")
 	}
 
 	if len(opts.TargetPool) == 1 {
@@ -68,7 +67,7 @@ func (opts *ProxyOptions) director(r *http.Request) {
 // that captures all routes that begin with a specific prefix.
 func (r *APIRoute) Proxy(opts ProxyOptions) *APIRoute {
 	if err := opts.Validate(); err != nil {
-		grip.Alert(message.WrapError(err, message.Field{
+		grip.Alert(message.WrapError(err, message.Fields{
 			"message":          "invalid proxy options",
 			"route":            r.route,
 			"version":          r.version,
@@ -81,6 +80,7 @@ func (r *APIRoute) Proxy(opts ProxyOptions) *APIRoute {
 		ErrorLog: grip.MakeStandardLogger(level.Warning),
 		Director: opts.director,
 	}).ServeHTTP
+
 	return r
 }
 
