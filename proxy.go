@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 
 	"github.com/mongodb/grip"
@@ -21,6 +22,7 @@ type ProxyOptions struct {
 	RemotePrefix      string
 	StripSourcePrefix bool
 	TargetPool        []string
+	FindTarget        func(*url.URL) []string
 }
 
 // Validate checks the default configuration of a proxy configuration.
@@ -30,8 +32,31 @@ func (opts *ProxyOptions) Validate() error {
 	}
 
 	catcher := grip.NewBasicCatcher()
-	catcher.NewWhen(len(opts.TargetPool) == 0, "must specify one or more target services")
+	catcher.NewWhen(len(opts.TargetPool) == 0 && opts.FindTarget == nil, "must specify a way to resolve target host")
+	catcher.NewWhen(len(opts.TargetPool) >= 1 && opts.FindTarget != nil, "cannot specify more than one target resolution option")
 	return catcher.Resolve()
+}
+
+func (opts *ProxyOptions) getHost() string { return getRandomHost(opts.TargetPool) }
+
+func getRandomHost(hosts []string) string {
+	hostLen := len(hosts)
+	switch {
+	case hostLen == 1:
+		return hosts[0]
+	case hostLen > 1:
+		return hosts[rand.Intn(hostLen)]
+	default:
+		return ""
+	}
+}
+
+func (opts *ProxyOptions) resolveTarget(u *url.URL) string {
+	if opts.FindTarget == nil {
+		return ""
+	}
+
+	return getRandomHost(opts.FindTarget(u))
 }
 
 func (opts *ProxyOptions) director(req *http.Request) {
@@ -48,10 +73,12 @@ func (opts *ProxyOptions) director(req *http.Request) {
 		req.Header.Set("User-Agent", "")
 	}
 
-	if len(opts.TargetPool) == 1 {
-		req.URL.Host = opts.TargetPool[0]
+	if target := opts.getHost(); target != "" {
+		req.URL.Host = target
+	} else if target := opts.resolveTarget(req.URL); target != "" {
+		req.URL.Host = target
 	} else {
-		req.URL.Host = opts.TargetPool[rand.Intn(len(opts.TargetPool))]
+		panic("could not resolve proxy target host")
 	}
 
 	if opts.StripSourcePrefix {

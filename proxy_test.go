@@ -2,6 +2,7 @@ package gimlet
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,11 +16,34 @@ func TestProxyService(t *testing.T) {
 		assert.Equal(t, "foo/bar", singleJoiningSlash("foo/", "/bar"))
 	})
 	t.Run("Validate", func(t *testing.T) {
-		opts := &ProxyOptions{}
-		assert.Error(t, opts.Validate())
-		opts.TargetPool = []string{"a", "b"}
-		assert.NoError(t, opts.Validate())
+		t.Run("Default", func(t *testing.T) {
+			opts := &ProxyOptions{}
+			assert.Error(t, opts.Validate())
+		})
+		t.Run("HostPool", func(t *testing.T) {
+			opts := &ProxyOptions{}
+			opts.TargetPool = []string{"a", "b"}
+			assert.NoError(t, opts.Validate())
+		})
+		t.Run("HostPoolDeclared", func(t *testing.T) {
+			opts := &ProxyOptions{}
+			opts.TargetPool = []string{}
+			assert.Error(t, opts.Validate())
+		})
+		t.Run("FindFunction", func(t *testing.T) {
+			opts := &ProxyOptions{}
+			opts.FindTarget = func(u *url.URL) []string { return nil }
+			assert.NoError(t, opts.Validate())
+		})
+		t.Run("ErrorWhenAllResolversSpecified", func(t *testing.T) {
+			opts := &ProxyOptions{
+				TargetPool: []string{"a"},
+				FindTarget: func(u *url.URL) []string { return nil },
+			}
+			assert.Error(t, opts.Validate())
+		})
 	})
+
 	t.Run("DirectorHeaders", func(t *testing.T) {
 		opts := &ProxyOptions{
 			TargetPool:      []string{"localhost:8080"},
@@ -49,6 +73,17 @@ func TestProxyService(t *testing.T) {
 		assert.Equal(t, "localhost:8080", req.URL.Host)
 		assert.Equal(t, "/target/path", req.URL.Path)
 	})
+	t.Run("PanicWithNoHosts", func(t *testing.T) {
+		opts := &ProxyOptions{
+			TargetPool: []string{},
+			FindTarget: func(u *url.URL) []string { return nil },
+		}
+
+		req, err := http.NewRequest(http.MethodGet, "http://example.com/target/path", nil)
+		require.NoError(t, err)
+		assert.Panics(t, func() { opts.director(req) })
+	})
+
 	t.Run("AddPrefix", func(t *testing.T) {
 		opts := &ProxyOptions{
 			TargetPool:   []string{"localhost:8080"},
