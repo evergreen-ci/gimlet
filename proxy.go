@@ -32,7 +32,7 @@ func (opts *ProxyOptions) Validate() error {
 	}
 
 	catcher := grip.NewBasicCatcher()
-	catcher.NewWhen(len(opts.TargetPool) == 0 && opts.FindTarget == nil, "must specify one or more target resolution option")
+	catcher.NewWhen(len(opts.TargetPool) == 0 && opts.FindTarget == nil, "must specify a way to resolve target host")
 	catcher.NewWhen(len(opts.TargetPool) >= 1 && opts.FindTarget != nil, "cannot specify more than one target resolution option")
 	return catcher.Resolve()
 }
