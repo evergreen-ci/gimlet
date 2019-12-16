@@ -191,6 +191,105 @@ func (m *mongoBackedRoleManager) DeleteScope(id string) error {
 	return err
 }
 
+func (m *mongoBackedRoleManager) AddResourceToScope(scope, resource string) error {
+	toUpdate, err := m.findParentsOfScope(scope)
+	if err != nil {
+		return err
+	}
+	filter := bson.M{
+		"_id": bson.M{
+			"$in": toUpdate,
+		},
+	}
+	update := bson.M{
+		"$push": bson.M{
+			"resources": resource,
+		},
+	}
+	_, err = m.client.Database(m.db).Collection(m.scopeColl).UpdateMany(context.Background(), filter, update)
+	return err
+}
+
+func (m *mongoBackedRoleManager) RemoveResourceFromScope(scope, resource string) error {
+	toUpdate, err := m.findParentsOfScope(scope)
+	if err != nil {
+		return err
+	}
+	filter := bson.M{
+		"_id": bson.M{
+			"$in": toUpdate,
+		},
+	}
+	update := bson.M{
+		"$pull": bson.M{
+			"resources": resource,
+		},
+	}
+	_, err = m.client.Database(m.db).Collection(m.scopeColl).UpdateMany(context.Background(), filter, update)
+	return err
+}
+
+func (m *mongoBackedRoleManager) findParentsOfScope(scopeId string) ([]string, error) {
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"_id": scopeId,
+			},
+		},
+		{
+			"$graphLookup": bson.M{
+				"from":             m.scopeColl,
+				"startWith":        "$parent",
+				"connectFromField": "parent",
+				"connectToField":   "_id",
+				"as":               "parents_temp",
+			},
+		},
+		{
+			"$addFields": bson.M{
+				"parents_temp": bson.M{
+					"$concatArrays": []interface{}{"$parents_temp", []string{"$$ROOT"}},
+				},
+			},
+		},
+		{
+			"$project": bson.M{
+				"_id":     0,
+				"results": "$parents_temp",
+			},
+		},
+		{
+			"$unwind": "$results",
+		},
+		{
+			"$replaceRoot": bson.M{
+				"newRoot": "$results",
+			},
+		},
+		{
+			"$project": bson.M{
+				"_id": 1,
+			},
+		},
+	}
+
+	ctx := context.Background()
+	cursor, err := m.client.Database(m.db).Collection(m.scopeColl).Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	scopes := []gimlet.Scope{}
+	err = cursor.All(ctx, &scopes)
+	if err != nil {
+		return nil, err
+	}
+	scopeIds := []string{}
+	for _, scope := range scopes {
+		scopeIds = append(scopeIds, scope.ID)
+	}
+	return scopeIds, nil
+}
+
 func (m *mongoBackedRoleManager) FindRoleWithPermissions(resourceType string, resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
 	ctx := context.Background()
 	var permissionMatch bson.M
@@ -370,6 +469,40 @@ func (m *inMemoryRoleManager) AddScope(scope gimlet.Scope) error {
 
 func (m *inMemoryRoleManager) DeleteScope(id string) error {
 	delete(m.scopes, id)
+	return nil
+}
+
+func (m *inMemoryRoleManager) AddResourceToScope(scopeId, resource string) error {
+	baseScope, found := m.scopes[scopeId]
+	if !found {
+		return errors.New("no scope found")
+	}
+	toUpdate := m.findScopesRecursive(baseScope)
+	for _, scopeId := range toUpdate {
+		scope := m.scopes[scopeId]
+		scope.Resources = append(scope.Resources, resource)
+		m.scopes[scopeId] = scope
+	}
+
+	return nil
+}
+
+func (m *inMemoryRoleManager) RemoveResourceFromScope(scopeId, resource string) error {
+	baseScope, found := m.scopes[scopeId]
+	if !found {
+		return errors.New("no scope found")
+	}
+	toUpdate := m.findScopesRecursive(baseScope)
+	for _, scopeId := range toUpdate {
+		scope := m.scopes[scopeId]
+		for i := len(scope.Resources) - 1; i >= 0; i-- {
+			if scope.Resources[i] == resource {
+				scope.Resources = append(scope.Resources[:i], scope.Resources[i+1:]...)
+			}
+		}
+		m.scopes[scopeId] = scope
+	}
+
 	return nil
 }
 

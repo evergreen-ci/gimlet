@@ -459,6 +459,7 @@ func (s *RoleManagerSuite) TestFindScopeForResources() {
 	scope, err := s.m.FindScopeForResources("project", "resource1", "resource2")
 	s.NoError(err)
 	s.Equal(scope.ID, "1")
+	s.Equal(scope.Type, "project")
 	// order should not matter
 	scope, err = s.m.FindScopeForResources("project", "resource2", "resource1")
 	s.NoError(err)
@@ -474,4 +475,28 @@ func (s *RoleManagerSuite) TestFindScopeForResources() {
 	scope, err = s.m.FindScopeForResources("distro", "resource1", "resource2")
 	s.NoError(err)
 	s.Nil(scope)
+}
+
+func (s *RoleManagerSuite) TestAddAndRemoveResources() {
+	s.NoError(s.m.AddResourceToScope("1", "somethingelse"))
+	foundScope, err := s.m.FindScopeForResources("project", "resource1", "resource2", "somethingelse")
+	s.NoError(err)
+	s.Equal(foundScope.ID, "1")
+	foundScope, err = s.m.FindScopeForResources("project", "resource1", "resource2", "resource3", "somethingelse")
+	s.NoError(err)
+	s.Equal(foundScope.ID, "3")
+	foundScope, err = s.m.FindScopeForResources("project", "resource1", "resource2", "resource3", "resource4", "somethingelse")
+	s.NoError(err)
+	s.Equal(foundScope.ID, "root")
+
+	s.NoError(s.m.RemoveResourceFromScope("1", "resource1"))
+	foundScope, err = s.m.FindScopeForResources("project", "resource2", "somethingelse")
+	s.NoError(err)
+	s.Equal(foundScope.ID, "1")
+	foundScope, err = s.m.FindScopeForResources("project", "resource2", "resource3", "somethingelse")
+	s.NoError(err)
+	s.Equal(foundScope.ID, "3")
+	foundScope, err = s.m.FindScopeForResources("project", "resource2", "resource3", "resource4", "somethingelse")
+	s.NoError(err)
+	s.Equal(foundScope.ID, "root")
 }
