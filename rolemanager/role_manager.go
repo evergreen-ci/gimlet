@@ -591,7 +591,9 @@ func (m *inMemoryRoleManager) AddScope(scope gimlet.Scope) error {
 func (m *inMemoryRoleManager) DeleteScope(scope gimlet.Scope) error {
 	delete(m.scopes, scope.ID)
 	for _, resource := range scope.Resources {
-		m.RemoveResourceFromScope(scope.ParentScope, resource)
+		if err := m.RemoveResourceFromScope(scope.ParentScope, resource); err != nil {
+			return err
+		}
 	}
 	return nil
 }
