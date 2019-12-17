@@ -61,53 +61,46 @@ func (s *RoleManagerSuite) SetupSuite() {
 }
 
 func (s *RoleManagerSuite) SetupTest() {
-	s.NoError(s.m.Clear())
+	s.Require().NoError(s.m.Clear())
+	root := gimlet.Scope{
+		ID:        "root",
+		Type:      "project",
+		Resources: []string{},
+	}
+	s.Require().NoError(s.m.AddScope(root))
+	scope3 := gimlet.Scope{
+		ID:          "3",
+		ParentScope: "root",
+		Type:        "project",
+		Resources:   []string{},
+	}
+	s.Require().NoError(s.m.AddScope(scope3))
 	scope1 := gimlet.Scope{
 		ID:          "1",
 		Resources:   []string{"resource1", "resource2"},
 		ParentScope: "3",
 		Type:        "project",
 	}
-	s.NoError(s.m.AddScope(scope1))
+	s.Require().NoError(s.m.AddScope(scope1))
 	scope2 := gimlet.Scope{
 		ID:          "2",
 		Resources:   []string{"resource3"},
 		ParentScope: "3",
 		Type:        "project",
 	}
-	s.NoError(s.m.AddScope(scope2))
-	scope3 := gimlet.Scope{
-		ID:          "3",
-		ParentScope: "root",
-		Type:        "project",
-		Resources:   []string{"resource1", "resource2", "resource3"},
-	}
-	s.NoError(s.m.AddScope(scope3))
+	s.Require().NoError(s.m.AddScope(scope2))
 	scope4 := gimlet.Scope{
 		ID:          "4",
 		Resources:   []string{"resource4"},
 		ParentScope: "root",
 		Type:        "project",
 	}
-	s.NoError(s.m.AddScope(scope4))
-	scope5 := gimlet.Scope{
-		ID:          "5",
-		Resources:   []string{"resource5"},
-		ParentScope: "root",
-		Type:        "distro",
-	}
-	s.NoError(s.m.AddScope(scope5))
-	root := gimlet.Scope{
-		ID:        "root",
-		Type:      "project",
-		Resources: []string{"resource1", "resource2", "resource3", "resource4"},
-	}
-	s.NoError(s.m.AddScope(root))
+	s.Require().NoError(s.m.AddScope(scope4))
 	wrongType := gimlet.Scope{
 		ID:   "wrongType",
 		Type: "foo",
 	}
-	s.NoError(s.m.AddScope(wrongType))
+	s.Require().NoError(s.m.AddScope(wrongType))
 }
 
 func (s *RoleManagerSuite) TestGetAndUpdate() {
