@@ -6,9 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/evergreen-ci/gimlet"
 	"github.com/mongodb/grip"
@@ -74,7 +75,7 @@ func (m *oktaUserManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 		q.Add("state", "TODO")
 		q.Add("nonce", "TODO")
 
-		http.Redirect(w, r, fmt.Sprintf("%s/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
+		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
 	}
 }
 
@@ -143,7 +144,7 @@ func (m *oktaUserManager) getToken(code string) (*oktaAuthResponse, error) {
 	q.Set("grant_type", "authorization_code")
 	q.Set("code", code)
 	q.Set("redirect_uri", m.redirectURI)
-	resp, err := m.doRequest(context.Background(), http.MethodPost, fmt.Sprintf("%s/v1/token?%s", m.issuer, q.Encode()), nil)
+	resp, err := m.doRequest(context.Background(), http.MethodPost, fmt.Sprintf("%s/oauth2/v1/token?%s", m.issuer, q.Encode()), nil)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -211,23 +212,26 @@ type oktaAuthResponse struct {
 
 // doRequest sends the request with the required client credentials.
 func (m *oktaUserManager) doRequest(ctx context.Context, method string, url string, data interface{}) (*http.Response, error) {
-	var body io.Reader
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	req = req.WithContext(ctx)
 	if data != nil {
 		b, err := json.Marshal(data)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
-		body = bytes.NewReader(b)
+		req.Body = ioutil.NopCloser(bytes.NewReader(b))
+		req.Header.Add("Content-Length", strconv.Itoa(len(b)))
+	} else {
+		req.Header.Add("Content-Length", "0")
 	}
-	req, err := http.NewRequest(method, url, body)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	req = req.WithContext(ctx)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Accept", "application/json")
 	authHeader := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", m.clientID, m.clientSecret)))
 	req.Header.Add("Authorization", fmt.Sprintf("Basic "+authHeader))
+	req.Header.Add("Connection", "close")
 
 	client, err := m.client()
 	if err != nil {
