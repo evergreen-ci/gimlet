@@ -56,7 +56,7 @@ func (m *oktaUserManager) CreateUserToken(user string, password string) (string,
 
 func (m *oktaUserManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO (kim): save nonce and maybe state once login cache is available.
+		// TODO (kim): persist nonce and state.
 		// nonce, err := generateNonce()
 		// if err != nil {
 		//     grip.Error(message.WrapError(err, message.Fields{
@@ -74,35 +74,22 @@ func (m *oktaUserManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 		q.Add("state", "TODO")
 		q.Add("nonce", "TODO")
 
-		grip.Info(message.Fields{
-			"message": "kim: redirecting to Okta authentication page",
-			"op":      "GetLoginHandler",
-			"context": "Okta",
-			"query":   q,
-		})
-
 		http.Redirect(w, r, fmt.Sprintf("%s/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
 	}
 }
 
 func (m *oktaUserManager) GetLoginCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		grip.Info(message.Fields{
-			"message": "kim: starting auth callback handler",
-			"op":      "GetLoginCallbackHandler",
-			"context": "Okta",
-		})
 		// TODO (kim): verify state.
 		// checkState := r.URL.Query().Get("state")
 		// state := "TODO"
 		// if state != checkState {
-		//     grip.Error(message.Fields{
-		//         "message":        "kim: mismatched states when authenticating",
-		//         "op":             "GetLoginCallbackHandler",
+		//     grip.Error(message.WrapError(err, message.Fields{
+		//         "message":        "mismatched states during authentication",
 		//         "context":        "Okta",
 		//         "expected_state": state,
 		//         "actual_state":   checkState,
-		//     })
+		//     }))
 		//     gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.New("mismatched states during authentication")))
 		//     return
 		// }
@@ -111,7 +98,7 @@ func (m *oktaUserManager) GetLoginCallbackHandler() http.HandlerFunc {
 			desc := r.URL.Query().Get("error_description")
 			err := fmt.Errorf("%s: %s", errCode, desc)
 			grip.Error(message.WrapError(errors.WithStack(err), message.Fields{
-				"message": "kim: got error from callback handler redirect",
+				"message": "failure in callback handler redirect",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
@@ -124,7 +111,7 @@ func (m *oktaUserManager) GetLoginCallbackHandler() http.HandlerFunc {
 			err = errors.Wrap(err, "could not get ID token")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "kim: failed to get token from Okta",
+				"message": "failed to get token from Okta",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
@@ -134,14 +121,14 @@ func (m *oktaUserManager) GetLoginCallbackHandler() http.HandlerFunc {
 			err = errors.Wrap(err, "could not validate ID token from Okta")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "kim: failed to validate ID token",
+				"message": "failed to validate ID token",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
 		}
-		// TODO (kim): cache token.
+		// TODO (kim): persist token.
 		grip.Info(message.Fields{
-			"message":  "kim: successfully authenticated user and validated ID token",
+			"message":  "successfully authenticated user and validated ID token",
 			"op":       "GetLoginCallbackHandler",
 			"context":  "Okta",
 			"response": fmt.Sprintf("%+v", resp),
