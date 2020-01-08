@@ -1,7 +1,7 @@
 # start project configuration
 name := gimlet
 buildDir := build
-packages := $(name) acl ldap rolemanager
+packages := $(name) acl ldap okta rolemanager
 orgPath := github.com/evergreen-ci
 projectPath := $(orgPath)/$(name)
 # end project configuration
@@ -184,6 +184,7 @@ vendor-clean:
 	rm -rf vendor/gopkg.in/asn1-ber.v1/tests/
 	rm -rf vendor/github.com/rs/cors/examples/
 	find vendor/ -name "*.gif" -o -name "*.gz" -o -name "*.png" -o -name "*.ico" -o -name "*.dat" -o -name "*testdata" | xargs rm -rf
+	find vendor/ -type d -name '.git' | xargs rm -rf
 phony += vendor-clean
 # end vendoring tooling configuration
 
