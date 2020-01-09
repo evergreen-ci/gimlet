@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func randomString() (string, error) {
+func randomString() (string, error) { //nolint: deadcode
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", errors.Wrap(err, "could not generate random string")
@@ -16,7 +16,7 @@ func randomString() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func generateNonce() (string, error) {
+func generateNonce() (string, error) { //nolint: deadcode
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", errors.Wrap(err, "could not generate nonce")

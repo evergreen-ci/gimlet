@@ -26,7 +26,7 @@ type CreationOptions struct {
 	Issuer       string
 }
 
-type oktaUserManager struct {
+type userManager struct {
 	clientID     string
 	clientSecret string
 	redirectURI  string
@@ -38,7 +38,7 @@ type oktaUserManager struct {
 // NewUserManager creates a manager that connects to Okta for user
 // management services.
 func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
-	m := &oktaUserManager{
+	m := &userManager{
 		clientID:     opts.ClientID,
 		clientSecret: opts.ClientSecret,
 		redirectURI:  opts.RedirectURI,
@@ -47,15 +47,15 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 	return m, nil
 }
 
-func (m *oktaUserManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
+func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *oktaUserManager) CreateUserToken(user string, password string) (string, error) {
+func (m *userManager) CreateUserToken(user string, password string) (string, error) {
 	return "", errors.New("not implemented")
 }
 
-func (m *oktaUserManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
+func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO (kim): persist nonce and state.
 		// nonce, err := generateNonce()
@@ -79,7 +79,7 @@ func (m *oktaUserManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 	}
 }
 
-func (m *oktaUserManager) GetLoginCallbackHandler() http.HandlerFunc {
+func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO (kim): verify state.
 		// checkState := r.URL.Query().Get("state")
@@ -139,7 +139,7 @@ func (m *oktaUserManager) GetLoginCallbackHandler() http.HandlerFunc {
 }
 
 // getToken exchanges the given code to redeem tokens fro mthe endpoint.
-func (m *oktaUserManager) getToken(code string) (*oktaAuthResponse, error) {
+func (m *userManager) getToken(code string) (*authResponse, error) {
 	q := url.Values{}
 	q.Set("grant_type", "authorization_code")
 	q.Set("code", code)
@@ -148,7 +148,7 @@ func (m *oktaUserManager) getToken(code string) (*oktaAuthResponse, error) {
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	authResp := &oktaAuthResponse{}
+	authResp := &authResponse{}
 	if err := gimlet.GetJSONUnlimited(resp.Body, authResp); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -158,7 +158,7 @@ func (m *oktaUserManager) getToken(code string) (*oktaAuthResponse, error) {
 	return authResp, nil
 }
 
-func (m *oktaUserManager) validateToken(token string) error {
+func (m *userManager) validateToken(token string) error {
 	validator := verifier.JwtVerifier{
 		Issuer: m.issuer,
 		ClaimsToValidate: map[string]string{
@@ -176,31 +176,31 @@ func (m *oktaUserManager) validateToken(token string) error {
 	return nil
 }
 
-func (m *oktaUserManager) IsRedirect() bool { return true }
+func (m *userManager) IsRedirect() bool { return true }
 
-func (m *oktaUserManager) GetUserByID(user string) (gimlet.User, error) {
+func (m *userManager) GetUserByID(user string) (gimlet.User, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *oktaUserManager) GetOrCreateUser(user gimlet.User) (gimlet.User, error) {
+func (m *userManager) GetOrCreateUser(user gimlet.User) (gimlet.User, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *oktaUserManager) ClearUser(user gimlet.User, all bool) error {
+func (m *userManager) ClearUser(user gimlet.User, all bool) error {
 	return errors.New("not implemented")
 }
 
-func (m *oktaUserManager) GetGroupsForUser(user string) ([]string, error) {
+func (m *userManager) GetGroupsForUser(user string) ([]string, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *oktaUserManager) client() (*http.Client, error) {
+func (m *userManager) client() (*http.Client, error) {
 	// TODO (kim): need to acquire an HTTP client at this point but this should
 	// come from the application HTTP client pool.
 	return &http.Client{}, nil
 }
 
-type oktaAuthResponse struct {
+type authResponse struct {
 	AccessToken      string `json:"access_token,omitempty"`
 	TokenType        string `json:"token_type,omitempty"`
 	ExpiresIn        int    `json:"expires_in,omitempty"`
@@ -211,7 +211,7 @@ type oktaAuthResponse struct {
 }
 
 // doRequest sends the request with the required client credentials.
-func (m *oktaUserManager) doRequest(ctx context.Context, method string, url string, data interface{}) (*http.Response, error) {
+func (m *userManager) doRequest(ctx context.Context, method string, url string, data interface{}) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, errors.WithStack(err)
