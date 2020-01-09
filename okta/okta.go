@@ -139,7 +139,6 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 
 func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO (kim): verify state.
 		var nonce, state string
 		for _, cookie := range r.Cookies() {
 			var err error
@@ -218,7 +217,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 	}
 }
 
-// getToken exchanges the given code to redeem tokens fro mthe endpoint.
+// getToken exchanges the given code to redeem tokens from the endpoint.
 func (m *userManager) getToken(code string) (*authResponse, error) {
 	q := url.Values{}
 	q.Set("grant_type", "authorization_code")
