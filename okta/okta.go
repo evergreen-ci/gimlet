@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/evergreen-ci/gimlet"
 	"github.com/mongodb/grip"
@@ -24,6 +25,23 @@ type CreationOptions struct {
 	ClientSecret string
 	RedirectURI  string
 	Issuer       string
+	CookiePath   string
+	CookieDomain string
+	CookieTTL    time.Duration
+}
+
+func (opts CreationOptions) Validate() error {
+	catcher := grip.NewBasicCatcher()
+	catcher.NewWhen(opts.ClientID == "", "must specify client ID")
+	catcher.NewWhen(opts.ClientSecret == "", "must specify client secret")
+	catcher.NewWhen(opts.RedirectURI == "", "must specify redirect URI")
+	catcher.NewWhen(opts.Issuer == "", "must specify issuer")
+	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
+	catcher.NewWhen(opts.CookieDomain == "", "must specify cookie domain")
+	if opts.CookieTTL == time.Duration(0) {
+		opts.CookieTTL = time.Hour
+	}
+	return catcher.Resolve()
 }
 
 type userManager struct {
@@ -31,6 +49,9 @@ type userManager struct {
 	clientSecret string
 	redirectURI  string
 	issuer       string
+	cookiePath   string
+	cookieDomain string
+	cookieTTL    time.Duration
 
 	// TODO (kim): token caching functions
 }
@@ -38,11 +59,17 @@ type userManager struct {
 // NewUserManager creates a manager that connects to Okta for user
 // management services.
 func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, errors.Wrap(err, "invalid Okta manager options")
+	}
 	m := &userManager{
 		clientID:     opts.ClientID,
 		clientSecret: opts.ClientSecret,
 		redirectURI:  opts.RedirectURI,
 		issuer:       opts.Issuer,
+		cookiePath:   opts.CookiePath,
+		cookieDomain: opts.CookieDomain,
+		cookieTTL:    opts.CookieTTL,
 	}
 	return m, nil
 }
@@ -55,25 +82,56 @@ func (m *userManager) CreateUserToken(user string, password string) (string, err
 	return "", errors.New("not implemented")
 }
 
+const (
+	nonceCookieName = "okta-nonce"
+	stateCookieName = "okta-state"
+)
+
 func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO (kim): persist nonce and state.
-		// nonce, err := generateNonce()
-		// if err != nil {
-		//     grip.Error(message.WrapError(err, message.Fields{
-		//         "message": "could not get login handler",
-		//     }))
-		//     gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.Wrap(err, "could not get login handler")))
-		//     return
-		// }
+		nonce, err := randomString()
+		if err != nil {
+			grip.Error(message.WrapError(err, message.Fields{
+				"message": "could not get login handler",
+			}))
+			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.Wrap(err, "could not get login handler")))
+			return
+		}
+		state, err := randomString()
+		if err != nil {
+			grip.Error(message.WrapError(err, message.Fields{
+				"message": "could not get login handler",
+			}))
+			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.Wrap(err, "could not get login handler")))
+			return
+		}
+
 		q := r.URL.Query()
 		q.Add("client_id", m.clientID)
 		q.Add("response_type", "code")
 		q.Add("response_mode", "query")
 		q.Add("scope", "openid")
 		q.Add("redirect_uri", m.redirectURI)
-		q.Add("state", "TODO")
-		q.Add("nonce", "TODO")
+		q.Add("state", state)
+		q.Add("nonce", nonce)
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     nonceCookieName,
+			Path:     m.cookiePath,
+			Value:    nonce,
+			HttpOnly: true,
+			Expires:  time.Now().Add(m.cookieTTL),
+			Domain:   m.cookieDomain,
+		})
+		http.SetCookie(w, &http.Cookie{
+			Name:     stateCookieName,
+			Path:     m.cookiePath,
+			Value:    state,
+			HttpOnly: true,
+			Expires:  time.Now().Add(m.cookieTTL),
+			Domain:   m.cookieDomain,
+		})
 
 		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
 	}
@@ -82,18 +140,40 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO (kim): verify state.
-		// checkState := r.URL.Query().Get("state")
-		// state := "TODO"
-		// if state != checkState {
-		//     grip.Error(message.WrapError(err, message.Fields{
-		//         "message":        "mismatched states during authentication",
-		//         "context":        "Okta",
-		//         "expected_state": state,
-		//         "actual_state":   checkState,
-		//     }))
-		//     gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.New("mismatched states during authentication")))
-		//     return
-		// }
+		var nonce, state string
+		for _, cookie := range r.Cookies() {
+			var err error
+			if cookie.Name == nonceCookieName {
+				nonce, err = url.QueryUnescape(cookie.Value)
+				if err != nil {
+					err = errors.Wrap(err, "could not get Okta cookie for nonce")
+					grip.Error(err)
+					gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+					return
+				}
+			}
+			if cookie.Name == stateCookieName {
+				state, err = url.QueryUnescape(cookie.Value)
+				if err != nil {
+					err = errors.Wrap(err, "could not get Okta cookie for state")
+					grip.Error(err)
+					gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+					return
+				}
+			}
+		}
+		checkState := r.URL.Query().Get("state")
+
+		if state != checkState {
+			grip.Error(message.Fields{
+				"message":        "mismatched states during authentication",
+				"context":        "Okta",
+				"expected_state": state,
+				"actual_state":   checkState,
+			})
+			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.New("mismatched states during authentication")))
+			return
+		}
 
 		if errCode := r.URL.Query().Get("error"); errCode != "" {
 			desc := r.URL.Query().Get("error_description")
@@ -118,7 +198,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			}))
 			return
 		}
-		if err := m.validateToken(resp.IDToken); err != nil {
+		if err := m.validateToken(resp.IDToken, nonce); err != nil {
 			err = errors.Wrap(err, "could not validate ID token from Okta")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
@@ -158,11 +238,11 @@ func (m *userManager) getToken(code string) (*authResponse, error) {
 	return authResp, nil
 }
 
-func (m *userManager) validateToken(token string) error {
+func (m *userManager) validateToken(token, nonce string) error {
 	validator := verifier.JwtVerifier{
 		Issuer: m.issuer,
 		ClaimsToValidate: map[string]string{
-			"nonce": "TODO",
+			"nonce": nonce,
 			"aud":   m.clientID,
 		},
 	}
