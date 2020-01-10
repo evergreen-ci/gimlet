@@ -309,6 +309,14 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			}
 		}
 
+		user, err = m.GetOrCreateUser(user)
+		if err != nil {
+			err = errors.Wrap(err, "could not get or create user in cache")
+			grip.Error(err)
+			gimlet.MakeTextErrorResponder(err)
+			return
+		}
+
 		loginToken, err := m.cache.Put(user)
 		if err != nil {
 			err = errors.Wrapf(err, "failed to cache user %s", user.Username())
