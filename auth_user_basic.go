@@ -1,5 +1,10 @@
 package gimlet
 
+import (
+	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/message"
+)
+
 // NewBasicUser constructs a simple user. The underlying type has
 // serialization tags.
 func NewBasicUser(id, name, email, password, key string, roles []string, invalid bool, rm RoleManager) User {
@@ -39,23 +44,15 @@ func (u *basicUser) Roles() []string {
 	copy(out, u.AccessRoles)
 	return out
 }
-func (u *basicUser) HasPermission(opts PermissionOpts) (bool, error) {
+func (u *basicUser) HasPermission(opts PermissionOpts) bool {
 	roles, err := u.roleManager.GetRoles(u.Roles())
 	if err != nil {
-		return false, err
+		grip.Error(message.WrapError(err, message.Fields{
+			"message": "error getting roles",
+		}))
+		return false
 	}
-	roles, err = u.roleManager.FilterForResource(roles, opts.Resource, opts.ResourceType)
-	if err != nil {
-		return false, err
-	}
-
-	for _, role := range roles {
-		level, hasPermission := role.Permissions[opts.Permission]
-		if hasPermission && level >= opts.RequiredLevel {
-			return true, nil
-		}
-	}
-	return false, nil
+	return HasPermission(u.roleManager, opts, roles)
 }
 
 // userHasRole determines if the user has the defined role.

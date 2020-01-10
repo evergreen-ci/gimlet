@@ -32,15 +32,13 @@ type MockUser struct {
 	RoleNames    []string
 }
 
-func (u *MockUser) DisplayName() string { return u.Name }
-func (u *MockUser) Email() string       { return u.EmailAddress }
-func (u *MockUser) Username() string    { return u.ID }
-func (u *MockUser) IsNil() bool         { return u.ReportNil }
-func (u *MockUser) GetAPIKey() string   { return u.APIKey }
-func (u *MockUser) Roles() []string     { return u.RoleNames }
-func (u *MockUser) HasPermission(PermissionOpts) (bool, error) {
-	return true, nil
-}
+func (u *MockUser) DisplayName() string               { return u.Name }
+func (u *MockUser) Email() string                     { return u.EmailAddress }
+func (u *MockUser) Username() string                  { return u.ID }
+func (u *MockUser) IsNil() bool                       { return u.ReportNil }
+func (u *MockUser) GetAPIKey() string                 { return u.APIKey }
+func (u *MockUser) Roles() []string                   { return u.RoleNames }
+func (u *MockUser) HasPermission(PermissionOpts) bool { return true }
 
 type MockAuthenticator struct {
 	ResourceUserMapping     map[string]string
