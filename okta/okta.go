@@ -1,18 +1,13 @@
 package okta
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
-	"github.com/evergreen-ci/cedar/util"
 	"github.com/evergreen-ci/gimlet"
 	"github.com/evergreen-ci/gimlet/usercache"
 	"github.com/evergreen-ci/gimlet/util"
@@ -29,6 +24,8 @@ type CreationOptions struct {
 	RedirectURI  string
 	Issuer       string
 	Audience     string
+
+	UserGroup string
 
 	CookiePath   string
 	CookieDomain string
@@ -65,6 +62,9 @@ type userManager struct {
 	clientSecret string
 	redirectURI  string
 	issuer       string
+	audience     string
+
+	userGroup string
 
 	loginCookieName string
 	loginCookieTTL  time.Duration
@@ -117,16 +117,67 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 		return nil, errors.New("token not found in cache")
 	}
 	if !valid {
-		if err = m.reauthorizeUser(user); err != nil {
+		if err = m.reauthorizeUser(ctx, user); err != nil {
 			return nil, errors.Wrap(err, "problem reauthorizing user")
 		}
 	}
 	return user, nil
 }
 
-// TOOD (kim): implement reauthorization
-func (m *userManager) reauthorizeUser(user gimlet.User) error {
-	return errors.New("TODO (kim): implement")
+// TODO (kim): handle reauthentication.
+func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) error {
+	accessToken := user.GetAccessToken()
+	catcher := grip.NewBasicCatcher()
+	catcher.Wrap(m.validateAccessToken(user.GetAccessToken()), "invalid access token")
+	if !catcher.HasErrors() {
+		userInfo, err := m.getUserInfo(ctx, accessToken)
+		catcher.Wrap(err, "could not get user info")
+		if err == nil {
+			err := m.validateGroup(userInfo.Groups)
+			catcher.Wrap(err, "could not validate user group")
+			if err == nil {
+				_, err = m.cache.Put(user)
+				catcher.Wrap(err, "could not add user to cache")
+				if err == nil {
+					return nil
+				}
+			}
+		}
+	}
+	refreshToken := user.GetRefreshToken()
+	tokens, err := m.refreshTokens(ctx, refreshToken)
+	catcher.Wrap(err, "could not refresh authorization tokens")
+	if err == nil {
+		userInfo, err := m.getUserInfo(ctx, tokens.AccessToken)
+		catcher.Wrap(err, "could not get user info")
+		if err == nil {
+			err := m.validateGroup(userInfo.Groups)
+			catcher.Wrap(err, "could not validate user group")
+			if err == nil {
+				// TODO (kim): update user tokens
+				user = makeUser(userInfo, accessToken, refreshToken)
+				_, err = m.cache.Put(user)
+				catcher.Wrap(err, "could not add user to cache")
+				if err == nil {
+					return nil
+				}
+			}
+		}
+	}
+
+	// TODO (kim): fallback - reauthenticate user.
+	return catcher.Resolve()
+}
+
+// validateGroup checks that the user groups returned for this access token
+// contains the expected user group.
+func (m *userManager) validateGroup(groups []string) error {
+	for _, group := range groups {
+		if group == m.userGroup {
+			return nil
+		}
+	}
+	return errors.New("user is not in user group")
 }
 
 func (m *userManager) CreateUserToken(user string, password string) (string, error) {
@@ -182,6 +233,8 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 			Expires:  time.Now().Add(m.cookieTTL),
 			Domain:   m.cookieDomain,
 		})
+		// TODO (kim): set temporary cookie that will redirect user to the
+		// original page they requested, if redirect callback succeeds.
 
 		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
 	}
@@ -220,7 +273,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			return
 		}
 
-		tokens, err := m.getTokens(r.URL.Query().Get("code"))
+		tokens, err := m.exchangeCodeForTokens(context.Background(), r.URL.Query().Get("code"))
 		if err != nil {
 			err = errors.Wrap(err, "could not get ID token")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
@@ -252,7 +305,6 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			return
 		}
 
-		// TODO (kim): userinfo endpoint
 		userInfo, err := m.getUserInfo(context.Background(), tokens.AccessToken)
 		if err != nil {
 			err = errors.Wrap(err, "could not get user info from Okta")
@@ -264,9 +316,19 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			}))
 			return
 		}
+		if err := m.validateGroup(userInfo.Groups); err != nil {
+			err = errors.Wrap(err, "could not validate user groups")
+			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			grip.Error(message.WrapError(err, message.Fields{
+				"message": "failed to validate user groups",
+				"op":      "GetLoginCallbackHandler",
+				"auth":    "Okta",
+			}))
+			return
+		}
 
-		user := makeUser(userInfo)
-		token, err := m.cache.Put(user, tokens.AccessToken, tokens.RefreshToken)
+		user := makeUser(userInfo, tokens.AccessToken, tokens.RefreshToken)
+		token, err := m.cache.Put(user)
 		if err != nil {
 			err = errors.Wrap(err, "error putting user in cache")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
@@ -322,24 +384,23 @@ func getNonceAndStateCookies(cookies []*http.Cookie) (nonce, state string, err e
 	return nonce, state, catcher.Resolve()
 }
 
-// getTokens exchanges the given code to redeem tokens from the token endpoint.
-func (m *userManager) getTokens(code string) (*tokenResponse, error) {
+// refreshTokens exchanges the given refresh token to redeem tokens from the
+// token endpoint.
+func (m *userManager) refreshTokens(ctx context.Context, refreshToken string) (*tokenResponse, error) {
+	q := url.Values{}
+	q.Set("grant_type", "refresh_token")
+	q.Set("refresh_token", refreshToken)
+	return m.redeemTokens(ctx, q.Encode())
+}
+
+// exchangeCodeForTokens exchanges the given code to redeem tokens from the
+// token endpoint.
+func (m *userManager) exchangeCodeForTokens(ctx context.Context, code string) (*tokenResponse, error) {
 	q := url.Values{}
 	q.Set("grant_type", "authorization_code")
 	q.Set("code", code)
 	q.Set("redirect_uri", m.redirectURI)
-	resp, err := m.doTokenRequest(context.Background(), http.MethodPost, fmt.Sprintf("%s/oauth2/v1/token?%s", m.issuer, q.Encode()), nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "error during request for tokens")
-	}
-	tokens := &tokenResponse{}
-	if err := gimlet.GetJSONUnlimited(resp.Body, tokens); err != nil {
-		return nil, errors.WithStack(err)
-	}
-	if tokens.ErrorCode != "" {
-		return tokens, errors.Errorf("%s: %s", tokens.ErrorCode, tokens.ErrorDescription)
-	}
-	return tokens, nil
+	return m.redeemTokens(ctx, q.Encode())
 }
 
 // getUserInfo uses the access token to retrieve user information from the
@@ -392,20 +453,20 @@ func (m *userManager) validateIDToken(token, nonce string) error {
 }
 
 func (m *userManager) validateAccessToken(token string) error {
-	validator := verifier.JwtVerifier{
-		Issuer: m.issuer,
-		ClaimsToValidate: map[string]string{
-			"cid": m.clientID,
-			"aud": m.audience,
-		},
-	}
-	res, err := validator.New().VerifyAccessToken(token)
-	if err != nil {
-		return errors.Wrap(err, "could not verify access token")
-	}
-	if res == nil {
-		return errors.New("access token validation returned empty result")
-	}
+	// validator := verifier.JwtVerifier{
+	//     Issuer: m.issuer,
+	//     ClaimsToValidate: map[string]string{
+	//         "cid": m.clientID,
+	//         "aud": m.audience,
+	//     },
+	// }
+	// res, err := validator.New().VerifyAccessToken(token)
+	// if err != nil {
+	//     return errors.Wrap(err, "could not verify access token")
+	// }
+	// if res == nil {
+	//     return errors.New("access token validation returned empty result")
+	// }
 	return nil
 }
 
@@ -453,29 +514,20 @@ type userInfoResponse struct {
 	ErrorDescription string   `json:"error_description,omitempty"`
 }
 
-func makeUser(info *userInfoResponse) gimlet.User {
+func makeUser(info *userInfoResponse, accessToken, refreshToken string) gimlet.User {
 	// TODO (kim): ID must match LDAP ID (i.e. firstname.lastname), so we
 	// probably have to do some hack to get the same ID.
-	return gimlet.NewBasicUser(info.Email, info.Name, info.Email, "", "", info.Groups, false, nil)
+	return gimlet.NewBasicUser(info.Email, info.Name, info.Email, "", "", accessToken, refreshToken, info.Groups, false, nil)
 }
 
-// doTokenRequest sends the request with the required client credentials.
-func (m *userManager) doTokenRequest(ctx context.Context, method string, url string, data interface{}) (*http.Response, error) {
-	req, err := http.NewRequest(method, url, nil)
+// redeemTokens sends the request to redeem tokens with the required client
+// credentials.
+func (m *userManager) redeemTokens(ctx context.Context, query string) (*tokenResponse, error) {
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/oauth2/v1/token?%s", m.issuer, query), nil)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 	req = req.WithContext(ctx)
-	if data != nil {
-		b, err := json.Marshal(data)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-		req.Body = ioutil.NopCloser(bytes.NewReader(b))
-		req.Header.Add("Content-Length", strconv.Itoa(len(b)))
-	} else {
-		req.Header.Add("Content-Length", "0")
-	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Accept", "application/json")
 	authHeader := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", m.clientID, m.clientSecret)))
@@ -487,5 +539,16 @@ func (m *userManager) doTokenRequest(ctx context.Context, method string, url str
 		return nil, errors.WithStack(err)
 	}
 
-	return client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "token request returned error")
+	}
+	tokens := &tokenResponse{}
+	if err := gimlet.GetJSONUnlimited(resp.Body, tokens); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if tokens.ErrorCode != "" {
+		return tokens, errors.Errorf("%s: %s", tokens.ErrorCode, tokens.ErrorDescription)
+	}
+	return tokens, nil
 }
