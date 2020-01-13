@@ -1,4 +1,4 @@
-package okta
+package util
 
 import (
 	"encoding/base64"
@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRandom(t *testing.T) {
+func TestRandomString(t *testing.T) {
 	prev := []string{}
 	for i := 0; i < 1000; i++ {
-		s, err := randomString()
+		s, err := RandomString()
 		require.NoError(t, err)
 		assert.Len(t, s, base64.URLEncoding.EncodedLen(32))
 		assert.NotContains(t, prev, s)
