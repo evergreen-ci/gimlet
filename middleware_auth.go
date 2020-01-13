@@ -300,6 +300,7 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 				return
 			}
 			next(rw, r)
+			return
 		}
 		http.Error(rw, "no user found", http.StatusUnauthorized)
 		return
