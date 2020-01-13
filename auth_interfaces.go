@@ -17,6 +17,11 @@ type User interface {
 	GetAPIKey() string
 	Roles() []string
 	HasPermission(PermissionOpts) (bool, error)
+
+	// These only apply to systems that require token-based authorization
+	// (e.g. Okta).
+	GetAccessToken() string
+	GetRefreshToken() string
 }
 
 // PermissionOpts is the required data to be provided when asking if a user has permission for a resource
