@@ -191,8 +191,8 @@ func (u *mockUser) GetAPIKey() string       { return "" }
 func (u *mockUser) GetAccessToken() string  { return "" }
 func (u *mockUser) GetRefreshToken() string { return "" }
 func (u *mockUser) Roles() []string         { return []string{} }
-func (u *mockUser) HasPermission(gimlet.PermissionOpts) (bool, error) {
-	return true, nil
+func (u *mockUser) HasPermission(gimlet.PermissionOpts) bool {
+	return true
 }
 
 // TODO

@@ -286,12 +286,12 @@ func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
 	s.Equal(http.StatusUnauthorized, rw.Code)
 	s.Equal(1, counter)
 
-	// no resource found = allowed
+	// no resource found = not allowed
 	rw = httptest.NewRecorder()
 	req = mux.SetURLVars(req, map[string]string{})
 	authHandler.ServeHTTP(rw, req, checkPermission)
-	s.Equal(http.StatusOK, rw.Code)
-	s.Equal(2, counter)
+	s.Equal(http.StatusUnauthorized, rw.Code)
+	s.Equal(1, counter)
 }
 
 func (s *RoleManagerSuite) TestHighestPermissionsForRoles() {

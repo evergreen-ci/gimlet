@@ -42,8 +42,8 @@ func (u *MockUser) GetAPIKey() string       { return u.APIKey }
 func (u *MockUser) GetAccessToken() string  { return u.AccessToken }
 func (u *MockUser) GetRefreshToken() string { return u.RefreshToken }
 func (u *MockUser) Roles() []string         { return u.RoleNames }
-func (u *MockUser) HasPermission(PermissionOpts) (bool, error) {
-	return true, nil
+func (u *MockUser) HasPermission(PermissionOpts) bool {
+	return true
 }
 
 type MockAuthenticator struct {
