@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/evergreen-ci/gimlet"
+	"github.com/evergreen-ci/gimlet/util"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 	verifier "github.com/okta/okta-jwt-verifier-golang"
@@ -90,7 +91,7 @@ const (
 func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO (kim): persist nonce and state.
-		nonce, err := randomString()
+		nonce, err := util.RandomString()
 		if err != nil {
 			grip.Error(message.WrapError(err, message.Fields{
 				"message": "could not get login handler",
@@ -98,7 +99,7 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.Wrap(err, "could not get login handler")))
 			return
 		}
-		state, err := randomString()
+		state, err := util.RandomString()
 		if err != nil {
 			grip.Error(message.WrapError(err, message.Fields{
 				"message": "could not get login handler",
