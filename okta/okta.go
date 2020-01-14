@@ -18,11 +18,10 @@ import (
 
 // CreationOptions specify the options to create the manager.
 type CreationOptions struct {
-	ClientID            string
-	ClientSecret        string
-	RedirectURI         string
-	CallbackRedirectURI string
-	Issuer              string
+	ClientID     string
+	ClientSecret string
+	RedirectURI  string
+	Issuer       string
 
 	UserGroup string
 
@@ -43,7 +42,6 @@ func (opts *CreationOptions) validate() error {
 	catcher.NewWhen(opts.ClientID == "", "must specify client ID")
 	catcher.NewWhen(opts.ClientSecret == "", "must specify client secret")
 	catcher.NewWhen(opts.RedirectURI == "", "must specify redirect URI")
-	catcher.NewWhen(opts.CallbackRedirectURI == "", "must specify callback redirect URI")
 	catcher.NewWhen(opts.Issuer == "", "must specify issuer")
 	catcher.NewWhen(opts.UserGroup == "", "must specify user group")
 	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
@@ -59,11 +57,10 @@ func (opts *CreationOptions) validate() error {
 }
 
 type userManager struct {
-	clientID            string
-	clientSecret        string
-	callbackRedirectURI string
-	redirectURI         string
-	issuer              string
+	clientID     string
+	clientSecret string
+	redirectURI  string
+	issuer       string
 
 	userGroup string
 
@@ -95,18 +92,17 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		}
 	}
 	m := &userManager{
-		cache:               cache,
-		clientID:            opts.ClientID,
-		clientSecret:        opts.ClientSecret,
-		redirectURI:         opts.RedirectURI,
-		callbackRedirectURI: opts.CallbackRedirectURI,
-		issuer:              opts.Issuer,
-		userGroup:           opts.UserGroup,
-		cookiePath:          opts.CookiePath,
-		cookieDomain:        opts.CookieDomain,
-		cookieTTL:           opts.CookieTTL,
-		getHTTPClient:       opts.GetHTTPClient,
-		putHTTPClient:       opts.PutHTTPClient,
+		cache:         cache,
+		clientID:      opts.ClientID,
+		clientSecret:  opts.ClientSecret,
+		redirectURI:   opts.RedirectURI,
+		issuer:        opts.Issuer,
+		userGroup:     opts.UserGroup,
+		cookiePath:    opts.CookiePath,
+		cookieDomain:  opts.CookieDomain,
+		cookieTTL:     opts.CookieTTL,
+		getHTTPClient: opts.GetHTTPClient,
+		putHTTPClient: opts.PutHTTPClient,
 	}
 	return m, nil
 }
@@ -353,7 +349,8 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 
 		m.setLoginCookie(w, loginToken)
 
-		http.Redirect(w, r, m.callbackRedirectURI, http.StatusFound)
+		// TODO (kim): save URI as cookie to redirect to actual requested page.
+		http.Redirect(w, r, "/", http.StatusFound)
 	}
 }
 
