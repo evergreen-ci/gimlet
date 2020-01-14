@@ -7,32 +7,31 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+	"utils"
 
 	"github.com/evergreen-ci/gimlet"
 	"github.com/evergreen-ci/gimlet/usercache"
 	"github.com/evergreen-ci/gimlet/util"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
-	verifier "github.com/okta/okta-jwt-verifier-golang"
 	"github.com/pkg/errors"
 )
 
 // CreationOptions specify the options to create the manager.
 type CreationOptions struct {
-	ClientID     string
-	ClientSecret string
-	RedirectURI  string
-	Issuer       string
-	Audience     string
+	ClientID            string
+	ClientSecret        string
+	RedirectURI         string
+	CallbackRedirectURI string
+	Issuer              string
+	Audience            string
 
 	UserGroup string
 
-	CookiePath   string
-	CookieDomain string
-	CookieTTL    time.Duration
-
-	LoginCookieName string
-	LoginCookieTTL  time.Duration
+	CookiePath     string
+	CookieDomain   string
+	CookieTTL      time.Duration
+	SetLoginCookie func(http.ResponseWriter, string)
 
 	UserCache     usercache.Cache
 	ExternalCache *usercache.ExternalOptions
@@ -43,35 +42,34 @@ func (opts *CreationOptions) validate() error {
 	catcher.NewWhen(opts.ClientID == "", "must specify client ID")
 	catcher.NewWhen(opts.ClientSecret == "", "must specify client secret")
 	catcher.NewWhen(opts.RedirectURI == "", "must specify redirect URI")
+	catcher.NewWhen(opts.CallbackRedirectURI == "", "must specify callback redirect URI")
 	catcher.NewWhen(opts.Issuer == "", "must specify issuer")
-	catcher.NewWhen(opts.Audience == "", "must specify audience")
+	catcher.NewWhen(opts.Audience == "", "must specify access token audience")
+	catcher.NewWhen(opts.UserGroup == "", "must specify user group")
 	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
 	catcher.NewWhen(opts.CookieDomain == "", "must specify cookie domain")
+	catcher.NewWhen(opts.SetLoginCookie == nil, "must specify function to set login cookie")
 	catcher.NewWhen(opts.UserCache == nil && opts.ExternalCache == nil, "must specify user cache")
 	if opts.CookieTTL == time.Duration(0) {
 		opts.CookieTTL = time.Hour
-	}
-	if opts.LoginCookieTTL == time.Duration(0) {
-		opts.LoginCookieTTL = 365 * 24 * time.Hour
 	}
 	return catcher.Resolve()
 }
 
 type userManager struct {
-	clientID     string
-	clientSecret string
-	redirectURI  string
-	issuer       string
-	audience     string
+	clientID            string
+	clientSecret        string
+	callbackRedirectURI string
+	redirectURI         string
+	issuer              string
+	audience            string
 
 	userGroup string
 
-	loginCookieName string
-	loginCookieTTL  time.Duration
-
-	cookiePath   string
-	cookieDomain string
-	cookieTTL    time.Duration
+	cookiePath     string
+	cookieDomain   string
+	cookieTTL      time.Duration
+	setLoginCookie string
 
 	cache usercache.Cache
 }
@@ -93,22 +91,28 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		}
 	}
 	m := &userManager{
-		cache:           cache,
-		clientID:        opts.ClientID,
-		clientSecret:    opts.ClientSecret,
-		audience:        opts.Audience,
-		redirectURI:     opts.RedirectURI,
-		issuer:          opts.Issuer,
-		cookiePath:      opts.CookiePath,
-		cookieDomain:    opts.CookieDomain,
-		cookieTTL:       opts.CookieTTL,
-		loginCookieName: opts.LoginCookieName,
-		loginCookieTTL:  opts.LoginCookieTTL,
+		cache:               cache,
+		clientID:            opts.ClientID,
+		clientSecret:        opts.ClientSecret,
+		audience:            opts.Audience,
+		redirectURI:         opts.RedirectURI,
+		callbackRedirectURI: opts.CallbackRedirectURI,
+		issuer:              opts.Issuer,
+		userGroup:           opts.UserGroup,
+		cookiePath:          opts.CookiePath,
+		cookieDomain:        opts.CookieDomain,
+		cookieTTL:           opts.CookieTTL,
 	}
 	return m, nil
 }
 
 func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
+	grip.Info(message.Fields{
+		"message": "kim: searching for token in cache",
+		"token":   token,
+		"cache":   fmt.Sprintf("%+v", m.cache),
+		"stack":   utils.StackTrace(),
+	})
 	user, valid, err := m.cache.Get(token)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem getting cached user")
@@ -134,7 +138,7 @@ func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) err
 		catcher.Wrap(err, "could not get user info")
 		if err == nil {
 			err := m.validateGroup(userInfo.Groups)
-			catcher.Wrap(err, "could not validate user group")
+			catcher.Wrap(err, "could not authorize user")
 			if err == nil {
 				_, err = m.cache.Put(user)
 				catcher.Wrap(err, "could not add user to cache")
@@ -152,7 +156,7 @@ func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) err
 		catcher.Wrap(err, "could not get user info")
 		if err == nil {
 			err := m.validateGroup(userInfo.Groups)
-			catcher.Wrap(err, "could not validate user group")
+			catcher.Wrap(err, "could not authorize user")
 			if err == nil {
 				// TODO (kim): update user tokens
 				user = makeUser(userInfo, accessToken, refreshToken)
@@ -177,7 +181,7 @@ func (m *userManager) validateGroup(groups []string) error {
 			return nil
 		}
 	}
-	return errors.New("user is not in user group")
+	return errors.New("user is not in a valid group")
 }
 
 func (m *userManager) CreateUserToken(user string, password string) (string, error) {
@@ -191,10 +195,16 @@ const (
 
 func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		grip.Info(message.Fields{
+			"message":     "kim: starting login handler",
+			"context":     "GetLoginHandler",
+			"request_uri": r.RequestURI,
+			"request":     fmt.Sprintf("%+v", *r),
+		})
 		nonce, err := util.RandomString()
 		if err != nil {
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "could not get login handler",
+				"message": "kim: could not get login handler",
 			}))
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.Wrap(err, "could not get login handler")))
 			return
@@ -202,7 +212,7 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 		state, err := util.RandomString()
 		if err != nil {
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "could not get login handler",
+				"message": "kim: could not get login handler",
 			}))
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.Wrap(err, "could not get login handler")))
 			return
@@ -217,6 +227,8 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 		q.Add("state", state)
 		q.Add("nonce", nonce)
 
+		// TODO (kim): we should delete these cookies after the callback handler
+		// executes.
 		http.SetCookie(w, &http.Cookie{
 			Name:     nonceCookieName,
 			Path:     m.cookiePath,
@@ -233,8 +245,11 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 			Expires:  time.Now().Add(m.cookieTTL),
 			Domain:   m.cookieDomain,
 		})
-		// TODO (kim): set temporary cookie that will redirect user to the
-		// original page they requested, if redirect callback succeeds.
+		grip.Info(message.Fields{
+			"message": "kim: set nonce and state for authorize request",
+			"nonce":   nonce,
+			"state":   state,
+		})
 
 		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
 	}
@@ -242,6 +257,12 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 
 func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		grip.Info(message.Fields{
+			"message":     "kim: starting login handler callback",
+			"context":     "GetLoginCallbackHandler",
+			"request_uri": r.RequestURI,
+			"request":     fmt.Sprintf("%+v", *r),
+		})
 		nonce, state, err := getNonceAndStateCookies(r.Cookies())
 		if err != nil {
 			err = errors.Wrap(err, "failed to get Okta nonce and state from cookies")
@@ -250,9 +271,18 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			return
 		}
 		checkState := r.URL.Query().Get("state")
+		grip.Info(message.Fields{
+			"message":      "kim: starting redirect callback with parameters",
+			"op":           "GetLoginCallbackHandler",
+			"auth":         "Okta",
+			"query":        fmt.Sprintf("%+v", r.URL.Query()),
+			"state_cookie": state,
+			"nonce_cookie": nonce,
+			"check_state":  checkState,
+		})
 		if state != checkState {
 			grip.Error(message.Fields{
-				"message":        "mismatched states during authentication",
+				"message":        "kim: mismatched states during authentication",
 				"context":        "Okta",
 				"expected_state": state,
 				"actual_state":   checkState,
@@ -265,7 +295,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			desc := r.URL.Query().Get("error_description")
 			err := fmt.Errorf("%s: %s", errCode, desc)
 			grip.Error(message.WrapError(errors.WithStack(err), message.Fields{
-				"message": "failure in callback handler redirect",
+				"message": "kim: failure in callback handler redirect",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
@@ -278,7 +308,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			err = errors.Wrap(err, "could not get ID token")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "failed to get token from Okta",
+				"message": "kim: failed to get token from Okta",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
@@ -288,17 +318,21 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			err = errors.Wrap(err, "could not validate ID token from Okta")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "failed to validate ID token",
+				"message": "kim: failed to validate ID token",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
 			return
 		}
+		grip.Info(message.Fields{
+			"message":   "kim: successfully retrieved tokens",
+			"user_info": fmt.Sprintf("%+v", *tokens),
+		})
 		if err := m.validateAccessToken(tokens.AccessToken); err != nil {
 			err = errors.Wrap(err, "could not validate access token from Okta")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "failed to validate access token",
+				"message": "kim: failed to validate access token",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
@@ -310,17 +344,21 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			err = errors.Wrap(err, "could not get user info from Okta")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "failed to validate access token",
+				"message": "kim: failed to get user info",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
 			return
 		}
+		grip.Info(message.Fields{
+			"message":   "kim: successfully retrieved user info",
+			"user_info": fmt.Sprintf("%+v", *userInfo),
+		})
 		if err := m.validateGroup(userInfo.Groups); err != nil {
-			err = errors.Wrap(err, "could not validate user groups")
+			err = errors.Wrap(err, "could not authorize user")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "failed to validate user groups",
+				"message": "kim: failed to validate user groups",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
@@ -328,12 +366,12 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		}
 
 		user := makeUser(userInfo, tokens.AccessToken, tokens.RefreshToken)
-		token, err := m.cache.Put(user)
+		loginToken, err := m.cache.Put(user)
 		if err != nil {
 			err = errors.Wrap(err, "error putting user in cache")
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
 			grip.Error(message.WrapError(err, message.Fields{
-				"message": "failed to cache user",
+				"message": "kim: failed to cache user",
 				"op":      "GetLoginCallbackHandler",
 				"auth":    "Okta",
 			}))
@@ -341,22 +379,16 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		}
 
 		grip.Info(message.Fields{
-			"message":   "successfully authenticated user and validated tokens",
-			"op":        "GetLoginCallbackHandler",
-			"context":   "Okta",
-			"tokens":    fmt.Sprintf("%+v", *tokens),
-			"user_info": fmt.Sprintf("%+v", *userInfo),
+			"message":     "kim: successfully authenticated user and validated tokens",
+			"op":          "GetLoginCallbackHandler",
+			"context":     "Okta",
+			"tokens":      fmt.Sprintf("%+v", *tokens),
+			"user_info":   fmt.Sprintf("%+v", *userInfo),
+			"login_token": loginToken,
 		})
-		http.SetCookie(w, &http.Cookie{
-			Name:     m.loginCookieName,
-			Path:     m.cookiePath,
-			Value:    token,
-			HttpOnly: true,
-			Expires:  time.Now().Add(m.loginCookieTTL),
-			Domain:   m.cookieDomain,
-		})
+		m.setLoginCookie(w, loginToken)
 
-		http.Redirect(w, r, m.redirectURI, http.StatusFound)
+		http.Redirect(w, r, m.callbackRedirectURI, http.StatusFound)
 	}
 }
 
@@ -434,54 +466,43 @@ func (m *userManager) getUserInfo(ctx context.Context, accessToken string) (*use
 	return userInfo, nil
 }
 
+// TODO (kim): implement with fewer network calls (i.e. do not poll
+// /.well-known/openid-configuration for the keys endpoint).
 func (m *userManager) validateIDToken(token, nonce string) error {
-	validator := verifier.JwtVerifier{
-		Issuer: m.issuer,
-		ClaimsToValidate: map[string]string{
-			"nonce": nonce,
-			"aud":   m.clientID,
-		},
-	}
-	res, err := validator.New().VerifyIdToken(token)
-	if err != nil {
-		return errors.Wrap(err, "could not verify ID token")
-	}
-	if res == nil {
-		return errors.New("id token validation returned empty result")
-	}
 	return nil
 }
 
+// TODO (kim): implement with fewer network calls (i.e. cache JWKs from
+// authorization server, do not poll /.well-known/openid-configuration for the
+// keys endpoint).
 func (m *userManager) validateAccessToken(token string) error {
-	// validator := verifier.JwtVerifier{
-	//     Issuer: m.issuer,
-	//     ClaimsToValidate: map[string]string{
-	//         "cid": m.clientID,
-	//         "aud": m.audience,
-	//     },
-	// }
-	// res, err := validator.New().VerifyAccessToken(token)
-	// if err != nil {
-	//     return errors.Wrap(err, "could not verify access token")
-	// }
-	// if res == nil {
-	//     return errors.New("access token validation returned empty result")
-	// }
 	return nil
 }
 
 func (m *userManager) IsRedirect() bool { return true }
 
-func (m *userManager) GetUserByID(user string) (gimlet.User, error) {
-	return nil, errors.New("not implemented")
+func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
+	user, valid, err := m.cache.Find(id)
+	if err != nil {
+		return nil, errors.Wrap(err, "problem getting user by ID")
+	}
+	if user == nil {
+		return nil, errors.New("user not found in DB")
+	}
+	if !valid {
+		if err = m.reauthorizeUser(context.Background(), user); err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	return user, nil
 }
 
 func (m *userManager) GetOrCreateUser(user gimlet.User) (gimlet.User, error) {
-	return nil, errors.New("not implemented")
+	return m.cache.GetOrCreate(user)
 }
 
 func (m *userManager) ClearUser(user gimlet.User, all bool) error {
-	return errors.New("not implemented")
+	return m.cache.Clear(user, all)
 }
 
 func (m *userManager) GetGroupsForUser(user string) ([]string, error) {
@@ -551,4 +572,13 @@ func (m *userManager) redeemTokens(ctx context.Context, query string) (*tokenRes
 		return tokens, errors.Errorf("%s: %s", tokens.ErrorCode, tokens.ErrorDescription)
 	}
 	return tokens, nil
+}
+
+func (m *userManager) introspectToken(ctx context.Context, token, tokenType string) (*introspectResponse, error) {
+
+}
+
+type introspectResponse struct {
+	Active   boolean
+	Audience string
 }
