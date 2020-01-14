@@ -23,7 +23,6 @@ type CreationOptions struct {
 	RedirectURI         string
 	CallbackRedirectURI string
 	Issuer              string
-	Audience            string
 
 	UserGroup string
 
@@ -46,7 +45,6 @@ func (opts *CreationOptions) validate() error {
 	catcher.NewWhen(opts.RedirectURI == "", "must specify redirect URI")
 	catcher.NewWhen(opts.CallbackRedirectURI == "", "must specify callback redirect URI")
 	catcher.NewWhen(opts.Issuer == "", "must specify issuer")
-	catcher.NewWhen(opts.Audience == "", "must specify access token audience")
 	catcher.NewWhen(opts.UserGroup == "", "must specify user group")
 	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
 	catcher.NewWhen(opts.CookieDomain == "", "must specify cookie domain")
@@ -66,7 +64,6 @@ type userManager struct {
 	callbackRedirectURI string
 	redirectURI         string
 	issuer              string
-	audience            string
 
 	userGroup string
 
@@ -101,7 +98,6 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		cache:               cache,
 		clientID:            opts.ClientID,
 		clientSecret:        opts.ClientSecret,
-		audience:            opts.Audience,
 		redirectURI:         opts.RedirectURI,
 		callbackRedirectURI: opts.CallbackRedirectURI,
 		issuer:              opts.Issuer,
