@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/evergreen-ci/gimlet"
@@ -42,6 +41,10 @@ type CreationOptions struct {
 	// If set, user authentication will not attempt to populate the user's
 	// groups.
 	SkipGroupPopulation bool
+
+	// ReconciliateID is only used for the purposes of reconciliating existing
+	// user IDs with their Okta IDs.
+	ReconciliateID func(id string) (id string)
 }
 
 func (opts *CreationOptions) Validate() error {
@@ -58,6 +61,9 @@ func (opts *CreationOptions) Validate() error {
 	catcher.NewWhen(opts.PutHTTPClient == nil, "must specify function to put HTTP clients")
 	if opts.CookieTTL == time.Duration(0) {
 		opts.CookieTTL = time.Hour
+	}
+	if opts.ReconciliateID == nil {
+		opts.ReconciliateID = func(string) string {}
 	}
 	return catcher.Resolve()
 }
@@ -113,6 +119,7 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		getHTTPClient:       opts.GetHTTPClient,
 		putHTTPClient:       opts.PutHTTPClient,
 		skipGroupPopulation: opts.SkipGroupPopulation,
+		reconciliateID:      opts.ReconciliateID,
 	}
 	return m, nil
 }
@@ -642,18 +649,18 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 }
 
 // makeUserFromInfo returns a user based on information from a userinfo request.
-func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string) gimlet.User {
-	id := info.Email[:strings.LastIndex(info.Email, "@")]
+func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string, reconciliateID func(string) string) gimlet.User {
+	id := reconciliateID(info.Email)
 	return gimlet.NewBasicUser(id, info.Name, info.Email, "", "", accessToken, refreshToken, info.Groups, false, nil)
 }
 
 // makeUserFromIDToken returns a user based on information from an ID token.
-func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string) (gimlet.User, error) {
+func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
 	email, ok := jwt.Claims["email"].(string)
 	if !ok {
 		return nil, errors.New("user is missing email")
 	}
-	id := email[:strings.LastIndex(email, "@")]
+	id := reconciliateID(email)
 	name, ok := jwt.Claims["name"].(string)
 	if !ok {
 		return nil, errors.New("user is missing name")
