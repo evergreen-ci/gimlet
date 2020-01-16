@@ -683,6 +683,6 @@ func (s *LDAPSuite) TestClearUserToken() {
 
 func (s *LDAPSuite) TestGetGroupsForUser() {
 	groups, err := s.um.GetGroupsForUser("foo")
+	s.Require().NoError(err)
 	s.Equal("10gen", groups[0])
-	s.NoError(err)
 }
