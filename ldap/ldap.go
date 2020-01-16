@@ -56,28 +56,6 @@ type CreationOpts struct {
 	connect connectFunc // connect changes connection behavior for testing
 }
 
-// PutUserGetToken is a function provided by the client to cache users. It generates, saves, and
-// returns a new token. Updating the user's TTL should happen in this function.
-type PutUserGetToken func(gimlet.User) (string, error)
-
-// GetUserByToken is a function provided by the client to retrieve cached users by token.
-// It returns an error if and only if there was an error retrieving the user from the cache.
-// It returns (<user>, true, nil) if the user is present in the cache and is valid.
-// It returns (<user>, false, nil) if the user is present in the cache but has expired.
-// It returns (nil, false, nil) if the user is not present in the cache.
-type GetUserByToken func(string) (gimlet.User, bool, error)
-
-// ClearUserToken is a function provided by the client to remove users' tokens from
-// cache. Passing true will ignore the user passed and clear all users.
-type ClearUserToken func(gimlet.User, bool) error
-
-// GetUserByID is a function provided by the client to get a user from persistent storage.
-type GetUserByID func(string) (gimlet.User, bool, error)
-
-// GetOrCreateUser is a function provided by the client to get a user from
-// persistent storage, or if the user does not exist, to create and save it.
-type GetOrCreateUser func(gimlet.User) (gimlet.User, error)
-
 type connectFunc func(url, port string) (ldap.Client, error)
 
 // NewUserService constructs a userService. It requires a URL and Port to the LDAP server. It also
@@ -238,9 +216,9 @@ func (u *userService) bind(username, password string) error {
 	start := time.Now()
 	err := u.conn.Bind(username, password)
 	grip.Info(message.Fields{
-		"op":       "bind",
-		"context":  "LDAP user service",
-		"duration": time.Since(start),
+		"op":          "bind",
+		"context":     "LDAP user service",
+		"duration_ms": time.Since(start).Milliseconds(),
 	})
 	if err == nil {
 		return nil
@@ -253,9 +231,9 @@ func (u *userService) bind(username, password string) error {
 	start = time.Now()
 	err = u.conn.Bind(username, password)
 	grip.Info(message.Fields{
-		"op":       "bind",
-		"context":  "LDAP user service",
-		"duration": time.Since(start),
+		"op":          "bind",
+		"context":     "LDAP user service",
+		"duration_ms": time.Since(start).Milliseconds(),
 	})
 	return err
 }
@@ -272,9 +250,9 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 	start := time.Now()
 	s, err := u.conn.Search(searchRequest)
 	grip.Info(message.Fields{
-		"op":       "search",
-		"context":  "LDAP user service",
-		"duration": time.Since(start),
+		"op":          "search",
+		"context":     "LDAP user service",
+		"duration_ms": time.Since(start).Milliseconds(),
 	})
 	if err == nil {
 		return s, nil
@@ -287,9 +265,9 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 	start = time.Now()
 	s, err = u.conn.Search(searchRequest)
 	grip.Info(message.Fields{
-		"op":       "search",
-		"context":  "LDAP user service",
-		"duration": time.Since(start),
+		"op":          "search",
+		"context":     "LDAP user service",
+		"duration_ms": time.Since(start).Milliseconds(),
 	})
 	return s, err
 }
@@ -323,7 +301,7 @@ func connect(url, port string) (ldap.Client, error) {
 
 func (u *userService) login(username, password string) error {
 	var err error
-	for _, path := range []string{u.userPath, u.servicePath, u.serviceUserPath} {
+	for _, path := range []string{u.userPath, u.servicePath} {
 		fullPath := fmt.Sprintf("uid=%s,%s", username, path)
 		err = u.bind(fullPath, password)
 		if err == nil {
