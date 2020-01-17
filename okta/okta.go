@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/evergreen-ci/gimlet"
@@ -41,10 +42,6 @@ type CreationOptions struct {
 	// If set, user authentication will not attempt to populate the user's
 	// groups.
 	SkipGroupPopulation bool
-
-	// ReconciliateID is only used for the purposes of reconciliating existing
-	// user IDs with their Okta IDs.
-	ReconciliateID func(id string) (newID string)
 }
 
 func (opts *CreationOptions) Validate() error {
@@ -61,9 +58,6 @@ func (opts *CreationOptions) Validate() error {
 	catcher.NewWhen(opts.PutHTTPClient == nil, "must specify function to put HTTP clients")
 	if opts.CookieTTL == time.Duration(0) {
 		opts.CookieTTL = time.Hour
-	}
-	if opts.ReconciliateID == nil {
-		opts.ReconciliateID = func(id string) string { return id }
 	}
 	return catcher.Resolve()
 }
@@ -87,7 +81,6 @@ type userManager struct {
 	putHTTPClient func(*http.Client)
 
 	skipGroupPopulation bool
-	reconciliateID      func(id string) (newID string)
 }
 
 // NewUserManager creates a manager that connects to Okta for user
@@ -120,7 +113,6 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		getHTTPClient:       opts.GetHTTPClient,
 		putHTTPClient:       opts.PutHTTPClient,
 		skipGroupPopulation: opts.SkipGroupPopulation,
-		reconciliateID:      opts.ReconciliateID,
 	}
 	return m, nil
 }
@@ -242,7 +234,7 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 		q.Add("client_id", m.clientID)
 		q.Add("response_type", "code")
 		q.Add("response_mode", "query")
-		q.Add("scope", "openid profile email groups offline_access")
+		q.Add("scope", "openid email profile offline_access groups")
 		q.Add("prompt", "login consent")
 		q.Add("redirect_uri", m.redirectURI)
 		q.Add("state", state)
@@ -267,6 +259,15 @@ func (m *userManager) setTemporaryCookie(w http.ResponseWriter, name, value stri
 
 func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if errCode := r.URL.Query().Get("error"); errCode != "" {
+			desc := r.URL.Query().Get("error_description")
+			err := fmt.Errorf("%s: %s", errCode, desc)
+			err = errors.Wrap(err, "callback handler received error from Okta")
+			grip.Error(err)
+			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			return
+		}
+
 		nonce, state, requestURI, err := getCookies(r)
 		if err != nil {
 			err = errors.Wrap(err, "failed to get Okta nonce and state from cookies")
@@ -280,8 +281,6 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 				"message":        "state check failed because state from cookie did not match state from request",
 				"expected_state": state,
 				"actual_state":   checkState,
-				"op":             "GetLoginCallbackHandler",
-				"auth":           "Okta",
 			})
 			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.New("invalid state during authentication")))
 			return
@@ -297,12 +296,16 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		if m.skipGroupPopulation {
 			user, err = m.generateUserFromIDToken(tokens, idToken)
 			if err != nil {
+				grip.Error(err)
 				gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+				return
 			}
 		} else {
 			user, err = m.generateUserFromInfo(tokens)
 			if err != nil {
+				grip.Error(err)
 				gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+				return
 			}
 		}
 
@@ -325,24 +328,14 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtverifier.Jwt, error) {
 	tokens, err := m.exchangeCodeForTokens(context.Background(), code)
 	if err != nil {
-		err = errors.Wrap(err, "could not redeem authorization code for tokens")
-		grip.Error(message.WrapError(err, message.Fields{
-			"endpoint": "token",
-		}))
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "could not redeem authorization code for tokens")
 	}
 	idToken, err := m.validateIDToken(tokens.IDToken, nonce)
 	if err != nil {
-		err = errors.Wrap(err, "invalid ID token from Okta")
-		grip.Error(err)
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "invalid ID token from Okta")
 	}
 	if err := m.validateAccessToken(tokens.AccessToken); err != nil {
-		err = errors.Wrap(err, "invalid access token from Okta")
-		grip.Error(message.WrapError(err, message.Fields{
-			"endpoint": "introspect",
-		}))
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "invalid access token from Okta")
 	}
 	return tokens, idToken, nil
 }
@@ -367,12 +360,12 @@ func (m *userManager) generateUserFromInfo(tokens *tokenResponse) (gimlet.User, 
 		}))
 		return nil, err
 	}
-	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID), nil
+	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken), nil
 }
 
 // generateUserFromIDToken creates a user based on claims in their ID token.
 func (m *userManager) generateUserFromIDToken(tokens *tokenResponse, idToken *jwtverifier.Jwt) (gimlet.User, error) {
-	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
+	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken)
 	if err != nil {
 		err = errors.Wrap(err, "could not generate user from user info received from Okta")
 		grip.Error(err)
@@ -528,9 +521,9 @@ func (m *userManager) redeemTokens(ctx context.Context, query string) (*tokenRes
 	start := time.Now()
 	resp, err := client.Do(req)
 	grip.Info(message.Fields{
-		"endpoint":        "token",
-		"duration_millis": time.Since(start).Milliseconds(),
-		"context":         "Okta user manager",
+		"endpoint":    "token",
+		"duration_ms": time.Since(start) / time.Millisecond,
+		"context":     "Okta user manager",
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "request to redeem token returned error")
@@ -571,9 +564,9 @@ func (m *userManager) getUserInfo(ctx context.Context, accessToken string) (*use
 	start := time.Now()
 	resp, err := client.Do(req)
 	grip.Info(message.Fields{
-		"endpoint":        "userinfo",
-		"duration_millis": time.Since(start).Milliseconds(),
-		"context":         "Okta user manager",
+		"endpoint":    "userinfo",
+		"duration_ms": time.Since(start) / time.Millisecond,
+		"context":     "Okta user manager",
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "error during request for user info")
@@ -632,9 +625,9 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 	start := time.Now()
 	resp, err := client.Do(req)
 	grip.Info(message.Fields{
-		"endpoint":        "introspect",
-		"duration_millis": time.Since(start).Milliseconds(),
-		"context":         "Okta user manager",
+		"endpoint":    "introspect",
+		"duration_ms": time.Since(start) / time.Millisecond,
+		"context":     "Okta user manager",
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "request to introspect token returned error")
@@ -650,18 +643,18 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 }
 
 // makeUserFromInfo returns a user based on information from a userinfo request.
-func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string, reconciliateID func(string) string) gimlet.User {
-	id := reconciliateID(info.Email)
+func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string) gimlet.User {
+	id := info.Email[:strings.LastIndex(info.Email, "@")]
 	return gimlet.NewBasicUser(id, info.Name, info.Email, "", "", accessToken, refreshToken, info.Groups, false, nil)
 }
 
 // makeUserFromIDToken returns a user based on information from an ID token.
-func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
+func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string) (gimlet.User, error) {
 	email, ok := jwt.Claims["email"].(string)
 	if !ok {
 		return nil, errors.New("user is missing email")
 	}
-	id := reconciliateID(email)
+	id := email[:strings.LastIndex(email, "@")]
 	name, ok := jwt.Claims["name"].(string)
 	if !ok {
 		return nil, errors.New("user is missing name")
