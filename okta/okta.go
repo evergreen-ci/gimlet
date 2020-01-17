@@ -44,7 +44,7 @@ type CreationOptions struct {
 
 	// ReconciliateID is only used for the purposes of reconciliating existing
 	// user IDs with their Okta IDs.
-	ReconciliateID func(id string) (id string)
+	ReconciliateID func(id string) (newID string)
 }
 
 func (opts *CreationOptions) Validate() error {
@@ -63,7 +63,7 @@ func (opts *CreationOptions) Validate() error {
 		opts.CookieTTL = time.Hour
 	}
 	if opts.ReconciliateID == nil {
-		opts.ReconciliateID = func(string) string {}
+		opts.ReconciliateID = func(id string) string { return id }
 	}
 	return catcher.Resolve()
 }
@@ -87,6 +87,7 @@ type userManager struct {
 	putHTTPClient func(*http.Client)
 
 	skipGroupPopulation bool
+	reconciliateID      func(id string) (newID string)
 }
 
 // NewUserManager creates a manager that connects to Okta for user
@@ -366,12 +367,12 @@ func (m *userManager) generateUserFromInfo(tokens *tokenResponse) (gimlet.User, 
 		}))
 		return nil, err
 	}
-	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken), nil
+	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID), nil
 }
 
 // generateUserFromIDToken creates a user based on claims in their ID token.
 func (m *userManager) generateUserFromIDToken(tokens *tokenResponse, idToken *jwtverifier.Jwt) (gimlet.User, error) {
-	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken)
+	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
 	if err != nil {
 		err = errors.Wrap(err, "could not generate user from user info received from Okta")
 		grip.Error(err)
