@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/evergreen-ci/gimlet"
@@ -283,17 +283,18 @@ func (u *userService) ensureConnected() error {
 	return nil
 }
 
-func connect(url, port string) (ldap.Client, error) {
-	fullURL := url
+func connect(host, port string) (ldap.Client, error) {
+	fullURL := host
 	if port != "" {
 		fullURL += ":" + port
 	}
 	var conn *ldap.Conn
 	var err error
-	if strings.Contains(fullURL, "://") {
+	parsedURL, err := url.Parse(fullURL)
+	if parsedURL.Scheme != "" {
 		conn, err = ldap.DialURL(fullURL)
 	} else {
-		tlsConfig := &tls.Config{ServerName: url}
+		tlsConfig := &tls.Config{ServerName: host}
 		conn, err = ldap.DialTLS("tcp", fullURL, tlsConfig)
 	}
 	return conn, errors.Wrapf(err, "problem connecting to ldap server %s", fullURL)
