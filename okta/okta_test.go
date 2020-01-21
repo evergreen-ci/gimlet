@@ -110,38 +110,6 @@ func TestUserManagerCreation(t *testing.T) {
 	}
 }
 
-// TODO (kim): set up mock (echo?) server
-// * Set up essential mock validation server
-// - Create GET /oauth2/v1/authorize and read query parameters.
-// - Create /oauth2/v1/authorize/echo endpoint to check parameters sent.
-// - Create POST /oauth2/v1/token endpoint and read query parameters.
-// - Create /oauth2/v1/token/echo endpoint to check parameters sent.
-// - Create GET /oauth2/v1/userinfo endpoint and read query parameters.
-// - Create /oauth2/v1/userinfo/echo endpoint and check parameters sent.
-//
-// * Test essential helpers
-// - redeemTokens()
-// - refreshTokens()
-// - exchangeCodeForTokens()
-// - getUserInfo()
-//
-// * Test GetLoginHandler
-// - Mock out key validation functions (or just comment out for now, until keys
-//   are valid).
-// - Verify it sends expected parameters in query to /oauth2/v1/authorize
-//   Use REST echo response to check parameters.
-//
-// * Test GetLoginCallbackHandler
-// - Attach required cookies (nonce, state) to request to callback.
-// - Verify error if state check fails.
-// - Verify error if request has error/error description.
-// - Attach extra cookies (redirectURI) to request to callback.
-// - Check that redirect goes to cookie requestURI.
-//
-// * Set up more difficult mock validation server methods
-// Generate JWKs from master RSA key.
-// /v1/keys: put keys to download here in JSON format
-
 // mockAuthorizationServer represents a server against which OIDC requests can
 // be sent.
 type mockAuthorizationServer struct {
@@ -264,30 +232,6 @@ func (s *mockAuthorizationServer) authorize(rw http.ResponseWriter, r *http.Requ
 	if s.AuthorizeResponse == nil {
 		gimlet.WriteJSON(rw, struct{}{})
 	}
-	// TODO (kim): verify that this is correct flow to get to callback handler.
-	if s.RedirectToLoginCallback {
-		q := url.Values{}
-		q.Add("code", s.AuthorizeParameters.Get("code"))
-		q.Add("state", s.AuthorizeParameters.Get("state"))
-		redirectURI := fmt.Sprintf("%s?%s", s.AuthorizeParameters.Get("redirect_uri"), q.Encode())
-		http.Redirect(rw, r, redirectURI, http.StatusFound)
-		return
-		// client := &http.Client{}
-		// req, err := http.NewRequest(http.MethodGet, redirectURI, nil)
-		// if err != nil {
-		//     gimlet.WriteTextInternalError(rw, "could not create request to redirect callback URI")
-		//     return
-		// }
-		// for _, cookie := range r.Cookies() {
-		//     req.AddCookie(cookie)
-		// }
-		// resp, err := client.Do(req)
-		// if err != nil {
-		//     gimlet.WriteTextInternalError(rw, "request to login redirect callback URI failed")
-		//     return
-		// }
-		// return
-	}
 	gimlet.WriteJSON(rw, s.AuthorizeResponse)
 }
 
@@ -317,27 +261,6 @@ func (s *mockAuthorizationServer) userinfo(rw http.ResponseWriter, r *http.Reque
 		return
 	}
 	gimlet.WriteJSON(rw, s.UserInfoResponse)
-}
-
-// startMockApplicationLoginServer starts an application server for testing purposes
-// that can handle login requests and callbacks.
-func startMockApplicationLoginServer(ctx context.Context, port int, m *userManager) error {
-	app := gimlet.NewApp()
-	if err := app.SetHost("localhost"); err != nil {
-		return errors.WithStack(err)
-	}
-	if err := app.SetPort(port); err != nil {
-		return errors.WithStack(err)
-	}
-
-	app.AddRoute("/login").Version(1).Get().Handler(m.GetLoginHandler(""))
-	app.AddRoute("/login/callback").Version(1).Get().Handler(m.GetLoginCallbackHandler())
-
-	go func() {
-		app.Run(ctx)
-	}()
-
-	return nil
 }
 
 func mapContains(t *testing.T, set, subset map[string][]string) {
@@ -878,6 +801,20 @@ func TestLoginHandler(t *testing.T) {
 }
 
 func TestLoginHandlerCallback(t *testing.T) {
+	makeQuery := func(state, code, nonce string) url.Values {
+		q := url.Values{}
+		q.Add("state", state)
+		q.Add("code", code)
+		q.Add("nonce", nonce)
+		return q
+	}
+	makeCookieHeader := func(nonce, state, redirect string) []string {
+		cookieHeader := make([]string, 0, 3)
+		cookieHeader = append(cookieHeader, fmt.Sprintf("%s=%s", nonceCookieName, nonce))
+		cookieHeader = append(cookieHeader, fmt.Sprintf("%s=%s", stateCookieName, state))
+		cookieHeader = append(cookieHeader, fmt.Sprintf("%s=%s", requestURICookieName, redirect))
+		return cookieHeader
+	}
 	for testName, testCase := range map[string]func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer){
 		"Succeeds": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			um.insecureSkipTokenValidation = true
@@ -887,6 +824,10 @@ func TestLoginHandlerCallback(t *testing.T) {
 				Email:  "email",
 				Groups: []string{"user_group"},
 			}
+			s.TokenResponse = &tokenResponse{
+				AccessToken: "access_token",
+				IDToken:     "id_token",
+			}
 
 			state := "some_state"
 			nonce := "some_nonce"
@@ -894,22 +835,10 @@ func TestLoginHandlerCallback(t *testing.T) {
 			code := "some_code"
 
 			rw := httptest.NewRecorder()
-			var cookieHeader []string
-			for k, v := range map[string]string{
-				nonceCookieName:      nonce,
-				stateCookieName:      state,
-				requestURICookieName: redirect,
-			} {
-				cookieHeader = append(cookieHeader, fmt.Sprintf("%s=%s", k, v))
-			}
-
-			q := url.Values{}
-			q.Add("state", state)
-			q.Add("code", code)
-			q.Add("nonce", nonce)
+			q := makeQuery(state, code, nonce)
 			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/login/callback?%s", q.Encode()), strings.NewReader(q.Encode()))
 			require.NoError(t, err)
-			req.Header["Cookie"] = cookieHeader
+			req.Header["Cookie"] = makeCookieHeader(nonce, state, redirect)
 
 			um.GetLoginCallbackHandler()(rw, req)
 
@@ -917,6 +846,23 @@ func TestLoginHandlerCallback(t *testing.T) {
 			assert.NoError(t, resp.Body.Close())
 
 			assert.Equal(t, http.StatusFound, resp.StatusCode)
+			assert.Equal(t, []string{redirect}, resp.Header["Location"])
+
+			mapContains(t, s.TokenHeaders, map[string][]string{
+				"Accept":        []string{"application/json"},
+				"Content-Type":  []string{"application/x-www-form-urlencoded"},
+				"Authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", um.clientID, um.clientSecret)))},
+			})
+			mapContains(t, s.TokenParameters, map[string][]string{
+				"grant_type":   []string{"authorization_code"},
+				"code":         []string{code},
+				"redirect_uri": []string{um.redirectURI},
+			})
+
+			mapContains(t, s.UserInfoHeaders, map[string][]string{
+				"Accept":        []string{"application/json"},
+				"Authorization": []string{"Bearer access_token"},
+			})
 
 			cookies, err := cookieMap(resp.Cookies())
 			require.NoError(t, err)
@@ -934,6 +880,60 @@ func TestLoginHandlerCallback(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, user, checkUser)
 		},
+		"FailsForReturnedErrors": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+			um.insecureSkipTokenValidation = true
+
+			s.UserInfoResponse = &userInfoResponse{
+				Name:   "name",
+				Email:  "email",
+				Groups: []string{"user_group"},
+			}
+
+			state := "some_state"
+			nonce := "some_nonce"
+			redirect := "/redirect"
+			code := "some_code"
+
+			rw := httptest.NewRecorder()
+			q := makeQuery(state, code, nonce)
+			q.Add("error", "some_error")
+			q.Add("error_description", "some_error_description")
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/login/callback?%s", q.Encode()), strings.NewReader(q.Encode()))
+			require.NoError(t, err)
+			req.Header["Cookie"] = makeCookieHeader(nonce, state, redirect)
+
+			um.GetLoginCallbackHandler()(rw, req)
+
+			resp := rw.Result()
+			assert.NoError(t, resp.Body.Close())
+			assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		},
+		"FailsForMismatchedState": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+			um.insecureSkipTokenValidation = true
+
+			s.UserInfoResponse = &userInfoResponse{
+				Name:   "name",
+				Email:  "email",
+				Groups: []string{"user_group"},
+			}
+
+			state := "some_state"
+			nonce := "some_nonce"
+			redirect := "/redirect"
+			code := "some_code"
+
+			rw := httptest.NewRecorder()
+			q := makeQuery("bad_state", code, redirect)
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/login/callback?%s", q.Encode()), strings.NewReader(q.Encode()))
+			require.NoError(t, err)
+			req.Header["Cookie"] = makeCookieHeader(nonce, state, redirect)
+
+			um.GetLoginCallbackHandler()(rw, req)
+
+			resp := rw.Result()
+			assert.NoError(t, resp.Body.Close())
+			assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		},
 	} {
 		t.Run(testName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -944,6 +944,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 			opts := mockCreationOptions()
 			opts.Issuer = fmt.Sprintf("http://localhost:%d/v1", port)
 			opts.ReconciliateID = func(id string) string { return id }
+			opts.SkipGroupPopulation = false
 			um, err := NewUserManager(opts)
 			require.NoError(t, err)
 			impl, ok := um.(*userManager)
