@@ -769,12 +769,16 @@ func mapContainsKeys(t *testing.T, set map[string]string, subset []string) {
 	}
 }
 
-func cookieMap(cookies []*http.Cookie) map[string]string {
+func cookieMap(cookies []*http.Cookie) (map[string]string, error) {
 	m := map[string]string{}
 	for _, cookie := range cookies {
-		m[cookie.Name] = cookie.Value
+		var err error
+		m[cookie.Name], err = url.QueryUnescape(cookie.Value)
+		if err != nil {
+			return m, errors.Wrapf(err, "could not decode cookie %s", cookie.Name)
+		}
 	}
-	return m
+	return m, nil
 }
 
 func TestLoginHandler(t *testing.T) {
@@ -790,7 +794,8 @@ func TestLoginHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
 
-			cookies := cookieMap(resp.Cookies())
+			cookies, err := cookieMap(resp.Cookies())
+			require.NoError(t, err)
 			assert.Contains(t, cookies, nonceCookieName)
 			assert.Contains(t, cookies, stateCookieName)
 			redirectURI, ok := cookies[requestURICookieName]
@@ -827,7 +832,8 @@ func TestLoginHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
 
-			cookies := cookieMap(resp.Cookies())
+			cookies, err := cookieMap(resp.Cookies())
+			require.NoError(t, err)
 			assert.Contains(t, cookies, nonceCookieName)
 			assert.Contains(t, cookies, stateCookieName)
 			redirectURI, ok := cookies[requestURICookieName]
@@ -912,7 +918,8 @@ func TestLoginHandlerCallback(t *testing.T) {
 
 			assert.Equal(t, http.StatusFound, resp.StatusCode)
 
-			cookies := cookieMap(resp.Cookies())
+			cookies, err := cookieMap(resp.Cookies())
+			require.NoError(t, err)
 			loginToken, ok := cookies[um.loginCookieName]
 			assert.True(t, ok)
 			assert.NotEmpty(t, loginToken)
@@ -921,7 +928,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, user)
 			assert.Equal(t, "email", user.Email())
-			assert.ElementsMatch(t, []string{"group"}, user.Roles())
+			assert.ElementsMatch(t, []string{"user_group"}, user.Roles())
 
 			checkUser, err := um.GetUserByToken(ctx, loginToken)
 			require.NoError(t, err)
@@ -936,6 +943,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 			require.NoError(t, err)
 			opts := mockCreationOptions()
 			opts.Issuer = fmt.Sprintf("http://localhost:%d/v1", port)
+			opts.ReconciliateID = func(id string) string { return id }
 			um, err := NewUserManager(opts)
 			require.NoError(t, err)
 			impl, ok := um.(*userManager)
