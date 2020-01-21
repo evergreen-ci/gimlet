@@ -151,9 +151,6 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 	}
 	if !valid {
 		return nil, errors.Wrapf(ErrNeedsReauthentication, "could not get user %s", user.Username())
-		// if err = m.reauthorizeUser(ctx, user); err != nil {
-		//     return nil, errors.Wrap(err, "problem reauthorizing user")
-		// }
 	}
 	return user, nil
 }
@@ -430,9 +427,6 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 	}
 	if !valid {
 		return nil, errors.Wrapf(ErrNeedsReauthentication, "could not get user %s", id)
-		// if err = m.reauthorizeUser(context.Background(), user); err != nil {
-		//     return nil, errors.WithStack(err)
-		// }
 	}
 	return user, nil
 }
