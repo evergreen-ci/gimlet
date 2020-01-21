@@ -218,7 +218,7 @@ func (u *userService) bind(username, password string) error {
 	grip.Info(message.Fields{
 		"op":          "bind",
 		"context":     "LDAP user service",
-		"duration_ms": time.Since(start).Milliseconds(),
+		"duration_ms": time.Since(start) / time.Millisecond,
 	})
 	if err == nil {
 		return nil
@@ -233,7 +233,7 @@ func (u *userService) bind(username, password string) error {
 	grip.Info(message.Fields{
 		"op":          "bind",
 		"context":     "LDAP user service",
-		"duration_ms": time.Since(start).Milliseconds(),
+		"duration_ms": time.Since(start) / time.Millisecond,
 	})
 	return err
 }
@@ -252,7 +252,7 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 	grip.Info(message.Fields{
 		"op":          "search",
 		"context":     "LDAP user service",
-		"duration_ms": time.Since(start).Milliseconds(),
+		"duration_ms": time.Since(start) / time.Millisecond,
 	})
 	if err == nil {
 		return s, nil
@@ -267,7 +267,7 @@ func (u *userService) search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 	grip.Info(message.Fields{
 		"op":          "search",
 		"context":     "LDAP user service",
-		"duration_ms": time.Since(start).Milliseconds(),
+		"duration_ms": time.Since(start) / time.Millisecond,
 	})
 	return s, err
 }
@@ -291,6 +291,9 @@ func connect(host, port string) (ldap.Client, error) {
 	var conn *ldap.Conn
 	var err error
 	parsedURL, err := url.Parse(fullURL)
+	if err != nil {
+		return nil, errors.Wrapf(err, "problem parsing ldap url %s", fullURL)
+	}
 	if parsedURL.Scheme != "" {
 		conn, err = ldap.DialURL(fullURL)
 	} else {
