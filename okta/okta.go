@@ -138,9 +138,6 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 	return m, nil
 }
 
-// ErrNeedsReauthentication indicates that the user needs to be reauthenticated.
-var ErrNeedsReauthentication = errors.New("user needs to be reauthenticated externally")
-
 func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
 	user, valid, err := m.cache.Get(token)
 	if err != nil {
@@ -150,9 +147,57 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		return nil, errors.Wrapf(ErrNeedsReauthentication, "could not get user %s", user.Username())
+		if err := m.reauthorizeUser(ctx, user); err != nil {
+			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
+		}
 	}
 	return user, nil
+}
+
+// TODO (kim): handle reauthentication.
+func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) error {
+	// accessToken := user.GetAccessToken()
+	// catcher := grip.NewBasicCatcher()
+	// catcher.Wrap(m.validateAccessToken(user.GetAccessToken()), "invalid access token")
+	// if !catcher.HasErrors() {
+	//     userInfo, err := m.getUserInfo(ctx, accessToken)
+	//     catcher.Wrap(err, "could not get user info")
+	//     if err == nil {
+	//         err := m.validateGroup(userInfo.Groups)
+	//         catcher.Wrap(err, "could not authorize user")
+	//         if err == nil {
+	//             _, err = m.cache.Put(user)
+	//             catcher.Wrap(err, "could not add user to cache")
+	//             if err == nil {
+	//                 return nil
+	//             }
+	//         }
+	//     }
+	// }
+	// refreshToken := user.GetRefreshToken()
+	// tokens, err := m.refreshTokens(ctx, refreshToken)
+	// catcher.Wrap(err, "could not refresh authorization tokens")
+	// if err == nil {
+	//     userInfo, err := m.getUserInfo(ctx, tokens.AccessToken)
+	//     catcher.Wrap(err, "could not get user info")
+	//     if err == nil {
+	//         err := m.validateGroup(userInfo.Groups)
+	//         catcher.Wrap(err, "could not authorize user")
+	//         if err == nil {
+	//             // TODO (kim): update user tokens
+	//             user = makeUserFromInfo(userInfo, accessToken, refreshToken)
+	//             _, err = m.cache.Put(user)
+	//             catcher.Wrap(err, "could not add user to cache")
+	//             if err == nil {
+	//                 return nil
+	//             }
+	//         }
+	//     }
+	// }
+	//
+	// // TODO (kim): fallback - reauthenticate user if necessary.
+	// return catcher.Resolve()
+	return errors.New("not implemented yet")
 }
 
 // validateGroup checks that the user groups returned for this access token
@@ -426,7 +471,9 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		return nil, errors.Wrapf(ErrNeedsReauthentication, "could not get user %s", id)
+		if err := m.reauthorizeUser(context.Background(), user); err != nil {
+			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
+		}
 	}
 	return user, nil
 }
