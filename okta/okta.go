@@ -101,6 +101,8 @@ type userManager struct {
 	reconciliateID func(id string) (newID string)
 }
 
+var ErrNeedsReauthentication = errors.New("user session has expired so they must be reauthenticated")
+
 // NewUserManager creates a manager that connects to Okta for user
 // management services.
 func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
@@ -146,57 +148,9 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		if err := m.reauthorizeUser(ctx, user); err != nil {
-			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
-		}
+		return nil, ErrNeedsReauthentication
 	}
 	return user, nil
-}
-
-// TODO (kim): handle reauthentication.
-func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) error {
-	// accessToken := user.GetAccessToken()
-	// catcher := grip.NewBasicCatcher()
-	// catcher.Wrap(m.validateAccessToken(user.GetAccessToken()), "invalid access token")
-	// if !catcher.HasErrors() {
-	//     userInfo, err := m.getUserInfo(ctx, accessToken)
-	//     catcher.Wrap(err, "could not get user info")
-	//     if err == nil {
-	//         err := m.validateGroup(userInfo.Groups)
-	//         catcher.Wrap(err, "could not authorize user")
-	//         if err == nil {
-	//             _, err = m.cache.Put(user)
-	//             catcher.Wrap(err, "could not add user to cache")
-	//             if err == nil {
-	//                 return nil
-	//             }
-	//         }
-	//     }
-	// }
-	// refreshToken := user.GetRefreshToken()
-	// tokens, err := m.refreshTokens(ctx, refreshToken)
-	// catcher.Wrap(err, "could not refresh authorization tokens")
-	// if err == nil {
-	//     userInfo, err := m.getUserInfo(ctx, tokens.AccessToken)
-	//     catcher.Wrap(err, "could not get user info")
-	//     if err == nil {
-	//         err := m.validateGroup(userInfo.Groups)
-	//         catcher.Wrap(err, "could not authorize user")
-	//         if err == nil {
-	//             // TODO (kim): update user tokens
-	//             user = makeUserFromInfo(userInfo, accessToken, refreshToken)
-	//             _, err = m.cache.Put(user)
-	//             catcher.Wrap(err, "could not add user to cache")
-	//             if err == nil {
-	//                 return nil
-	//             }
-	//         }
-	//     }
-	// }
-	//
-	// // TODO (kim): fallback - reauthenticate user if necessary.
-	// return catcher.Resolve()
-	return errors.New("not implemented yet")
 }
 
 // validateGroup checks that the user groups returned for this access token
@@ -332,14 +286,14 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 
 		var user gimlet.User
 		if m.skipGroupPopulation && !m.insecureSkipTokenValidation {
-			user, err = m.generateUserFromIDToken(tokens, idToken)
+			user, err = makeUserFromIDToken(idToken, m.reconciliateID)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
 				return
 			}
 		} else {
-			user, err = m.generateUserFromInfo(tokens)
+			user, err = m.generateUserFromInfo(tokens.AccessToken)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
@@ -383,24 +337,20 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 
 	idToken, err := m.validateIDToken(tokens.IDToken, nonce)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "invalid ID token from Okta")
+		return tokens, nil, errors.Wrap(err, "invalid ID token from Okta")
 	}
 	if err := m.validateAccessToken(tokens.AccessToken); err != nil {
-		return nil, nil, errors.Wrap(err, "invalid access token from Okta")
+		return tokens, idToken, errors.Wrap(err, "invalid access token from Okta")
 	}
 	return tokens, idToken, nil
 }
 
 // generateUserFromInfo creates a user based on information from the userinfo
 // endpoint.
-func (m *userManager) generateUserFromInfo(tokens *tokenResponse) (gimlet.User, error) {
-	userInfo, err := m.getUserInfo(context.Background(), tokens.AccessToken)
+func (m *userManager) generateUserFromInfo(accessToken string) (gimlet.User, error) {
+	userInfo, err := m.getUserInfo(context.Background(), accessToken)
 	if err != nil {
 		err = errors.Wrap(err, "could not retrieve user info from Okta")
-		grip.Error(message.WrapError(err, message.Fields{
-			"message":  "could not authorize user due to failure to get user info",
-			"endpoint": "userinfo",
-		}))
 		return nil, err
 	}
 	if err := m.validateGroup(userInfo.Groups); err != nil {
@@ -411,19 +361,7 @@ func (m *userManager) generateUserFromInfo(tokens *tokenResponse) (gimlet.User, 
 		}))
 		return nil, err
 	}
-	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
-}
-
-// generateUserFromIDToken creates a user based on claims in their ID token.
-func (m *userManager) generateUserFromIDToken(tokens *tokenResponse, idToken *jwtverifier.Jwt) (gimlet.User, error) {
-	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
-	if err != nil {
-		err = errors.Wrap(err, "could not generate user from user info received from Okta")
-		grip.Error(err)
-		return nil, err
-	}
-
-	return user, nil
+	return makeUserFromInfo(userInfo, m.reconciliateID)
 }
 
 // getCookies gets the nonce and the state required in the redirect callback as
@@ -470,9 +408,7 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		if err := m.reauthorizeUser(context.Background(), user); err != nil {
-			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
-		}
+		return nil, ErrNeedsReauthentication
 	}
 	return user, nil
 }
@@ -517,16 +453,6 @@ func (m *userManager) validateAccessToken(token string) error {
 		return errors.New("access token is inactive, so authorization is not possible")
 	}
 	return nil
-}
-
-// refreshTokens exchanges the given refresh token to redeem tokens from the
-// token endpoint.
-func (m *userManager) refreshTokens(ctx context.Context, refreshToken string) (*tokenResponse, error) {
-	q := url.Values{}
-	q.Set("grant_type", "refresh_token")
-	q.Set("refresh_token", refreshToken)
-	q.Set("scope", "openid email profile offline_access groups")
-	return m.redeemTokens(ctx, q.Encode())
 }
 
 // exchangeCodeForTokens exchanges the given code to redeem tokens from the
@@ -713,7 +639,7 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 }
 
 // makeUserFromInfo returns a user based on information from a userinfo request.
-func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
+func makeUserFromInfo(info *userInfoResponse, reconciliateID func(string) string) (gimlet.User, error) {
 	id := info.Email
 	if reconciliateID != nil {
 		id = reconciliateID(id)
@@ -721,11 +647,11 @@ func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string, 
 	if id == "" {
 		return nil, errors.New("could not create user ID from email")
 	}
-	return gimlet.NewBasicUser(id, info.Name, info.Email, "", "", accessToken, refreshToken, info.Groups, false, nil), nil
+	return gimlet.NewBasicUser(id, info.Name, info.Email, "", "", info.Groups, false, nil), nil
 }
 
 // makeUserFromIDToken returns a user based on information from an ID token.
-func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
+func makeUserFromIDToken(jwt *jwtverifier.Jwt, reconciliateID func(string) string) (gimlet.User, error) {
 	email, ok := jwt.Claims["email"].(string)
 	if !ok {
 		return nil, errors.New("user is missing email")
@@ -741,5 +667,5 @@ func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string,
 	if !ok {
 		return nil, errors.New("user is missing name")
 	}
-	return gimlet.NewBasicUser(id, name, email, "", "", accessToken, refreshToken, []string{}, false, nil), nil
+	return gimlet.NewBasicUser(id, name, email, "", "", []string{}, false, nil), nil
 }

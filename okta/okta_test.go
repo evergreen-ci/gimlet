@@ -461,7 +461,7 @@ func TestMakeUserFromInfo(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			user, err := makeUserFromInfo(&testCase.info, "access_token", "refresh_token", testCase.reconciliateID)
+			user, err := makeUserFromInfo(&testCase.info, testCase.reconciliateID)
 			if testCase.shouldPass {
 				require.NoError(t, err)
 				require.NotNil(t, user)
@@ -528,7 +528,7 @@ func TestMakeUserFromIDToken(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			user, err := makeUserFromIDToken(&testCase.token, "access_token", "refresh_token", testCase.reconciliateID)
+			user, err := makeUserFromIDToken(&testCase.token, testCase.reconciliateID)
 			if testCase.shouldPass {
 				require.NoError(t, err)
 				require.NotNil(t, user)
@@ -554,7 +554,7 @@ func TestCreateUserToken(t *testing.T) {
 }
 
 func TestGetUserByID(t *testing.T) {
-	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, nil)
+	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", nil, false, nil)
 	for testName, testCase := range map[string]struct {
 		modifyOpts func(CreationOptions) CreationOptions
 		shouldPass bool
@@ -608,7 +608,7 @@ func TestGetUserByID(t *testing.T) {
 }
 
 func TestGetOrCreateUser(t *testing.T) {
-	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, nil)
+	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", nil, false, nil)
 	for testName, testCase := range map[string]struct {
 		modifyOpts func(CreationOptions) CreationOptions
 		shouldPass bool
@@ -647,7 +647,7 @@ func TestGetOrCreateUser(t *testing.T) {
 }
 
 func TestClearUser(t *testing.T) {
-	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, nil)
+	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", nil, false, nil)
 	for testName, testCase := range map[string]struct {
 		modifyOpts func(CreationOptions) CreationOptions
 		shouldPass bool
