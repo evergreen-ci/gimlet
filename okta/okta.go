@@ -28,10 +28,12 @@ type CreationOptions struct {
 
 	UserGroup string
 
-	CookiePath     string
-	CookieDomain   string
-	CookieTTL      time.Duration
-	SetLoginCookie func(http.ResponseWriter, string)
+	CookiePath   string
+	CookieDomain string
+	CookieTTL    time.Duration
+
+	LoginCookieName string
+	LoginCookieTTL  time.Duration
 
 	UserCache     usercache.Cache
 	ExternalCache *usercache.ExternalOptions
@@ -42,6 +44,10 @@ type CreationOptions struct {
 	// If set, user authentication will not attempt to populate the user's
 	// groups.
 	SkipGroupPopulation bool
+
+	// ReconciliateID is only used for the purposes of reconciliating existing
+	// user IDs with their Okta IDs.
+	ReconciliateID func(id string) (newID string)
 }
 
 func (opts *CreationOptions) Validate() error {
@@ -52,12 +58,19 @@ func (opts *CreationOptions) Validate() error {
 	catcher.NewWhen(opts.Issuer == "", "must specify issuer")
 	catcher.NewWhen(opts.UserGroup == "", "must specify user group")
 	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
-	catcher.NewWhen(opts.SetLoginCookie == nil, "must specify function to set login cookie")
-	catcher.NewWhen(opts.UserCache == nil && opts.ExternalCache == nil, "must specify user cache")
+	catcher.NewWhen(opts.LoginCookieName == "", "must specify login cookie name")
+	if opts.LoginCookieTTL == time.Duration(0) {
+		opts.LoginCookieTTL = time.Hour
+	}
+	catcher.NewWhen(opts.UserCache == nil && opts.ExternalCache == nil, "must specify one user cache")
+	catcher.NewWhen(opts.UserCache != nil && opts.ExternalCache != nil, "must specify exactly one user cache")
 	catcher.NewWhen(opts.GetHTTPClient == nil, "must specify function to get HTTP clients")
 	catcher.NewWhen(opts.PutHTTPClient == nil, "must specify function to put HTTP clients")
 	if opts.CookieTTL == time.Duration(0) {
 		opts.CookieTTL = time.Hour
+	}
+	if opts.ReconciliateID == nil {
+		opts.ReconciliateID = func(id string) string { return id }
 	}
 	return catcher.Resolve()
 }
@@ -70,10 +83,12 @@ type userManager struct {
 
 	userGroup string
 
-	cookiePath     string
-	cookieDomain   string
-	cookieTTL      time.Duration
-	setLoginCookie func(http.ResponseWriter, string)
+	cookiePath   string
+	cookieDomain string
+	cookieTTL    time.Duration
+
+	loginCookieName string
+	loginCookieTTL  time.Duration
 
 	cache usercache.Cache
 
@@ -81,6 +96,10 @@ type userManager struct {
 	putHTTPClient func(*http.Client)
 
 	skipGroupPopulation bool
+	reconciliateID      func(id string) (newID string)
+
+	// This is used only for testing purposes.
+	insecureSkipTokenValidation bool
 }
 
 // NewUserManager creates a manager that connects to Okta for user
@@ -109,10 +128,12 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		cookiePath:          opts.CookiePath,
 		cookieDomain:        opts.CookieDomain,
 		cookieTTL:           opts.CookieTTL,
-		setLoginCookie:      opts.SetLoginCookie,
+		loginCookieName:     opts.LoginCookieName,
+		loginCookieTTL:      opts.LoginCookieTTL,
 		getHTTPClient:       opts.GetHTTPClient,
 		putHTTPClient:       opts.PutHTTPClient,
 		skipGroupPopulation: opts.SkipGroupPopulation,
+		reconciliateID:      opts.ReconciliateID,
 	}
 	return m, nil
 }
@@ -123,11 +144,11 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 		return nil, errors.Wrap(err, "problem getting cached user")
 	}
 	if user == nil {
-		return nil, errors.New("token not found in cache")
+		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		if err = m.reauthorizeUser(ctx, user); err != nil {
-			return nil, errors.Wrap(err, "problem reauthorizing user")
+		if err := m.reauthorizeUser(ctx, user); err != nil {
+			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
 		}
 	}
 	return user, nil
@@ -176,7 +197,7 @@ func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) err
 	//
 	// // TODO (kim): fallback - reauthenticate user if necessary.
 	// return catcher.Resolve()
-	return nil
+	return errors.New("not implemented yet")
 }
 
 // validateGroup checks that the user groups returned for this access token
@@ -200,7 +221,7 @@ const (
 	requestURICookieName = "okta-original-request-uri"
 )
 
-func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
+func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		nonce, err := util.RandomString()
 		if err != nil {
@@ -208,7 +229,7 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 			grip.Critical(message.WrapError(err, message.Fields{
 				"reason": "nonce could not be generated",
 			}))
-			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			writeError(w, err)
 			return
 		}
 		state, err := util.RandomString()
@@ -217,7 +238,7 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 			grip.Critical(message.WrapError(err, message.Fields{
 				"reason": "state could not be generated",
 			}))
-			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			writeError(w, err)
 			return
 		}
 
@@ -244,17 +265,35 @@ func (m *userManager) GetLoginHandler(callbackURL string) http.HandlerFunc {
 	}
 }
 
+func (m *userManager) setLoginCookie(w http.ResponseWriter, value string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     m.loginCookieName,
+		Path:     m.cookiePath,
+		Value:    url.QueryEscape(value),
+		HttpOnly: true,
+		Expires:  time.Now().Add(m.loginCookieTTL),
+		Domain:   m.cookieDomain,
+	})
+}
+
 // setTemporaryCookie sets a short-lived cookie that is required for login to
 // succeed via Okta.
 func (m *userManager) setTemporaryCookie(w http.ResponseWriter, name, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Path:     m.cookiePath,
-		Value:    value,
+		Value:    url.QueryEscape(value),
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.cookieTTL),
 		Domain:   m.cookieDomain,
 	})
+}
+
+func writeError(w http.ResponseWriter, err error) {
+	gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(gimlet.ErrorResponse{
+		StatusCode: http.StatusInternalServerError,
+		Message:    err.Error(),
+	}))
 }
 
 func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
@@ -264,7 +303,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			err := fmt.Errorf("%s: %s", errCode, desc)
 			err = errors.Wrap(err, "callback handler received error from Okta")
 			grip.Error(err)
-			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			writeError(w, err)
 			return
 		}
 
@@ -272,48 +311,56 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		if err != nil {
 			err = errors.Wrap(err, "failed to get Okta nonce and state from cookies")
 			grip.Error(err)
-			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			writeError(w, err)
 			return
 		}
 		checkState := r.URL.Query().Get("state")
 		if state != checkState {
-			grip.Error(message.Fields{
-				"message":        "state check failed because state from cookie did not match state from request",
+			err = errors.New("state value received from Okta did not match expected state")
+			grip.Error(message.WrapError(err, message.Fields{
 				"expected_state": state,
 				"actual_state":   checkState,
-			})
-			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(errors.New("invalid state during authentication")))
+			}))
+			writeError(w, err)
 			return
 		}
 
 		tokens, idToken, err := m.getUserTokens(r.URL.Query().Get("code"), nonce)
 		if err != nil {
-			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			writeError(w, err)
 			return
 		}
 
 		var user gimlet.User
-		if m.skipGroupPopulation {
+		if m.skipGroupPopulation && !m.insecureSkipTokenValidation {
 			user, err = m.generateUserFromIDToken(tokens, idToken)
 			if err != nil {
 				grip.Error(err)
-				gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+				writeError(w, err)
 				return
 			}
 		} else {
 			user, err = m.generateUserFromInfo(tokens)
 			if err != nil {
 				grip.Error(err)
-				gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+				writeError(w, err)
 				return
 			}
+		}
+
+		user, err = m.GetOrCreateUser(user)
+		if err != nil {
+			err = errors.Wrap(err, "failed to get or create cached user")
+			grip.Error(err)
+			gimlet.MakeTextErrorResponder(err)
+			return
 		}
 
 		loginToken, err := m.cache.Put(user)
 		if err != nil {
 			err = errors.Wrapf(err, "failed to cache user %s", user.Username())
 			grip.Error(err)
-			gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(err))
+			writeError(w, err)
 			return
 		}
 
@@ -324,12 +371,17 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 }
 
 // getUserTokens redeems the authorization code for tokens and validates the
-// tokens.
+// received tokens.
 func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtverifier.Jwt, error) {
 	tokens, err := m.exchangeCodeForTokens(context.Background(), code)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not redeem authorization code for tokens")
 	}
+
+	if m.insecureSkipTokenValidation {
+		return tokens, nil, nil
+	}
+
 	idToken, err := m.validateIDToken(tokens.IDToken, nonce)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid ID token from Okta")
@@ -360,12 +412,12 @@ func (m *userManager) generateUserFromInfo(tokens *tokenResponse) (gimlet.User, 
 		}))
 		return nil, err
 	}
-	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken), nil
+	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
 }
 
 // generateUserFromIDToken creates a user based on claims in their ID token.
 func (m *userManager) generateUserFromIDToken(tokens *tokenResponse, idToken *jwtverifier.Jwt) (gimlet.User, error) {
-	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken)
+	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
 	if err != nil {
 		err = errors.Wrap(err, "could not generate user from user info received from Okta")
 		grip.Error(err)
@@ -416,11 +468,11 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 		return nil, errors.Wrap(err, "problem getting user by ID")
 	}
 	if user == nil {
-		return nil, errors.New("user not found in DB")
+		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		if err = m.reauthorizeUser(context.Background(), user); err != nil {
-			return nil, errors.WithStack(err)
+		if err := m.reauthorizeUser(context.Background(), user); err != nil {
+			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
 		}
 	}
 	return user, nil
@@ -522,11 +574,17 @@ func (m *userManager) redeemTokens(ctx context.Context, query string) (*tokenRes
 	resp, err := client.Do(req)
 	grip.Info(message.Fields{
 		"endpoint":    "token",
-		"duration_ms": time.Since(start) / time.Millisecond,
+		"duration_ms": int64(time.Since(start) / time.Millisecond),
 		"context":     "Okta user manager",
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "request to redeem token returned error")
+	}
+	if resp.StatusCode != http.StatusOK {
+		catcher := grip.NewBasicCatcher()
+		catcher.Errorf("received unexpected status code %d", resp.StatusCode)
+		catcher.Wrap(resp.Body.Close(), "error closing response body")
+		return nil, catcher.Resolve()
 	}
 	tokens := &tokenResponse{}
 	if err := gimlet.GetJSONUnlimited(resp.Body, tokens); err != nil {
@@ -565,11 +623,17 @@ func (m *userManager) getUserInfo(ctx context.Context, accessToken string) (*use
 	resp, err := client.Do(req)
 	grip.Info(message.Fields{
 		"endpoint":    "userinfo",
-		"duration_ms": time.Since(start) / time.Millisecond,
+		"duration_ms": int64(time.Since(start) / time.Millisecond),
 		"context":     "Okta user manager",
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "error during request for user info")
+	}
+	if resp.StatusCode != http.StatusOK {
+		catcher := grip.NewBasicCatcher()
+		catcher.Errorf("received unexpected status code %d", resp.StatusCode)
+		catcher.Wrap(resp.Body.Close(), "error closing response body")
+		return nil, catcher.Resolve()
 	}
 	userInfo := &userInfoResponse{}
 	if err := gimlet.GetJSONUnlimited(resp.Body, userInfo); err != nil {
@@ -607,7 +671,7 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 	q := url.Values{}
 	q.Add("token", token)
 	q.Add("token_type_hint", tokenType)
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/oauth2/v1/introspect", m.issuer), bytes.NewBufferString(q.Encode()))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/oauth2/v1/introspect", m.issuer), strings.NewReader(q.Encode()))
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -626,12 +690,19 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 	resp, err := client.Do(req)
 	grip.Info(message.Fields{
 		"endpoint":    "introspect",
-		"duration_ms": time.Since(start) / time.Millisecond,
+		"duration_ms": int64(time.Since(start) / time.Millisecond),
 		"context":     "Okta user manager",
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "request to introspect token returned error")
 	}
+	if resp.StatusCode != http.StatusOK {
+		catcher := grip.NewBasicCatcher()
+		catcher.Errorf("received unexpected status code %d", resp.StatusCode)
+		catcher.Wrap(resp.Body.Close(), "error closing response body")
+		return nil, catcher.Resolve()
+	}
+
 	tokenInfo := &introspectResponse{}
 	if err := gimlet.GetJSONUnlimited(resp.Body, tokenInfo); err != nil {
 		return nil, errors.WithStack(err)
@@ -643,18 +714,30 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 }
 
 // makeUserFromInfo returns a user based on information from a userinfo request.
-func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string) gimlet.User {
-	id := info.Email[:strings.LastIndex(info.Email, "@")]
-	return gimlet.NewBasicUser(id, info.Name, info.Email, "", "", accessToken, refreshToken, info.Groups, false, nil)
+func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
+	id := info.Email
+	if reconciliateID != nil {
+		id = reconciliateID(id)
+	}
+	if id == "" {
+		return nil, errors.New("could not create user ID from email")
+	}
+	return gimlet.NewBasicUser(id, info.Name, info.Email, "", "", accessToken, refreshToken, info.Groups, false, nil), nil
 }
 
 // makeUserFromIDToken returns a user based on information from an ID token.
-func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string) (gimlet.User, error) {
+func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
 	email, ok := jwt.Claims["email"].(string)
 	if !ok {
 		return nil, errors.New("user is missing email")
 	}
-	id := email[:strings.LastIndex(email, "@")]
+	id := email
+	if reconciliateID != nil {
+		id = reconciliateID(id)
+	}
+	if id == "" {
+		return nil, errors.New("could not create user ID from email")
+	}
 	name, ok := jwt.Claims["name"].(string)
 	if !ok {
 		return nil, errors.New("user is missing name")
