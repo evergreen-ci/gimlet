@@ -27,6 +27,9 @@ type CreationOptions struct {
 	Issuer       string
 
 	UserGroup string
+	// If set, user authentication will not attempt to populate the user's
+	// groups.
+	SkipGroupPopulation bool
 
 	CookiePath   string
 	CookieDomain string
@@ -40,10 +43,6 @@ type CreationOptions struct {
 
 	GetHTTPClient func() *http.Client
 	PutHTTPClient func(*http.Client)
-
-	// If set, user authentication will not attempt to populate the user's
-	// groups.
-	SkipGroupPopulation bool
 
 	// ReconciliateID is only used for the purposes of reconciliating existing
 	// user IDs with their Okta IDs.
@@ -81,7 +80,11 @@ type userManager struct {
 	redirectURI  string
 	issuer       string
 
-	userGroup string
+	userGroup           string
+	skipGroupPopulation bool
+
+	// This is used only for testing purposes.
+	insecureSkipTokenValidation bool
 
 	cookiePath   string
 	cookieDomain string
@@ -95,11 +98,7 @@ type userManager struct {
 	getHTTPClient func() *http.Client
 	putHTTPClient func(*http.Client)
 
-	skipGroupPopulation bool
-	reconciliateID      func(id string) (newID string)
-
-	// This is used only for testing purposes.
-	insecureSkipTokenValidation bool
+	reconciliateID func(id string) (newID string)
 }
 
 // NewUserManager creates a manager that connects to Okta for user
