@@ -14,14 +14,17 @@ import (
 // UserMiddlewareConfiguration is an keyed-arguments struct used to
 // produce the user manager middleware.
 type UserMiddlewareConfiguration struct {
-	SkipCookie      bool
-	SkipHeaderCheck bool
-	HeaderUserName  string
-	HeaderKeyName   string
-	CookieName      string
-	CookiePath      string
-	CookieTTL       time.Duration
-	CookieDomain    string
+	SkipCookie        bool
+	SkipHeaderCheck   bool
+	HeaderUserName    string
+	HeaderKeyName     string
+	CookieName        string
+	CookiePath        string
+	CookieTTL         time.Duration
+	CookieDomain      string
+	LoginPath         string
+	LoginCallbackPath string
+	SetRedirect       func(*http.Request, string)
 }
 
 // Validate ensures that the UserMiddlewareConfiguration is correct
@@ -124,6 +127,8 @@ func UserMiddleware(um UserManager, conf UserMiddlewareConfiguration) Middleware
 
 func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	var err error
+	var usr User
+	var needsReauth bool
 	ctx := r.Context()
 	reqID := GetRequestID(ctx)
 	logger := GetLogger(ctx)
@@ -143,7 +148,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		// set the user, preferring the cookie, maye change
 		if len(token) > 0 {
 			ctx := r.Context()
-			usr, err := u.manager.GetUserByToken(ctx, token)
+			usr, needsReauth, err = u.manager.GetUserByToken(ctx, token)
 
 			if err != nil {
 				logger.Debug(message.WrapError(err, message.Fields{
@@ -161,7 +166,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 				}
 			}
 
-			if usr != nil {
+			if usr != nil && !needsReauth {
 				r = setUserForRequest(r, usr)
 			}
 		}
@@ -182,7 +187,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 
 		if len(authDataAPIKey) > 0 {
-			usr, err := u.manager.GetUserByID(authDataName)
+			usr, err = u.manager.GetUserByID(authDataName)
 			logger.Debug(message.WrapError(err, message.Fields{
 				"message":   "problem getting user by id",
 				"operation": "header check",
@@ -199,6 +204,19 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 				r = setUserForRequest(r, usr)
 			}
 		}
+	}
+
+	if GetUser(r.Context()) == nil && needsReauth && u.manager != nil && u.manager.IsRedirect() && r.URL.Path != u.conf.LoginCallbackPath /*"/login/redirect/callback"*/ {
+		if r.URL.Path != u.conf.LoginPath /*"/login/redirect"*/ {
+			querySep := ""
+			if r.URL.RawQuery != "" {
+				querySep = "?"
+			}
+			redirect := url.QueryEscape(r.URL.Path) + querySep + r.URL.RawQuery
+			u.conf.SetRedirect(r, redirect)
+		}
+		u.manager.GetLoginHandler("")(rw, r)
+		return
 	}
 
 	next(rw, r)

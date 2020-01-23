@@ -46,7 +46,7 @@ type Authenticator interface {
 // the api and ui server after authenticating
 type UserManager interface {
 	// The first 5 methods are borrowed directly from evergreen without modification
-	GetUserByToken(context.Context, string) (User, error)
+	GetUserByToken(context.Context, string) (u User, needsReauth bool, err error)
 	CreateUserToken(string, string) (string, error)
 	// GetLoginHandler returns the function that starts the login process for auth mechanisms
 	// that redirect to a thirdparty site for authentication

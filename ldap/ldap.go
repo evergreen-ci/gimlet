@@ -122,20 +122,20 @@ func (opts CreationOpts) validate() error {
 
 // GetUserByToken returns a user for a given token. If the user is invalid (e.g., if the user's TTL
 // has expired), it re-authorizes the user and re-puts the user in the cache.
-func (u *userService) GetUserByToken(_ context.Context, token string) (gimlet.User, error) {
+func (u *userService) GetUserByToken(_ context.Context, token string) (gimlet.User, bool, error) {
 	user, valid, err := u.cache.Get(token)
 	if err != nil {
-		return nil, errors.Wrap(err, "problem getting cached user")
+		return nil, false, errors.Wrap(err, "problem getting cached user")
 	}
 	if user == nil {
-		return nil, errors.New("token is not present in cache")
+		return nil, false, errors.New("token is not present in cache")
 	}
 	if !valid {
 		if err = u.reauthorizeUser(user); err != nil {
-			return nil, errors.WithStack(err)
+			return nil, false, errors.WithStack(err)
 		}
 	}
-	return user, nil
+	return user, false, nil
 }
 
 func (u *userService) reauthorizeUser(user gimlet.User) error {

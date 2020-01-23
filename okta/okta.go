@@ -38,8 +38,6 @@ type CreationOptions struct {
 	LoginCookieName string
 	LoginCookieTTL  time.Duration
 
-	// SilentReauthCookieTTL time.Duration
-
 	UserCache     usercache.Cache
 	ExternalCache *usercache.ExternalOptions
 
@@ -63,9 +61,6 @@ func (opts *CreationOptions) Validate() error {
 	if opts.LoginCookieTTL == time.Duration(0) {
 		opts.LoginCookieTTL = 365 * time.Hour
 	}
-	// if opts.SilentReauthCookieTTL == time.Duration(0) {
-	//     opts.SilentReauthCookieTTL = 365 * 24 * time.Hour
-	// }
 	catcher.NewWhen(opts.UserCache == nil && opts.ExternalCache == nil, "must specify one user cache")
 	catcher.NewWhen(opts.UserCache != nil && opts.ExternalCache != nil, "must specify exactly one user cache")
 	catcher.NewWhen(opts.GetHTTPClient == nil, "must specify function to get HTTP clients")
@@ -98,8 +93,6 @@ type userManager struct {
 	loginCookieName string
 	loginCookieTTL  time.Duration
 
-	// silentReauthCookieTTL time.Duration
-
 	cache usercache.Cache
 
 	getHTTPClient func() *http.Client
@@ -127,18 +120,17 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		}
 	}
 	m := &userManager{
-		cache:           cache,
-		clientID:        opts.ClientID,
-		clientSecret:    opts.ClientSecret,
-		redirectURI:     opts.RedirectURI,
-		issuer:          opts.Issuer,
-		userGroup:       opts.UserGroup,
-		cookiePath:      opts.CookiePath,
-		cookieDomain:    opts.CookieDomain,
-		cookieTTL:       opts.CookieTTL,
-		loginCookieName: opts.LoginCookieName,
-		loginCookieTTL:  opts.LoginCookieTTL,
-		// silentReauthCookieTTL: opts.SilentReauthCookieTTL,
+		cache:               cache,
+		clientID:            opts.ClientID,
+		clientSecret:        opts.ClientSecret,
+		redirectURI:         opts.RedirectURI,
+		issuer:              opts.Issuer,
+		userGroup:           opts.UserGroup,
+		cookiePath:          opts.CookiePath,
+		cookieDomain:        opts.CookieDomain,
+		cookieTTL:           opts.CookieTTL,
+		loginCookieName:     opts.LoginCookieName,
+		loginCookieTTL:      opts.LoginCookieTTL,
 		getHTTPClient:       opts.GetHTTPClient,
 		putHTTPClient:       opts.PutHTTPClient,
 		skipGroupPopulation: opts.SkipGroupPopulation,
@@ -147,18 +139,18 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 	return m, nil
 }
 
-func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
+func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, bool, error) {
 	user, valid, err := m.cache.Get(token)
 	if err != nil {
-		return nil, errors.Wrap(err, "problem getting cached user")
+		return nil, false, errors.Wrap(err, "problem getting cached user")
 	}
 	if user == nil {
-		return nil, errors.New("user not found in cache")
+		return nil, false, errors.New("user not found in cache")
 	}
 	if !valid {
-		return nil, ErrNeedsReauthentication
+		return user, true, ErrNeedsReauthentication
 	}
-	return user, nil
+	return user, false, nil
 }
 
 // validateGroup checks that the user groups returned for this access token
@@ -180,7 +172,6 @@ const (
 	nonceCookieName      = "okta-nonce"
 	stateCookieName      = "okta-state"
 	requestURICookieName = "okta-original-request-uri"
-	// silentReauthCookieName = "okta-silent-reauth-token"
 )
 
 func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
@@ -221,24 +212,11 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 					grip.Error(errors.Wrapf(err, "could not decode login cookie '%s'", cookie.Value))
 					break
 				}
-				user, _, err := m.cache.Get(loginToken)
-				if err == nil && user != nil {
+				user, needsReauth, err := m.GetUserByToken(context.Background(), loginToken)
+				if (err == nil || needsReauth) && user != nil {
 					canSilentReauth = true
 				}
 			}
-			// if cookie.Name == silentReauthCookieName {
-			//     silentReauthCookie, err := url.QueryUnescape(cookie.Value)
-			//     if err != nil {
-			//         grip.Error(errors.Wrapf(err, "could not decode silent reauthentication cookie '%s'", cookie.Value))
-			//         break
-			//     }
-			//     // _, valid, err := m.cache.GetReauth(silentReauthCookie)
-			//     grip.Error(errors.Wrapf(err, "could not get user with silent reauthentication cookie '%s'", silentReauthCookie))
-			//     if valid {
-			//         canSilentReauth = true
-			//     }
-			//     break
-			// }
 		}
 
 		m.setTemporaryCookie(w, nonceCookieName, nonce)
@@ -251,6 +229,7 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		q.Add("scope", "openid email profile offline_access groups")
 		if !canSilentReauth {
 			q.Add("prompt", "login consent")
+		} else {
 		}
 		q.Add("redirect_uri", m.redirectURI)
 		q.Add("state", state)
@@ -262,9 +241,10 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 
 func (m *userManager) setLoginCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     m.loginCookieName,
-		Path:     m.cookiePath,
-		Value:    url.QueryEscape(value),
+		Name: m.loginCookieName,
+		Path: m.cookiePath,
+		// Value:    url.QueryEscape(value),
+		Value:    value,
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.loginCookieTTL),
 		Domain:   m.cookieDomain,
@@ -275,9 +255,10 @@ func (m *userManager) setLoginCookie(w http.ResponseWriter, value string) {
 // succeed via Okta.
 func (m *userManager) setTemporaryCookie(w http.ResponseWriter, name, value string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     name,
-		Path:     m.cookiePath,
-		Value:    url.QueryEscape(value),
+		Name: name,
+		Path: m.cookiePath,
+		// Value:    url.QueryEscape(value),
+		Value:    value,
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.cookieTTL),
 		Domain:   m.cookieDomain,

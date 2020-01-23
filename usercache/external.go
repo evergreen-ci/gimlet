@@ -12,7 +12,6 @@ type ExternalOptions struct {
 	PutUserGetToken PutUserGetToken
 	GetUserByToken  GetUserByToken
 	ClearUserToken  ClearUserToken
-	// GetUserByReauthToken GetUserByReauthToken
 	GetUserByID     GetUserByID
 	GetOrCreateUser GetOrCreateUser
 }
@@ -49,17 +48,3 @@ func (c *ExternalCache) Find(id string) (gimlet.User, bool, error) { return c.Op
 func (c *ExternalCache) GetOrCreate(u gimlet.User) (gimlet.User, error) {
 	return c.Opts.GetOrCreateUser(u)
 }
-
-// type ExternalReauthCache struct {
-//     *ExternalCache
-//     GetUserByReauthToken GetUserByReauthToken
-// }
-//
-// func NewExternalReauth(opts ExternalOptions) (ReauthCache, error) {
-//     catcher := grip.NewBasicCatcher()
-//     catcher.Add(opts.Validate())
-//     catcher.NewWhen(opts.GetUserByReauthToken == nil, ")GetUserByReauthToken must be defined")
-//     if catcher.HasErrors() {
-//         return nil, catcher.Resolve()
-//     }
-// }

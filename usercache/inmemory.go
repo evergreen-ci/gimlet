@@ -13,11 +13,9 @@ import (
 // NewInMemory returns a user cache which keeps entries in memory.
 func NewInMemory(ctx context.Context, ttl time.Duration) Cache {
 	c := &userCache{
-		ttl:   ttl,
-		cache: make(map[string]cacheValue),
-		// reauthCache: make(map[string]cacheValue),
+		ttl:         ttl,
+		cache:       make(map[string]cacheValue),
 		userToToken: make(map[string]string),
-		// userToReauthToken: make(map[string]string)
 	}
 
 	go func() {
@@ -44,12 +42,9 @@ type cacheValue struct {
 type userCache struct {
 	mu  sync.RWMutex
 	ttl time.Duration
-	// reauthTTL time.Duration
 
-	cache map[string]cacheValue
-	// reauthCache map[string]cacheValue
+	cache       map[string]cacheValue
 	userToToken map[string]string
-	// userToReauthToken map[string]string
 }
 
 func (c *userCache) clean() {
@@ -63,13 +58,6 @@ func (c *userCache) clean() {
 		delete(c.userToToken, v.user.Username())
 		delete(c.cache, k)
 	}
-	// for k, v := range c.reauthCache {
-	//     if time.Since(v.created) < c.reauthTTL {
-	//         continue
-	//     }
-	//     delete(c.userToReauthToken, v.user.Username())
-	//     delete(c.reauthCache, k)
-	// }
 }
 
 func (c *userCache) Add(u gimlet.User) error {
@@ -87,22 +75,12 @@ func (c *userCache) Put(u gimlet.User) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "error generating token")
 	}
-	// reauthToken, err := util.RandomString()
-	// if err != nil {
-	//     return "", errors.Wrap(err, "error generating reauth token")
-	// }
 
-	now := time.Now()
 	c.userToToken[id] = token
 	c.cache[token] = cacheValue{
 		user:    u,
-		created: now,
+		created: time.Now(),
 	}
-	// c.userToReauthToken[id] = reauthToken
-	// c.reauthCache[reauthToken] = cacheValue{
-	//     user: u,
-	//     created: now,
-	// }
 
 	return token, nil
 }
@@ -123,21 +101,6 @@ func (c *userCache) Get(token string) (gimlet.User, bool, error) {
 	return u.user, true, nil
 }
 
-// func (c *userCache) GetReauth(token string) (gimlet.User, bool, error) {
-//     c.mu.RLock()
-//     defer c.mu.RUnlock()
-//
-//     u, ok := c.reauthCache[token]
-//     if !ok {
-//         return nil, false, nil
-//     }
-//
-//     if time.Since(u.created) >= c.reauthTTL {
-//         return u.user, false, nil
-//     }
-//     return  u.user, true, nil
-// }
-
 func (c *userCache) Clear(u gimlet.User, all bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -145,8 +108,6 @@ func (c *userCache) Clear(u gimlet.User, all bool) error {
 	if all {
 		c.cache = make(map[string]cacheValue)
 		c.userToToken = make(map[string]string)
-		// c.reauthCache = make(map[string]cacheValue)
-		// c.userToReauthToken = make(map[string]string)
 		return nil
 	}
 
@@ -154,15 +115,9 @@ func (c *userCache) Clear(u gimlet.User, all bool) error {
 	if !ok {
 		return errors.New("invalid user")
 	}
-	// reauthToken, ok := c.userToReauthToken[u.Username()]
-	// if !ok {
-	//     return errors.New("invalid user")
-	// }
 
 	delete(c.userToToken, u.Username())
 	delete(c.cache, token)
-	// delete(c.userToReauthToken, u.Username())
-	// delete(c.reauthCache, reauthToken)
 
 	return nil
 }
