@@ -38,6 +38,8 @@ type CreationOptions struct {
 	LoginCookieName string
 	LoginCookieTTL  time.Duration
 
+	// SilentReauthCookieTTL time.Duration
+
 	UserCache     usercache.Cache
 	ExternalCache *usercache.ExternalOptions
 
@@ -59,8 +61,11 @@ func (opts *CreationOptions) Validate() error {
 	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
 	catcher.NewWhen(opts.LoginCookieName == "", "must specify login cookie name")
 	if opts.LoginCookieTTL == time.Duration(0) {
-		opts.LoginCookieTTL = time.Hour
+		opts.LoginCookieTTL = 365 * time.Hour
 	}
+	// if opts.SilentReauthCookieTTL == time.Duration(0) {
+	//     opts.SilentReauthCookieTTL = 365 * 24 * time.Hour
+	// }
 	catcher.NewWhen(opts.UserCache == nil && opts.ExternalCache == nil, "must specify one user cache")
 	catcher.NewWhen(opts.UserCache != nil && opts.ExternalCache != nil, "must specify exactly one user cache")
 	catcher.NewWhen(opts.GetHTTPClient == nil, "must specify function to get HTTP clients")
@@ -93,6 +98,8 @@ type userManager struct {
 	loginCookieName string
 	loginCookieTTL  time.Duration
 
+	// silentReauthCookieTTL time.Duration
+
 	cache usercache.Cache
 
 	getHTTPClient func() *http.Client
@@ -120,17 +127,18 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		}
 	}
 	m := &userManager{
-		cache:               cache,
-		clientID:            opts.ClientID,
-		clientSecret:        opts.ClientSecret,
-		redirectURI:         opts.RedirectURI,
-		issuer:              opts.Issuer,
-		userGroup:           opts.UserGroup,
-		cookiePath:          opts.CookiePath,
-		cookieDomain:        opts.CookieDomain,
-		cookieTTL:           opts.CookieTTL,
-		loginCookieName:     opts.LoginCookieName,
-		loginCookieTTL:      opts.LoginCookieTTL,
+		cache:           cache,
+		clientID:        opts.ClientID,
+		clientSecret:    opts.ClientSecret,
+		redirectURI:     opts.RedirectURI,
+		issuer:          opts.Issuer,
+		userGroup:       opts.UserGroup,
+		cookiePath:      opts.CookiePath,
+		cookieDomain:    opts.CookieDomain,
+		cookieTTL:       opts.CookieTTL,
+		loginCookieName: opts.LoginCookieName,
+		loginCookieTTL:  opts.LoginCookieTTL,
+		// silentReauthCookieTTL: opts.SilentReauthCookieTTL,
 		getHTTPClient:       opts.GetHTTPClient,
 		putHTTPClient:       opts.PutHTTPClient,
 		skipGroupPopulation: opts.SkipGroupPopulation,
@@ -172,6 +180,7 @@ const (
 	nonceCookieName      = "okta-nonce"
 	stateCookieName      = "okta-state"
 	requestURICookieName = "okta-original-request-uri"
+	// silentReauthCookieName = "okta-silent-reauth-token"
 )
 
 func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
@@ -201,6 +210,37 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 			redirectURI = "/"
 		}
 
+		// Allow users to silently reauthenticate as long as the request
+		// presents a cookie containing a login token associated with an
+		// existing user.
+		var canSilentReauth bool
+		for _, cookie := range r.Cookies() {
+			if cookie.Name == m.loginCookieName {
+				loginToken, err := url.QueryUnescape(cookie.Value)
+				if err != nil {
+					grip.Error(errors.Wrapf(err, "could not decode login cookie '%s'", cookie.Value))
+					break
+				}
+				user, _, err := m.cache.Get(loginToken)
+				if err == nil && user != nil {
+					canSilentReauth = true
+				}
+			}
+			// if cookie.Name == silentReauthCookieName {
+			//     silentReauthCookie, err := url.QueryUnescape(cookie.Value)
+			//     if err != nil {
+			//         grip.Error(errors.Wrapf(err, "could not decode silent reauthentication cookie '%s'", cookie.Value))
+			//         break
+			//     }
+			//     // _, valid, err := m.cache.GetReauth(silentReauthCookie)
+			//     grip.Error(errors.Wrapf(err, "could not get user with silent reauthentication cookie '%s'", silentReauthCookie))
+			//     if valid {
+			//         canSilentReauth = true
+			//     }
+			//     break
+			// }
+		}
+
 		m.setTemporaryCookie(w, nonceCookieName, nonce)
 		m.setTemporaryCookie(w, stateCookieName, state)
 		m.setTemporaryCookie(w, requestURICookieName, redirectURI)
@@ -209,7 +249,9 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		q.Add("response_type", "code")
 		q.Add("response_mode", "query")
 		q.Add("scope", "openid email profile offline_access groups")
-		q.Add("prompt", "login consent")
+		if !canSilentReauth {
+			q.Add("prompt", "login consent")
+		}
 		q.Add("redirect_uri", m.redirectURI)
 		q.Add("state", state)
 		q.Add("nonce", nonce)

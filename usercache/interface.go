@@ -19,6 +19,17 @@ type PutUserGetToken func(gimlet.User) (string, error)
 // It returns (nil, false, nil) if the user is not present in the cache.
 type GetUserByToken func(string) (u gimlet.User, valid bool, err error)
 
+// // GetUserByReauthToken is a function provided by the client to retrieve cached
+// // user by reauthentication token.
+// // It returns an error if and only if there was an error retrieving the user
+// // from the cache.
+// // It returns (<user>, true, nil) if the user is present in the cache and is
+// // valid.
+// // It returns (<user>, false, nil) if the user is present in the cache but has
+// // expired.
+// // It returns (nil, false, nil) if the user is not present in the cache.
+// type GetUserByReauthToken func(string) (u gimlet.User, valid bool, err error)
+
 // ClearUserToken is a function provided by the client to remove users' tokens
 // from cache. Passing true will ignore the user passed and clear all users.
 type ClearUserToken func(u gimlet.User, all bool) error
@@ -38,3 +49,10 @@ type Cache interface {
 	Get(token string) (u gimlet.User, valid bool, err error)
 	Find(id string) (u gimlet.User, valid bool, err error)
 }
+
+// // ReauthCache supports all login cache functionality as well as getting users
+// // by reauthentication token.
+// type ReauthCache interface {
+//     Cache
+//     GetReauth(token string) (u gimlet.User, valid bool, err error)
+// }
