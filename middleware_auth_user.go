@@ -206,8 +206,8 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 	}
 
-	if GetUser(r.Context()) == nil && needsReauth && u.manager != nil && u.manager.IsRedirect() && r.URL.Path != u.conf.LoginCallbackPath /*"/login/redirect/callback"*/ {
-		if r.URL.Path != u.conf.LoginPath /*"/login/redirect"*/ {
+	if GetUser(r.Context()) == nil && needsReauth && u.manager != nil && u.manager.IsRedirect() && r.URL.Path != u.conf.LoginCallbackPath {
+		if r.URL.Path != u.conf.LoginPath {
 			querySep := ""
 			if r.URL.RawQuery != "" {
 				querySep = "?"
