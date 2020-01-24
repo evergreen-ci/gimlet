@@ -18,6 +18,8 @@ type User interface {
 	Email() string
 	Username() string
 	GetAPIKey() string
+	GetAccessToken() string
+	GetRefreshToken() string
 	Roles() []string
 	HasPermission(PermissionOpts) bool
 }

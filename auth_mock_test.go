@@ -29,15 +29,19 @@ type MockUser struct {
 	EmailAddress string
 	ReportNil    bool
 	APIKey       string
+	AccessToken  string
+	RefreshToken string
 	RoleNames    []string
 }
 
-func (u *MockUser) DisplayName() string { return u.Name }
-func (u *MockUser) Email() string       { return u.EmailAddress }
-func (u *MockUser) Username() string    { return u.ID }
-func (u *MockUser) IsNil() bool         { return u.ReportNil }
-func (u *MockUser) GetAPIKey() string   { return u.APIKey }
-func (u *MockUser) Roles() []string     { return u.RoleNames }
+func (u *MockUser) DisplayName() string     { return u.Name }
+func (u *MockUser) Email() string           { return u.EmailAddress }
+func (u *MockUser) Username() string        { return u.ID }
+func (u *MockUser) IsNil() bool             { return u.ReportNil }
+func (u *MockUser) GetAPIKey() string       { return u.APIKey }
+func (u *MockUser) GetAccessToken() string  { return u.AccessToken }
+func (u *MockUser) GetRefreshToken() string { return u.RefreshToken }
+func (u *MockUser) Roles() []string         { return u.RoleNames }
 func (u *MockUser) HasPermission(PermissionOpts) bool {
 	return true
 }
@@ -98,7 +102,7 @@ func (m *MockUserManager) GetUserByToken(_ context.Context, token string) (User,
 		return nil, false, errors.New("user does not exist")
 	}
 
-	return u, false, false
+	return u, false, nil
 }
 
 func (m *MockUserManager) CreateUserToken(username, password string) (string, error) {

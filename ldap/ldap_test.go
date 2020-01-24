@@ -214,11 +214,13 @@ func (m *mockConn) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSiz
 
 type mockUser struct{ name string }
 
-func (u *mockUser) DisplayName() string { return "" }
-func (u *mockUser) Email() string       { return "" }
-func (u *mockUser) Username() string    { return u.name }
-func (u *mockUser) GetAPIKey() string   { return "" }
-func (u *mockUser) Roles() []string     { return []string{} }
+func (u *mockUser) DisplayName() string     { return "" }
+func (u *mockUser) Email() string           { return "" }
+func (u *mockUser) Username() string        { return u.name }
+func (u *mockUser) GetAPIKey() string       { return "" }
+func (u *mockUser) GetAccessToken() string  { return "" }
+func (u *mockUser) GetRefreshToken() string { return "" }
+func (u *mockUser) Roles() []string         { return []string{} }
 func (u *mockUser) HasPermission(gimlet.PermissionOpts) bool {
 	return true
 }
@@ -259,12 +261,12 @@ func mockClearUserToken(u gimlet.User, all bool) error {
 }
 
 func mockGetUserByID(id string) (gimlet.User, bool, error) {
-	u := gimlet.NewBasicUser(id, "", "", "", "", []string{}, false, nil)
+	u := gimlet.NewBasicUser(id, "", "", "", "", "", "", []string{}, false, nil)
 	return u, true, nil
 }
 
 func mockGetOrCreateUser(user gimlet.User) (gimlet.User, error) {
-	u := gimlet.NewBasicUser(user.Username(), user.DisplayName(), user.Email(), "", user.GetAPIKey(), []string{}, false, nil)
+	u := gimlet.NewBasicUser(user.Username(), user.DisplayName(), user.Email(), "", user.GetAPIKey(), "", "", []string{}, false, nil)
 	return u, nil
 }
 
@@ -755,7 +757,7 @@ func (s *LDAPSuite) TestGetUser() {
 }
 
 func (s *LDAPSuite) TestGetOrCreateUser() {
-	basicUser := gimlet.NewBasicUser("foo", "", "", "", "", []string{}, false, nil)
+	basicUser := gimlet.NewBasicUser("foo", "", "", "", "", "", "", []string{}, false, nil)
 	user, err := s.um.GetOrCreateUser(basicUser)
 	s.NoError(err)
 	s.Equal("foo", user.Username())
@@ -779,7 +781,7 @@ func (s *LDAPSuite) TestLoginUsesValidPaths() {
 }
 
 func (s *LDAPSuite) TestClearUserToken() {
-	basicUser := gimlet.NewBasicUser("foo", "", "", "", "", []string{}, false, nil)
+	basicUser := gimlet.NewBasicUser("foo", "", "", "", "", "", "", []string{}, false, nil)
 	user, err := s.um.GetOrCreateUser(basicUser)
 	s.Require().NoError(err)
 

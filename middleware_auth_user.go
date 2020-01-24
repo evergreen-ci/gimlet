@@ -206,7 +206,15 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 	}
 
-	if GetUser(r.Context()) == nil && needsReauth && u.manager != nil && u.manager.IsRedirect() && r.URL.Path != u.conf.LoginCallbackPath {
+	// We can only use silent reauthentication if:
+	// They present a login cookie (i.e. they're connecting via a browser).
+	// The user manager redirects to a different website (i.e. third-party login
+	// service).
+	// The request method is idempotent (e.g. POST will not work because the
+	// request body will be lost when redirecting to the third party for
+	// reauthentication).
+	// NOTE: we can get rid of this if we're allowed to use refresh tokens.
+	if GetUser(r.Context()) == nil && needsReauth && u.manager != nil && u.manager.IsRedirect() && r.URL.Path != u.conf.LoginCallbackPath && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
 		if r.URL.Path != u.conf.LoginPath {
 			querySep := ""
 			if r.URL.RawQuery != "" {
