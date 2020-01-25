@@ -763,7 +763,7 @@ func TestLoginHandler(t *testing.T) {
 			resp := rw.Result()
 			assert.NoError(t, resp.Body.Close())
 
-			assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+			assert.Equal(t, http.StatusFound, resp.StatusCode)
 
 			cookies, err := cookieMap(resp.Cookies())
 			require.NoError(t, err)
@@ -801,7 +801,7 @@ func TestLoginHandler(t *testing.T) {
 			resp := rw.Result()
 			assert.NoError(t, resp.Body.Close())
 
-			assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+			assert.Equal(t, http.StatusFound, resp.StatusCode)
 
 			cookies, err := cookieMap(resp.Cookies())
 			require.NoError(t, err)
@@ -1036,56 +1036,6 @@ func TestReauthorization(t *testing.T) {
 			assert.Equal(t, user.GetAccessToken(), cachedUser.GetAccessToken())
 			assert.Equal(t, user.GetRefreshToken(), cachedUser.GetRefreshToken())
 		},
-		"SucceedsWithRefreshedTokens": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
-			accessToken := "access_token"
-			refreshToken := "refresh_token"
-			newAccessToken := "new_access_token"
-			newRefreshToken := "new_refresh_token"
-			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", accessToken, refreshToken, nil, false, nil)
-
-			_, err := um.cache.GetOrCreate(user)
-			require.NoError(t, err)
-
-			s.IntrospectResponse = &introspectResponse{Active: false}
-			s.TokenResponse = &tokenResponse{
-				AccessToken:  newAccessToken,
-				IDToken:      "new_id_token",
-				RefreshToken: newRefreshToken,
-				TokenType:    "token_type",
-				ExpiresIn:    3600,
-				Scope:        "scope",
-			}
-			s.UserInfoResponse = &userInfoResponse{Name: "foo", Email: "foo@bar.com", Groups: []string{um.userGroup}}
-
-			require.NoError(t, um.reauthorizeUser(ctx, user))
-
-			mapContains(t, s.IntrospectParameters, map[string][]string{
-				"token":           []string{accessToken},
-				"token_type_hint": []string{"access_token"},
-			})
-			mapContains(t, s.IntrospectHeaders, map[string][]string{
-				"Content-Type": []string{"application/x-www-form-urlencoded"},
-				"Accept":       []string{"application/json"},
-			})
-			mapContains(t, s.TokenParameters, map[string][]string{
-				"grant_type":    []string{"refresh_token"},
-				"refresh_token": []string{refreshToken},
-				"scope":         []string{"openid email profile offline_access groups"},
-			})
-			mapContains(t, s.TokenHeaders, map[string][]string{
-				"Content-Type": []string{"application/x-www-form-urlencoded"},
-				"Accept":       []string{"application/json"},
-			})
-			mapContains(t, s.UserInfoHeaders, map[string][]string{
-				"Accept":        []string{"application/json"},
-				"Authorization": []string{"Bearer " + newAccessToken},
-			})
-
-			cachedUser, _, err := um.cache.Find(user.Username())
-			require.NoError(t, err)
-			assert.Equal(t, newAccessToken, cachedUser.GetAccessToken())
-			assert.Equal(t, newRefreshToken, cachedUser.GetRefreshToken())
-		},
 		"FailsIfAccessTokenExpiredAndTokensCannotRefresh": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			accessToken := "access_token"
 			refreshToken := "refresh_token"
@@ -1147,7 +1097,7 @@ func TestReauthorization(t *testing.T) {
 			assert.Error(t, um.reauthorizeUser(ctx, user))
 
 			mapContains(t, s.IntrospectParameters, map[string][]string{
-				"token":           []string{accessToken},
+				"token":           []string{newAccessToken},
 				"token_type_hint": []string{"access_token"},
 			})
 			mapContains(t, s.IntrospectHeaders, map[string][]string{

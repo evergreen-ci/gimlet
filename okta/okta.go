@@ -139,11 +139,11 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		cookieTTL:            opts.CookieTTL,
 		loginCookieName:      opts.LoginCookieName,
 		loginCookieTTL:       opts.LoginCookieTTL,
-		getHTTPClient:        opts.GetHTTPClient,
-		putHTTPClient:        opts.PutHTTPClient,
 		skipGroupPopulation:  opts.SkipGroupPopulation,
 		allowReauthorization: opts.AllowReauthorization,
 		alwaysRefreshTokens:  opts.AlwaysRefreshTokens,
+		getHTTPClient:        opts.GetHTTPClient,
+		putHTTPClient:        opts.PutHTTPClient,
 		reconciliateID:       opts.ReconciliateID,
 	}
 	return m, nil
@@ -160,46 +160,66 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 	if !valid {
 		if m.allowReauthorization {
 			if err := m.reauthorizeUser(ctx, user); err != nil {
-				grip.Error(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
+				grip.Notice(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
 				return user, true, ErrNeedsReauthentication
 			}
+			return user, false, nil
 		}
 		return user, true, ErrNeedsReauthentication
 	}
 	return user, false, nil
 }
 
+// doReauthorize attempts to authorize the user based on their tokens.
+func (m *userManager) doReauthorize(accessToken, refreshToken string) error {
+	catcher := grip.NewBasicCatcher()
+	var err error
+	if !m.insecureSkipTokenValidation {
+		err = m.validateAccessToken(accessToken)
+		catcher.Wrap(err, "invalid access token")
+	}
+	if err == nil {
+		user, err := m.generateUserFromInfo(accessToken, refreshToken)
+		catcher.Wrap(err, "could not generate user from Okta user info")
+		if err == nil {
+			_, err = m.cache.Put(user)
+			catcher.Wrap(err, "could not update user in cache")
+			if err == nil {
+				return nil
+			}
+		}
+	}
+	return catcher.Resolve()
+}
+
+// reauthorizeUser attempts to reauthorize the user, first with their current
+// access token. If that fails, it refreshes the tokens and attempts to
+// reauthorize them again.
 func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) error {
 	accessToken := user.GetAccessToken()
+	if accessToken == "" {
+		return errors.Errorf("user '%s' cannot reauthorize because user is missing access token", user.Username())
+	}
 	refreshToken := user.GetRefreshToken()
 	catcher := grip.NewBasicCatcher()
 	if !m.alwaysRefreshTokens {
-		if !m.insecureSkipTokenValidation {
-			catcher.Wrap(m.validateAccessToken(accessToken), "invalid access token")
+		err := m.doReauthorize(accessToken, refreshToken)
+		catcher.Wrap(err, "could not reauthorize user with current access token")
+		if err == nil {
+			return nil
 		}
-		if !catcher.HasErrors() {
-			user, err := m.generateUserFromInfo(accessToken, refreshToken)
-			catcher.Wrap(err, "could not generate user from Okta user info")
-			if err == nil {
-				_, err = m.cache.Put(user)
-				catcher.Wrap(err, "could not update user in cache")
-				if err == nil {
-					return nil
-				}
-			}
-		}
+	}
+
+	if refreshToken == "" {
+		return errors.Errorf("user '%s' cannot refresh tokens because refresh token is missing", user.Username())
 	}
 	tokens, err := m.refreshTokens(ctx, refreshToken)
 	catcher.Wrap(err, "could not refresh authorization tokens")
 	if err == nil {
-		user, err := m.generateUserFromInfo(tokens.AccessToken, tokens.RefreshToken)
-		catcher.Wrap(err, "could not generate user from Okta user info")
+		err = m.doReauthorize(tokens.AccessToken, tokens.RefreshToken)
+		catcher.Wrap(err, "could  not reauthorize user after refreshing tokens")
 		if err == nil {
-			_, err = m.cache.Put(user)
-			catcher.Wrap(err, "could not add user to cache")
-			if err == nil {
-				return nil
-			}
+			return nil
 		}
 	}
 
@@ -258,15 +278,17 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		// presents a cookie containing a login token associated with an
 		// existing user.
 		var canSilentReauth bool
-		cookie, err := r.Cookie(m.loginCookieName)
-		if err == nil {
-			loginToken, err := url.QueryUnescape(cookie.Value)
-			if err != nil {
-				grip.Warning(errors.Wrapf(err, "could not decode login cookie '%s'", cookie.Value))
-			}
-			user, needsReauth, err := m.GetUserByToken(context.Background(), loginToken)
-			if (err == nil || needsReauth) && user != nil {
-				canSilentReauth = true
+		for _, cookie := range r.Cookies() {
+			if cookie.Name == m.loginCookieName {
+				loginToken, err := url.QueryUnescape(cookie.Value)
+				if err != nil {
+					grip.Warning(errors.Wrapf(err, "could not decode login cookie '%s'", cookie.Value))
+				}
+				user, needsReauth, err := m.GetUserByToken(context.Background(), loginToken)
+				if (err == nil || needsReauth) && user != nil {
+					canSilentReauth = true
+					break
+				}
 			}
 		}
 
@@ -286,7 +308,8 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		q.Add("state", state)
 		q.Add("nonce", nonce)
 
-		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
+		r.Header.Add("Cache-Control", "no-store")
+		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusFound)
 	}
 }
 
@@ -343,7 +366,8 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		}
 		checkState := r.URL.Query().Get("state")
 		if state != checkState {
-			err = errors.New("state value received from Okta did not match expected state")
+			// err = errors.New("state value received from Okta did not match expected state")
+			err = errors.Errorf("state value '%s' received from Okta did not match expected state '%s'", checkState, state)
 			grip.Error(message.WrapError(err, message.Fields{
 				"expected_state": state,
 				"actual_state":   checkState,
@@ -445,23 +469,29 @@ func (m *userManager) generateUserFromInfo(accessToken, refreshToken string) (gi
 // well as the originally requested URI from the cookies.
 func getCookies(r *http.Request) (nonce, state, requestURI string, err error) {
 	catcher := grip.NewBasicCatcher()
-	cookie, err := r.Cookie(nonceCookieName)
-	catcher.Wrap(err, "could not find nonce cookie")
-	if err == nil {
-		nonce, err = url.QueryUnescape(cookie.Value)
-		catcher.Wrap(err, "found nonce cookie but failed to decode it")
+	for _, cookie := range r.Cookies() {
+		if cookie.Name == nonceCookieName {
+			nonce, err = url.QueryUnescape(cookie.Value)
+			if err != nil {
+				catcher.Wrap(err, "could not decode nonce cookie")
+			}
+		}
+		if cookie.Name == stateCookieName {
+			state, err = url.QueryUnescape(cookie.Value)
+			if err != nil {
+				catcher.Wrap(err, "could not decode state cookie")
+			}
+		}
+		if cookie.Name == requestURICookieName {
+			requestURI, err = url.QueryUnescape(cookie.Value)
+			if err != nil {
+				catcher.Wrap(err, "could not decode requestURI cookie")
+			}
+		}
 	}
-	cookie, err = r.Cookie(stateCookieName)
-	catcher.Wrap(err, "could not find state cookie")
-	if err == nil {
-		state, err = url.QueryUnescape(cookie.Value)
-		catcher.Wrap(err, "found state cookie but failed to decode it")
-	}
-	cookie, err = r.Cookie(requestURICookieName)
-	if err == nil {
-		requestURI, err = url.QueryUnescape(cookie.Value)
-		grip.Warning(errors.Wrap(err, "found original request URI cookie but failed to decode it"))
-	}
+	catcher.NewWhen(nonce == "", "nonce could not be retrieved from cookies")
+	catcher.NewWhen(state == "", "state could not be retrieved from cookies")
+	grip.NoticeWhen(requestURI == "", "request URI could not be retrieved from cookies")
 	if requestURI == "" {
 		requestURI = "/"
 	}
@@ -481,9 +511,10 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 	if !valid {
 		if m.allowReauthorization {
 			if err := m.reauthorizeUser(context.Background(), user); err != nil {
-				grip.Error(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
+				grip.Notice(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
 				return user, ErrNeedsReauthentication
 			}
+			return user, nil
 		}
 		return user, ErrNeedsReauthentication
 	}
