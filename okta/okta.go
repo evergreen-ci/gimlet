@@ -302,22 +302,20 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		q.Add("scope", "openid email profile offline_access groups")
 		if !canSilentReauth {
 			q.Add("prompt", "login consent")
-		} else {
 		}
 		q.Add("redirect_uri", m.redirectURI)
 		q.Add("state", state)
 		q.Add("nonce", nonce)
 
-		r.Header.Add("Cache-Control", "no-store")
+		r.Header.Add("Cache-Control", "no-cache,no-store")
 		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusFound)
 	}
 }
 
 func (m *userManager) setLoginCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
-		Name: m.loginCookieName,
-		Path: m.cookiePath,
-		// Value:    url.QueryEscape(value),
+		Name:     m.loginCookieName,
+		Path:     m.cookiePath,
 		Value:    value,
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.loginCookieTTL),
@@ -329,9 +327,8 @@ func (m *userManager) setLoginCookie(w http.ResponseWriter, value string) {
 // succeed via Okta.
 func (m *userManager) setTemporaryCookie(w http.ResponseWriter, name, value string) {
 	http.SetCookie(w, &http.Cookie{
-		Name: name,
-		Path: m.cookiePath,
-		// Value:    url.QueryEscape(value),
+		Name:     name,
+		Path:     m.cookiePath,
 		Value:    value,
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.cookieTTL),
@@ -366,8 +363,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		}
 		checkState := r.URL.Query().Get("state")
 		if state != checkState {
-			// err = errors.New("state value received from Okta did not match expected state")
-			err = errors.Errorf("state value '%s' received from Okta did not match expected state '%s'", checkState, state)
+			err = errors.New("state value received from Okta did not match expected state")
 			grip.Error(message.WrapError(err, message.Fields{
 				"expected_state": state,
 				"actual_state":   checkState,
