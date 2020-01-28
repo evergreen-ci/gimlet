@@ -80,6 +80,7 @@ func (umc UserMiddlewareConfiguration) ClearCookie(rw http.ResponseWriter) {
 	http.SetCookie(rw, &http.Cookie{
 		Name:   umc.CookieName,
 		Path:   umc.CookiePath,
+		Domain: umc.CookieDomain,
 		Value:  "",
 		MaxAge: -1,
 	})
