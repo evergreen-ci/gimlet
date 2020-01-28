@@ -41,15 +41,15 @@ func NewBasicUserManager(users []User, rm RoleManager) (UserManager, error) {
 // the user on the list, the email of the user and a hash of the username and
 // password, checking it against the token string and returning a User if
 // there is a match.
-func (um *BasicUserManager) GetUserByToken(_ context.Context, token string) (User, bool, error) {
+func (um *BasicUserManager) GetUserByToken(_ context.Context, token string) (User, error) {
 	for i, user := range um.users {
 		//check to see if token exists
 		possibleToken := fmt.Sprintf("%v:%v:%v", i, user.EmailAddress, md5.Sum([]byte(user.ID+user.Password)))
 		if token == possibleToken {
-			return &user, false, nil
+			return &user, nil
 		}
 	}
-	return nil, false, errors.New("No valid user found")
+	return nil, errors.New("No valid user found")
 }
 
 // CreateUserToken finds the user with the same username and password in its

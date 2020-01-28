@@ -924,9 +924,8 @@ func TestLoginHandlerCallback(t *testing.T) {
 			assert.Equal(t, "email", user.Email())
 			assert.ElementsMatch(t, []string{"user_group"}, user.Roles())
 
-			checkUser, needsReauth, err := um.GetUserByToken(ctx, loginToken)
+			checkUser, err := um.GetUserByToken(ctx, loginToken)
 			require.NoError(t, err)
-			assert.False(t, needsReauth)
 			assert.Equal(t, user, checkUser)
 		},
 		"FailsForReturnedErrors": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {

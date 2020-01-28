@@ -19,13 +19,13 @@ func TestBasicUserManager(t *testing.T) {
 			EmailAddress: "baz",
 		},
 	}}
-	user, _, err := u.GetUserByToken(context.Background(), expectedToken)
+	user, err := u.GetUserByToken(context.Background(), expectedToken)
 	assert.NoError(err)
 	assert.NotNil(user)
 	assert.Equal("foo", user.Username())
 	assert.Equal("baz", user.Email())
 
-	user, _, err = u.GetUserByToken(context.Background(), "")
+	user, err = u.GetUserByToken(context.Background(), "")
 	assert.Error(err)
 	assert.Nil(user)
 

@@ -109,8 +109,6 @@ type userManager struct {
 	reconciliateID func(id string) (newID string)
 }
 
-var ErrNeedsReauthentication = errors.New("user session has expired so they must be reauthenticated")
-
 // NewUserManager creates a manager that connects to Okta for user
 // management services.
 func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
@@ -149,25 +147,24 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 	return m, nil
 }
 
-func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, bool, error) {
+func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
 	user, valid, err := m.cache.Get(token)
 	if err != nil {
-		return nil, false, errors.Wrap(err, "problem getting cached user")
+		return nil, errors.Wrap(err, "problem getting cached user")
 	}
 	if user == nil {
-		return nil, false, errors.New("user not found in cache")
+		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
 		if m.allowReauthorization {
 			if err := m.reauthorizeUser(ctx, user); err != nil {
-				grip.Notice(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
-				return user, true, ErrNeedsReauthentication
+				return user, gimlet.ErrNeedsReauthentication
 			}
-			return user, false, nil
+			return user, nil
 		}
-		return user, true, ErrNeedsReauthentication
+		return user, gimlet.ErrNeedsReauthentication
 	}
-	return user, false, nil
+	return user, nil
 }
 
 // doReauthorize attempts to authorize the user based on their tokens.
@@ -284,8 +281,8 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 				if err != nil {
 					grip.Warning(errors.Wrapf(err, "could not decode login cookie '%s'", cookie.Value))
 				}
-				user, needsReauth, err := m.GetUserByToken(context.Background(), loginToken)
-				if (err == nil || needsReauth) && user != nil {
+				user, err := m.GetUserByToken(context.Background(), loginToken)
+				if (err == nil || errors.Cause(err) == gimlet.ErrNeedsReauthentication) && user != nil {
 					canSilentReauth = true
 					break
 				}
@@ -508,11 +505,11 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 		if m.allowReauthorization {
 			if err := m.reauthorizeUser(context.Background(), user); err != nil {
 				grip.Notice(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
-				return user, ErrNeedsReauthentication
+				return user, gimlet.ErrNeedsReauthentication
 			}
 			return user, nil
 		}
-		return user, ErrNeedsReauthentication
+		return user, gimlet.ErrNeedsReauthentication
 	}
 	return user, nil
 }

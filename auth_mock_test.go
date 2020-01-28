@@ -77,7 +77,7 @@ func (a *MockAuthenticator) CheckAuthenticated(u User) bool {
 func (a *MockAuthenticator) GetUserFromRequest(um UserManager, r *http.Request) (User, error) {
 	ctx := r.Context()
 
-	u, _, err := um.GetUserByToken(ctx, a.UserToken)
+	u, err := um.GetUserByToken(ctx, a.UserToken)
 	if err != nil {
 		return nil, err
 	}
@@ -92,17 +92,17 @@ type MockUserManager struct {
 	CreateUserFails bool
 }
 
-func (m *MockUserManager) GetUserByToken(_ context.Context, token string) (User, bool, error) {
+func (m *MockUserManager) GetUserByToken(_ context.Context, token string) (User, error) {
 	if m.TokenToUsers == nil {
-		return nil, false, errors.New("no users configured")
+		return nil, errors.New("no users configured")
 	}
 
 	u, ok := m.TokenToUsers[token]
 	if !ok {
-		return nil, false, errors.New("user does not exist")
+		return nil, errors.New("user does not exist")
 	}
 
-	return u, false, nil
+	return u, nil
 }
 
 func (m *MockUserManager) CreateUserToken(username, password string) (string, error) {
