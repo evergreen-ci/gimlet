@@ -504,7 +504,6 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 	if !valid {
 		if m.allowReauthorization {
 			if err := m.reauthorizeUser(context.Background(), user); err != nil {
-				grip.Notice(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
 				return user, gimlet.ErrNeedsReauthentication
 			}
 			return user, nil
