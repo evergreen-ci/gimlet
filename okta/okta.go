@@ -30,6 +30,11 @@ type CreationOptions struct {
 	// If set, user authentication will not attempt to populate the user's
 	// groups.
 	SkipGroupPopulation bool
+	// If set, user reauthorization will always refresh the access and refresh
+	// tokens without trying to use the existing access token.
+	AlwaysRefreshTokens bool
+	// If set, user can be reauthorized without needing to authenticate.
+	AllowReauthorization bool
 
 	CookiePath   string
 	CookieDomain string
@@ -59,7 +64,7 @@ func (opts *CreationOptions) Validate() error {
 	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
 	catcher.NewWhen(opts.LoginCookieName == "", "must specify login cookie name")
 	if opts.LoginCookieTTL == time.Duration(0) {
-		opts.LoginCookieTTL = time.Hour
+		opts.LoginCookieTTL = 365 * time.Hour
 	}
 	catcher.NewWhen(opts.UserCache == nil && opts.ExternalCache == nil, "must specify one user cache")
 	catcher.NewWhen(opts.UserCache != nil && opts.ExternalCache != nil, "must specify exactly one user cache")
@@ -80,8 +85,11 @@ type userManager struct {
 	redirectURI  string
 	issuer       string
 
-	userGroup           string
-	skipGroupPopulation bool
+	userGroup string
+
+	skipGroupPopulation  bool
+	allowReauthorization bool
+	alwaysRefreshTokens  bool
 
 	// This is used only for testing purposes.
 	insecureSkipTokenValidation bool
@@ -118,21 +126,23 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		}
 	}
 	m := &userManager{
-		cache:               cache,
-		clientID:            opts.ClientID,
-		clientSecret:        opts.ClientSecret,
-		redirectURI:         opts.RedirectURI,
-		issuer:              opts.Issuer,
-		userGroup:           opts.UserGroup,
-		cookiePath:          opts.CookiePath,
-		cookieDomain:        opts.CookieDomain,
-		cookieTTL:           opts.CookieTTL,
-		loginCookieName:     opts.LoginCookieName,
-		loginCookieTTL:      opts.LoginCookieTTL,
-		getHTTPClient:       opts.GetHTTPClient,
-		putHTTPClient:       opts.PutHTTPClient,
-		skipGroupPopulation: opts.SkipGroupPopulation,
-		reconciliateID:      opts.ReconciliateID,
+		cache:                cache,
+		clientID:             opts.ClientID,
+		clientSecret:         opts.ClientSecret,
+		redirectURI:          opts.RedirectURI,
+		issuer:               opts.Issuer,
+		userGroup:            opts.UserGroup,
+		cookiePath:           opts.CookiePath,
+		cookieDomain:         opts.CookieDomain,
+		cookieTTL:            opts.CookieTTL,
+		loginCookieName:      opts.LoginCookieName,
+		loginCookieTTL:       opts.LoginCookieTTL,
+		skipGroupPopulation:  opts.SkipGroupPopulation,
+		allowReauthorization: opts.AllowReauthorization,
+		alwaysRefreshTokens:  opts.AlwaysRefreshTokens,
+		getHTTPClient:        opts.GetHTTPClient,
+		putHTTPClient:        opts.PutHTTPClient,
+		reconciliateID:       opts.ReconciliateID,
 	}
 	return m, nil
 }
@@ -146,57 +156,71 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		if err := m.reauthorizeUser(ctx, user); err != nil {
-			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
+		if m.allowReauthorization {
+			if err := m.reauthorizeUser(ctx, user); err != nil {
+				return user, gimlet.ErrNeedsReauthentication
+			}
+			return user, nil
 		}
+		return user, gimlet.ErrNeedsReauthentication
 	}
 	return user, nil
 }
 
-// TODO (kim): handle reauthentication.
+// doReauthorize attempts to authorize the user based on their tokens.
+func (m *userManager) doReauthorize(accessToken, refreshToken string) error {
+	catcher := grip.NewBasicCatcher()
+	var err error
+	if !m.insecureSkipTokenValidation {
+		err = m.validateAccessToken(accessToken)
+		catcher.Wrap(err, "invalid access token")
+	}
+	if err == nil {
+		user, err := m.generateUserFromInfo(accessToken, refreshToken)
+		catcher.Wrap(err, "could not generate user from Okta user info")
+		if err == nil {
+			_, err = m.cache.Put(user)
+			catcher.Wrap(err, "could not update user in cache")
+			if err == nil {
+				return nil
+			}
+		}
+	}
+	return catcher.Resolve()
+}
+
+// reauthorizeUser attempts to reauthorize the user, first with their current
+// access token. If that fails, it refreshes the tokens and attempts to
+// reauthorize them again.
 func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) error {
-	// accessToken := user.GetAccessToken()
-	// catcher := grip.NewBasicCatcher()
-	// catcher.Wrap(m.validateAccessToken(user.GetAccessToken()), "invalid access token")
-	// if !catcher.HasErrors() {
-	//     userInfo, err := m.getUserInfo(ctx, accessToken)
-	//     catcher.Wrap(err, "could not get user info")
-	//     if err == nil {
-	//         err := m.validateGroup(userInfo.Groups)
-	//         catcher.Wrap(err, "could not authorize user")
-	//         if err == nil {
-	//             _, err = m.cache.Put(user)
-	//             catcher.Wrap(err, "could not add user to cache")
-	//             if err == nil {
-	//                 return nil
-	//             }
-	//         }
-	//     }
-	// }
-	// refreshToken := user.GetRefreshToken()
-	// tokens, err := m.refreshTokens(ctx, refreshToken)
-	// catcher.Wrap(err, "could not refresh authorization tokens")
-	// if err == nil {
-	//     userInfo, err := m.getUserInfo(ctx, tokens.AccessToken)
-	//     catcher.Wrap(err, "could not get user info")
-	//     if err == nil {
-	//         err := m.validateGroup(userInfo.Groups)
-	//         catcher.Wrap(err, "could not authorize user")
-	//         if err == nil {
-	//             // TODO (kim): update user tokens
-	//             user = makeUserFromInfo(userInfo, accessToken, refreshToken)
-	//             _, err = m.cache.Put(user)
-	//             catcher.Wrap(err, "could not add user to cache")
-	//             if err == nil {
-	//                 return nil
-	//             }
-	//         }
-	//     }
-	// }
-	//
-	// // TODO (kim): fallback - reauthenticate user if necessary.
-	// return catcher.Resolve()
-	return errors.New("not implemented yet")
+	accessToken := user.GetAccessToken()
+	if accessToken == "" {
+		return errors.Errorf("user '%s' cannot reauthorize because user is missing access token", user.Username())
+	}
+	refreshToken := user.GetRefreshToken()
+	catcher := grip.NewBasicCatcher()
+	if !m.alwaysRefreshTokens {
+		err := m.doReauthorize(accessToken, refreshToken)
+		catcher.Wrap(err, "could not reauthorize user with current access token")
+		if err == nil {
+			return nil
+		}
+	}
+
+	if refreshToken == "" {
+		return errors.Errorf("user '%s' cannot refresh tokens because refresh token is missing", user.Username())
+	}
+	tokens, err := m.refreshTokens(ctx, refreshToken)
+	catcher.Wrap(err, "could not refresh authorization tokens")
+	if err == nil {
+		err = m.doReauthorize(tokens.AccessToken, tokens.RefreshToken)
+		catcher.Wrap(err, "could  not reauthorize user after refreshing tokens")
+		if err == nil {
+			return nil
+		}
+	}
+
+	return catcher.Resolve()
 }
 
 // validateGroup checks that the user groups returned for this access token
@@ -247,6 +271,24 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 			redirectURI = "/"
 		}
 
+		// Allow users to silently reauthenticate as long as the request
+		// presents a cookie containing a login token associated with an
+		// existing user.
+		var canSilentReauth bool
+		for _, cookie := range r.Cookies() {
+			if cookie.Name == m.loginCookieName {
+				loginToken, err := url.QueryUnescape(cookie.Value)
+				if err != nil {
+					grip.Warning(errors.Wrapf(err, "could not decode login cookie '%s'", cookie.Value))
+				}
+				user, err := m.GetUserByToken(context.Background(), loginToken)
+				if (err == nil || errors.Cause(err) == gimlet.ErrNeedsReauthentication) && user != nil {
+					canSilentReauth = true
+					break
+				}
+			}
+		}
+
 		m.setTemporaryCookie(w, nonceCookieName, nonce)
 		m.setTemporaryCookie(w, stateCookieName, state)
 		m.setTemporaryCookie(w, requestURICookieName, redirectURI)
@@ -255,12 +297,15 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		q.Add("response_type", "code")
 		q.Add("response_mode", "query")
 		q.Add("scope", "openid email profile offline_access groups")
-		q.Add("prompt", "login consent")
+		if !canSilentReauth {
+			q.Add("prompt", "login consent")
+		}
 		q.Add("redirect_uri", m.redirectURI)
 		q.Add("state", state)
 		q.Add("nonce", nonce)
 
-		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusMovedPermanently)
+		r.Header.Add("Cache-Control", "no-cache,no-store")
+		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/v1/authorize?%s", m.issuer, q.Encode()), http.StatusFound)
 	}
 }
 
@@ -268,7 +313,7 @@ func (m *userManager) setLoginCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     m.loginCookieName,
 		Path:     m.cookiePath,
-		Value:    url.QueryEscape(value),
+		Value:    value,
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.loginCookieTTL),
 		Domain:   m.cookieDomain,
@@ -281,7 +326,7 @@ func (m *userManager) setTemporaryCookie(w http.ResponseWriter, name, value stri
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Path:     m.cookiePath,
-		Value:    url.QueryEscape(value),
+		Value:    value,
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.cookieTTL),
 		Domain:   m.cookieDomain,
@@ -332,14 +377,14 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 
 		var user gimlet.User
 		if m.skipGroupPopulation && !m.insecureSkipTokenValidation {
-			user, err = m.generateUserFromIDToken(tokens, idToken)
+			user, err = makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
 				return
 			}
 		} else {
-			user, err = m.generateUserFromInfo(tokens)
+			user, err = m.generateUserFromInfo(tokens.AccessToken, tokens.RefreshToken)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
@@ -383,76 +428,63 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 
 	idToken, err := m.validateIDToken(tokens.IDToken, nonce)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "invalid ID token from Okta")
+		return tokens, nil, errors.Wrap(err, "invalid ID token from Okta")
+	}
+	if m.insecureSkipTokenValidation {
+		return tokens, idToken, nil
 	}
 	if err := m.validateAccessToken(tokens.AccessToken); err != nil {
-		return nil, nil, errors.Wrap(err, "invalid access token from Okta")
+		return tokens, idToken, errors.Wrap(err, "invalid access token from Okta")
 	}
 	return tokens, idToken, nil
 }
 
 // generateUserFromInfo creates a user based on information from the userinfo
 // endpoint.
-func (m *userManager) generateUserFromInfo(tokens *tokenResponse) (gimlet.User, error) {
-	userInfo, err := m.getUserInfo(context.Background(), tokens.AccessToken)
+func (m *userManager) generateUserFromInfo(accessToken, refreshToken string) (gimlet.User, error) {
+	userInfo, err := m.getUserInfo(context.Background(), accessToken)
 	if err != nil {
 		err = errors.Wrap(err, "could not retrieve user info from Okta")
-		grip.Error(message.WrapError(err, message.Fields{
-			"message":  "could not authorize user due to failure to get user info",
-			"endpoint": "userinfo",
-		}))
 		return nil, err
 	}
 	if err := m.validateGroup(userInfo.Groups); err != nil {
-		err = errors.Wrap(err, "user is not in a valid group for the organization")
+		err = errors.Wrap(err, "could not authorize user")
 		grip.Error(message.WrapError(err, message.Fields{
 			"expected_group": m.userGroup,
 			"actual_groups":  userInfo.Groups,
 		}))
 		return nil, err
 	}
-	return makeUserFromInfo(userInfo, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
-}
-
-// generateUserFromIDToken creates a user based on claims in their ID token.
-func (m *userManager) generateUserFromIDToken(tokens *tokenResponse, idToken *jwtverifier.Jwt) (gimlet.User, error) {
-	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
-	if err != nil {
-		err = errors.Wrap(err, "could not generate user from user info received from Okta")
-		grip.Error(err)
-		return nil, err
-	}
-
-	return user, nil
+	return makeUserFromInfo(userInfo, accessToken, refreshToken, m.reconciliateID)
 }
 
 // getCookies gets the nonce and the state required in the redirect callback as
 // well as the originally requested URI from the cookies.
 func getCookies(r *http.Request) (nonce, state, requestURI string, err error) {
+	catcher := grip.NewBasicCatcher()
 	for _, cookie := range r.Cookies() {
-		var err error
 		if cookie.Name == nonceCookieName {
 			nonce, err = url.QueryUnescape(cookie.Value)
 			if err != nil {
-				return "", "", "", errors.Wrap(err, "found nonce cookie but failed to decode it")
+				catcher.Wrap(err, "could not decode nonce cookie")
 			}
 		}
 		if cookie.Name == stateCookieName {
 			state, err = url.QueryUnescape(cookie.Value)
 			if err != nil {
-				return "", "", "", errors.Wrap(err, "found state cookie but failed to decode it")
+				catcher.Wrap(err, "could not decode state cookie")
 			}
 		}
 		if cookie.Name == requestURICookieName {
 			requestURI, err = url.QueryUnescape(cookie.Value)
 			if err != nil {
-				grip.Error(errors.Wrap(err, "found original request URI cokoie but failed to decode it"))
+				catcher.Wrap(err, "could not decode requestURI cookie")
 			}
 		}
 	}
-	catcher := grip.NewBasicCatcher()
-	catcher.NewWhen(nonce == "", "could not find nonce cookie")
-	catcher.NewWhen(state == "", "could not find state cookie")
+	catcher.NewWhen(nonce == "", "nonce could not be retrieved from cookies")
+	catcher.NewWhen(state == "", "state could not be retrieved from cookies")
+	grip.NoticeWhen(requestURI == "", "request URI could not be retrieved from cookies")
 	if requestURI == "" {
 		requestURI = "/"
 	}
@@ -470,9 +502,14 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 		return nil, errors.New("user not found in cache")
 	}
 	if !valid {
-		if err := m.reauthorizeUser(context.Background(), user); err != nil {
-			return nil, errors.Wrapf(err, "could not authorize user %s, likely needs to be reauthenticated", user.Username())
+		if m.allowReauthorization {
+			if err := m.reauthorizeUser(context.Background(), user); err != nil {
+				grip.Notice(errors.Wrapf(err, "problem reauthorizing user '%s'", user.Username()))
+				return user, gimlet.ErrNeedsReauthentication
+			}
+			return user, nil
 		}
+		return user, gimlet.ErrNeedsReauthentication
 	}
 	return user, nil
 }
@@ -519,14 +556,16 @@ func (m *userManager) validateAccessToken(token string) error {
 	return nil
 }
 
-// refreshTokens exchanges the given refresh token to redeem tokens from the
-// token endpoint.
-func (m *userManager) refreshTokens(ctx context.Context, refreshToken string) (*tokenResponse, error) {
-	q := url.Values{}
-	q.Set("grant_type", "refresh_token")
-	q.Set("refresh_token", refreshToken)
-	q.Set("scope", "openid email profile offline_access groups")
-	return m.redeemTokens(ctx, q.Encode())
+// tokenResponse represents a response received from the token endpoint.
+type tokenResponse struct {
+	AccessToken      string `json:"access_token,omitempty"`
+	IDToken          string `json:"id_token,omitempty"`
+	RefreshToken     string `json:"refresh_token,omitempty"`
+	TokenType        string `json:"token_type,omitempty"`
+	ExpiresIn        int    `json:"expires_in,omitempty"`
+	Scope            string `json:"scope,omitempty"`
+	ErrorCode        string `json:"error,omitempty"`
+	ErrorDescription string `json:"error_description,omitempty"`
 }
 
 // exchangeCodeForTokens exchanges the given code to redeem tokens from the
@@ -539,16 +578,14 @@ func (m *userManager) exchangeCodeForTokens(ctx context.Context, code string) (*
 	return m.redeemTokens(ctx, q.Encode())
 }
 
-// tokenResponse represents a response received from the token endpoint.
-type tokenResponse struct {
-	AccessToken      string `json:"access_token,omitempty"`
-	IDToken          string `json:"id_token,omitempty"`
-	RefreshToken     string `json:"refresh_token,omitempty"`
-	TokenType        string `json:"token_type,omitempty"`
-	ExpiresIn        int    `json:"expires_in,omitempty"`
-	Scope            string `json:"scope,omitempty"`
-	ErrorCode        string `json:"error,omitempty"`
-	ErrorDescription string `json:"error_description,omitempty"`
+// refreshTokens exchanges the given refresh token to redeem tokens from the
+// token endpoint.
+func (m *userManager) refreshTokens(ctx context.Context, refreshToken string) (*tokenResponse, error) {
+	q := url.Values{}
+	q.Set("grant_type", "refresh_token")
+	q.Set("refresh_token", refreshToken)
+	q.Set("scope", "openid email profile offline_access groups")
+	return m.redeemTokens(ctx, q.Encode())
 }
 
 // redeemTokens sends the request to redeem tokens with the required client
@@ -613,7 +650,7 @@ func (m *userManager) getUserInfo(ctx context.Context, accessToken string) (*use
 	}
 	req = req.WithContext(ctx)
 	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer "+accessToken))
+	req.Header.Add("Authorization", "Bearer "+accessToken)
 	req.Header.Add("Connection", "close")
 
 	client := m.getHTTPClient()

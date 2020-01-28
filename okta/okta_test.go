@@ -117,7 +117,7 @@ type mockAuthorizationServer struct {
 	AuthorizeParameters url.Values
 	// Authorizeheaders are the headers sent to the authorize endpoint.
 	AuthorizeHeaders http.Header
-	// AuthorizeResponse is returned from the userinfo endpoint.
+	// AuthorizeResponse is returned from the authorize endpoint.
 	AuthorizeResponse map[string]interface{}
 	// TokenParameters are parameters sent to the token endpoint.
 	TokenParameters url.Values
@@ -127,11 +127,14 @@ type mockAuthorizationServer struct {
 	TokenResponse *tokenResponse
 	// UserInfoHeaders are the headers sent to the userinfo endpoint.
 	UserInfoHeaders http.Header
-	// UserInfoResponse isre returned from the userinfo endpoint.
+	// UserInfoResponse is returned from the userinfo endpoint.
 	UserInfoResponse *userInfoResponse
-	// RedirectToLoginCallback is true if the authorization server should
-	// continue the authorization code flow at the login callback.
-	RedirectToLoginCallback bool
+	// IntrospectParameters are parameters sent to the introspect endpoint.
+	IntrospectParameters url.Values
+	// IntrospectParameters are headers sent to the introspect endpoint.
+	IntrospectHeaders http.Header
+	// IntrospectResponse is returned from the introspect endpoint.
+	IntrospectResponse *introspectResponse
 }
 
 func (s *mockAuthorizationServer) app(port int) (*gimlet.APIApp, error) {
@@ -147,6 +150,7 @@ func (s *mockAuthorizationServer) app(port int) (*gimlet.APIApp, error) {
 	app.AddRoute("/oauth2/v1/authorize").Version(1).Get().Handler(s.authorize)
 	app.AddRoute("/oauth2/v1/token").Version(1).Post().Handler(s.token)
 	app.AddRoute("/oauth2/v1/userinfo").Version(1).Get().Handler(s.userinfo)
+	app.AddRoute("/oauth2/v1/introspect").Version(1).Post().Handler(s.introspect)
 
 	return app, nil
 }
@@ -263,17 +267,44 @@ func (s *mockAuthorizationServer) userinfo(rw http.ResponseWriter, r *http.Reque
 	gimlet.WriteJSON(rw, s.UserInfoResponse)
 }
 
+func (s *mockAuthorizationServer) introspect(rw http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		gimlet.WriteJSONError(rw, &introspectResponse{ErrorCode: "invalid_request"})
+		return
+	}
+	s.IntrospectParameters, err = url.ParseQuery(string(body))
+	if err != nil {
+		gimlet.WriteJSONError(rw, &introspectResponse{ErrorCode: "invalid_request"})
+		return
+	}
+	s.IntrospectHeaders = r.Header
+	if s.IntrospectResponse == nil {
+		gimlet.WriteJSON(rw, struct{}{})
+		return
+	}
+	gimlet.WriteJSON(rw, s.IntrospectResponse)
+}
+
 func mapContains(t *testing.T, set, subset map[string][]string) {
 	for k, v := range subset {
 		checkVal, ok := set[k]
-		require.Truef(t, ok, "missing key '%s'", k)
+		if !assert.Truef(t, ok, "missing key '%s'", k) {
+			continue
+		}
 		assert.ElementsMatch(t, v, checkVal)
 	}
 }
 
+func TestBasic(t *testing.T) {
+	um := &userManager{}
+	assert.Implements(t, (*gimlet.UserManager)(nil), um)
+	assert.True(t, um.IsRedirect())
+}
+
 func TestRequestHelpers(t *testing.T) {
 	for testName, testCase := range map[string]func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer){
-		"TestGetUserInfoSuccess": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+		"GetUserInfoSuccess": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			s.UserInfoResponse = &userInfoResponse{
 				Name:   "name",
 				Email:  "email",
@@ -288,7 +319,7 @@ func TestRequestHelpers(t *testing.T) {
 			require.NotNil(t, userInfo)
 			assert.Equal(t, *s.UserInfoResponse, *userInfo)
 		},
-		"TestGetUserInfoError": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+		"GetUserInfoError": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			s.UserInfoResponse = &userInfoResponse{
 				Name:             "name",
 				Email:            "email",
@@ -305,7 +336,7 @@ func TestRequestHelpers(t *testing.T) {
 			require.NotNil(t, userInfo)
 			assert.Equal(t, *s.UserInfoResponse, *userInfo)
 		},
-		"TestExchangeCodeForTokensSuccess": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+		"ExchangeCodeForTokensSuccess": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			s.TokenResponse = &tokenResponse{
 				AccessToken:  "access_token",
 				IDToken:      "id_token",
@@ -330,7 +361,7 @@ func TestRequestHelpers(t *testing.T) {
 			require.NotNil(t, tokens)
 			assert.Equal(t, *s.TokenResponse, *tokens)
 		},
-		"TestExchangeCodeForTokensError": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+		"ExchangeCodeForTokensError": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			s.TokenResponse = &tokenResponse{
 				AccessToken:      "access_token",
 				IDToken:          "id_token",
@@ -357,6 +388,9 @@ func TestRequestHelpers(t *testing.T) {
 			require.NotNil(t, tokens)
 			assert.Equal(t, *s.TokenResponse, *tokens)
 		},
+		"IntrospectSucceeds": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+
+		},
 	} {
 		t.Run(testName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -377,20 +411,21 @@ func TestRequestHelpers(t *testing.T) {
 
 func mockCreationOptions() CreationOptions {
 	return CreationOptions{
-		ClientID:            "client_id",
-		ClientSecret:        "client_secret",
-		RedirectURI:         "redirect_uri",
-		Issuer:              "issuer",
-		UserGroup:           "user_group",
-		CookiePath:          "cookie_path",
-		CookieDomain:        "example.com",
-		LoginCookieName:     "login_cookie",
-		LoginCookieTTL:      time.Hour,
-		UserCache:           usercache.NewInMemory(context.Background(), time.Minute),
-		GetHTTPClient:       func() *http.Client { return &http.Client{} },
-		PutHTTPClient:       func(*http.Client) {},
-		SkipGroupPopulation: true,
-		ReconciliateID:      func(string) string { return "" },
+		ClientID:             "client_id",
+		ClientSecret:         "client_secret",
+		RedirectURI:          "redirect_uri",
+		Issuer:               "issuer",
+		UserGroup:            "user_group",
+		CookiePath:           "cookie_path",
+		CookieDomain:         "example.com",
+		LoginCookieName:      "login_cookie",
+		LoginCookieTTL:       time.Hour,
+		UserCache:            usercache.NewInMemory(context.Background(), time.Minute),
+		GetHTTPClient:        func() *http.Client { return &http.Client{} },
+		PutHTTPClient:        func(*http.Client) {},
+		SkipGroupPopulation:  true,
+		AllowReauthorization: false,
+		ReconciliateID:       func(id string) string { return id },
 	}
 }
 
@@ -469,6 +504,8 @@ func TestMakeUserFromInfo(t *testing.T) {
 				assert.Equal(t, testCase.info.Name, user.DisplayName())
 				assert.Equal(t, testCase.info.Email, user.Email())
 				assert.Equal(t, testCase.info.Groups, testCase.info.Groups)
+				assert.Equal(t, "access_token", user.GetAccessToken())
+				assert.Equal(t, "refresh_token", user.GetRefreshToken())
 			} else {
 				assert.Error(t, err)
 				assert.Nil(t, user)
@@ -536,6 +573,8 @@ func TestMakeUserFromIDToken(t *testing.T) {
 				assert.Equal(t, testCase.expectedUsername, user.Username())
 				assert.Equal(t, testCase.token.Claims["name"].(string), user.DisplayName())
 				assert.Equal(t, testCase.token.Claims["email"], user.Email())
+				assert.Equal(t, "access_token", user.GetAccessToken())
+				assert.Equal(t, "refresh_token", user.GetRefreshToken())
 				assert.Empty(t, user.Roles())
 			} else {
 				assert.Error(t, err)
@@ -556,36 +595,41 @@ func TestCreateUserToken(t *testing.T) {
 func TestGetUserByID(t *testing.T) {
 	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, nil)
 	for testName, testCase := range map[string]struct {
-		modifyOpts func(CreationOptions) CreationOptions
-		shouldPass bool
+		modifyOpts       func(CreationOptions) CreationOptions
+		shouldPass       bool
+		shouldReturnUser bool
 	}{
 		"Succeeds": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
 				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return expectedUser, true, nil }
 				return opts
 			},
-			shouldPass: true,
+			shouldPass:       true,
+			shouldReturnUser: true,
 		},
 		"Errors": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
 				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return nil, false, errors.New("fail") }
 				return opts
 			},
-			shouldPass: false,
+			shouldPass:       false,
+			shouldReturnUser: false,
 		},
 		"ErrorsForNilUser": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
 				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return nil, false, nil }
 				return opts
 			},
-			shouldPass: false,
+			shouldPass:       false,
+			shouldReturnUser: false,
 		},
 		"FailsDueToInvalidUser": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
 				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return expectedUser, false, nil }
 				return opts
 			},
-			shouldPass: false,
+			shouldPass:       false,
+			shouldReturnUser: true,
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
@@ -597,10 +641,14 @@ func TestGetUserByID(t *testing.T) {
 			if testCase.shouldPass {
 				require.NoError(t, err)
 				require.NotNil(t, user)
-
+				assert.EqualValues(t, expectedUser, user)
 			} else {
 				assert.Error(t, err)
-				assert.Nil(t, user)
+				if testCase.shouldReturnUser {
+					assert.NotNil(t, user)
+				} else {
+					assert.Nil(t, user)
+				}
 			}
 		})
 	}
@@ -715,7 +763,7 @@ func TestLoginHandler(t *testing.T) {
 			resp := rw.Result()
 			assert.NoError(t, resp.Body.Close())
 
-			assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+			assert.Equal(t, http.StatusFound, resp.StatusCode)
 
 			cookies, err := cookieMap(resp.Cookies())
 			require.NoError(t, err)
@@ -753,7 +801,7 @@ func TestLoginHandler(t *testing.T) {
 			resp := rw.Result()
 			assert.NoError(t, resp.Body.Close())
 
-			assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+			assert.Equal(t, http.StatusFound, resp.StatusCode)
 
 			cookies, err := cookieMap(resp.Cookies())
 			require.NoError(t, err)
@@ -948,6 +996,153 @@ func TestLoginHandlerCallback(t *testing.T) {
 			um, err := NewUserManager(opts)
 			require.NoError(t, err)
 			impl, ok := um.(*userManager)
+			require.True(t, ok)
+			testCase(ctx, t, impl, s)
+		})
+	}
+}
+
+func TestReauthorization(t *testing.T) {
+	for testName, testCase := range map[string]func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer){
+		"SucceedsWithValidAccessToken": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+			accessToken := "access_token"
+			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", accessToken, "", nil, false, nil)
+			_, err := um.cache.GetOrCreate(user)
+			require.NoError(t, err)
+
+			s.IntrospectResponse = &introspectResponse{Active: true}
+			s.UserInfoResponse = &userInfoResponse{Name: "foo", Email: "foo@bar.com", Groups: []string{um.userGroup}}
+
+			require.NoError(t, um.reauthorizeUser(ctx, user))
+
+			mapContains(t, s.IntrospectParameters, map[string][]string{
+				"token":           []string{accessToken},
+				"token_type_hint": []string{"access_token"},
+			})
+			mapContains(t, s.IntrospectHeaders, map[string][]string{
+				"Content-Type": []string{"application/x-www-form-urlencoded"},
+				"Accept":       []string{"application/json"},
+			})
+			mapContains(t, s.UserInfoHeaders, map[string][]string{
+				"Accept":        []string{"application/json"},
+				"Authorization": []string{"Bearer " + accessToken},
+			})
+			assert.Empty(t, s.TokenParameters)
+			assert.Empty(t, s.TokenHeaders)
+
+			cachedUser, _, err := um.cache.Find(user.Username())
+			require.NoError(t, err)
+			assert.Equal(t, user.GetAccessToken(), cachedUser.GetAccessToken())
+			assert.Equal(t, user.GetRefreshToken(), cachedUser.GetRefreshToken())
+		},
+		"FailsIfAccessTokenExpiredAndTokensCannotRefresh": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+			accessToken := "access_token"
+			refreshToken := "refresh_token"
+			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", accessToken, refreshToken, nil, false, nil)
+
+			_, err := um.cache.GetOrCreate(user)
+			require.NoError(t, err)
+
+			s.IntrospectResponse = &introspectResponse{Active: false}
+			s.TokenResponse = &tokenResponse{
+				ErrorCode:        "error",
+				ErrorDescription: "error_description",
+			}
+
+			assert.Error(t, um.reauthorizeUser(ctx, user))
+
+			mapContains(t, s.IntrospectParameters, map[string][]string{
+				"token":           []string{accessToken},
+				"token_type_hint": []string{"access_token"},
+			})
+			mapContains(t, s.IntrospectHeaders, map[string][]string{
+				"Content-Type": []string{"application/x-www-form-urlencoded"},
+				"Accept":       []string{"application/json"},
+			})
+			mapContains(t, s.TokenParameters, map[string][]string{
+				"grant_type":    []string{"refresh_token"},
+				"refresh_token": []string{refreshToken},
+				"scope":         []string{"openid email profile offline_access groups"},
+			})
+			mapContains(t, s.TokenHeaders, map[string][]string{
+				"Content-Type": []string{"application/x-www-form-urlencoded"},
+				"Accept":       []string{"application/json"},
+			})
+			assert.Empty(t, s.UserInfoHeaders)
+
+			cachedUser, _, err := um.cache.Find(user.Username())
+			require.NoError(t, err)
+			assert.Equal(t, user.GetAccessToken(), cachedUser.GetAccessToken())
+			assert.Equal(t, user.GetRefreshToken(), cachedUser.GetRefreshToken())
+		},
+		"FailsForInvalidGroups": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
+			accessToken := "access_token"
+			refreshToken := "refresh_token"
+			newAccessToken := "new_access_token"
+			s.IntrospectResponse = &introspectResponse{Active: true}
+			s.TokenResponse = &tokenResponse{
+				AccessToken:  newAccessToken,
+				IDToken:      "new_id_token",
+				RefreshToken: "new_refresh_token",
+				TokenType:    "token_type",
+				ExpiresIn:    3600,
+				Scope:        "scope",
+			}
+			s.UserInfoResponse = &userInfoResponse{Name: "foo", Email: "foo@bar.com", Groups: []string{"invalid_group"}}
+			user := gimlet.NewBasicUser("id", "name", "email", "password", "key", accessToken, refreshToken, nil, false, nil)
+			_, err := um.cache.GetOrCreate(user)
+			require.NoError(t, err)
+
+			assert.Error(t, um.reauthorizeUser(ctx, user))
+
+			mapContains(t, s.IntrospectParameters, map[string][]string{
+				"token":           []string{newAccessToken},
+				"token_type_hint": []string{"access_token"},
+			})
+			mapContains(t, s.IntrospectHeaders, map[string][]string{
+				"Content-Type": []string{"application/x-www-form-urlencoded"},
+				"Accept":       []string{"application/json"},
+			})
+			mapContains(t, s.TokenParameters, map[string][]string{
+				"grant_type":    []string{"refresh_token"},
+				"refresh_token": []string{refreshToken},
+				"scope":         []string{"openid email profile offline_access groups"},
+			})
+			mapContains(t, s.TokenHeaders, map[string][]string{
+				"Content-Type": []string{"application/x-www-form-urlencoded"},
+				"Accept":       []string{"application/json"},
+			})
+			mapContains(t, s.UserInfoHeaders, map[string][]string{
+				"Accept":        []string{"application/json"},
+				"Authorization": []string{"Bearer " + newAccessToken},
+			})
+
+			cachedUser, _, err := um.cache.Find(user.Username())
+			require.NoError(t, err)
+			assert.Equal(t, user.GetAccessToken(), cachedUser.GetAccessToken())
+			assert.Equal(t, user.GetRefreshToken(), cachedUser.GetRefreshToken())
+		},
+	} {
+		t.Run(testName, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s := &mockAuthorizationServer{}
+			port, err := s.startMockServer(ctx)
+			require.NoError(t, err)
+			opts := mockCreationOptions()
+			opts.Issuer = fmt.Sprintf("http://localhost:%d/v1", port)
+			opts.AllowReauthorization = true
+			um, err := NewUserManager(opts)
+			require.NoError(t, err)
+			impl, ok := um.(*userManager)
+			impl.reconciliateID = func(id string) string {
+				index := strings.LastIndex(id, "@")
+				if index == -1 {
+					return id
+				}
+				return id[:index]
+			}
+
 			require.True(t, ok)
 			testCase(ctx, t, impl, s)
 		})
