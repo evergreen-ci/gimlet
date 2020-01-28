@@ -294,7 +294,7 @@ func connect(host, port string) (ldap.Client, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "problem parsing ldap url %s", fullURL)
 	}
-	if parsedURL.Scheme != "" {
+	if parsedURL.Scheme != "" && parsedURL.Scheme != host {
 		conn, err = ldap.DialURL(fullURL)
 	} else {
 		tlsConfig := &tls.Config{ServerName: host}
