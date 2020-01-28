@@ -15,17 +15,15 @@ import (
 // UserMiddlewareConfiguration is an keyed-arguments struct used to
 // produce the user manager middleware.
 type UserMiddlewareConfiguration struct {
-	SkipCookie        bool
-	SkipHeaderCheck   bool
-	HeaderUserName    string
-	HeaderKeyName     string
-	CookieName        string
-	CookiePath        string
-	CookieTTL         time.Duration
-	CookieDomain      string
-	LoginPath         string
-	LoginCallbackPath string
-	SetRedirect       func(*http.Request, string)
+	SkipCookie      bool
+	SkipHeaderCheck bool
+	HeaderUserName  string
+	HeaderKeyName   string
+	CookieName      string
+	CookiePath      string
+	CookieTTL       time.Duration
+	CookieDomain    string
+	SetRedirect     func(*http.Request, string)
 }
 
 // Validate ensures that the UserMiddlewareConfiguration is correct
