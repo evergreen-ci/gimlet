@@ -241,7 +241,7 @@ type requiresPermissionHandler struct {
 	opts RequiresPermissionMiddlewareOpts
 }
 
-type FindResourceFunc func(*http.Request) (string, int, error)
+type FindResourceFunc func(*http.Request) ([]string, int, error)
 
 // RequiresPermissionMiddlewareOpts defines what permissions the middleware shoud check and how. The ResourceFunc parameter
 // can be used to specify custom behavior to extract a valid resource name from request variables
@@ -265,13 +265,12 @@ func RequiresPermission(opts RequiresPermissionMiddlewareOpts) Middleware {
 }
 
 func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	ctx := r.Context()
 	vars := GetVars(r)
-	var resource string
+	resources := []string{}
 	var status int
 	var err error
 	if rp.opts.ResourceFunc != nil {
-		resource, status, err = rp.opts.ResourceFunc(r)
+		resources, status, err = rp.opts.ResourceFunc(r)
 		if err != nil {
 			http.Error(rw, err.Error(), status)
 			return
@@ -279,12 +278,21 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 	} else {
 		for _, level := range rp.opts.ResourceLevels {
 			if resourceVal, exists := vars[level]; exists {
-				resource = resourceVal
+				resources = []string{resourceVal}
 				break
 			}
 		}
 	}
 
+	for _, item := range resources {
+		if ok := rp.handleResource(rw, r, next, item); !ok {
+			return
+		}
+	}
+}
+
+func (rp *requiresPermissionHandler) handleResource(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc, resource string) bool {
+	ctx := r.Context()
 	opts := PermissionOpts{
 		Resource:      resource,
 		ResourceType:  rp.opts.ResourceType,
@@ -297,30 +305,30 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 		if rp.opts.DefaultRoles != nil {
 			if !HasPermission(rp.opts.RM, opts, rp.opts.DefaultRoles) {
 				http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
-				return
+				return false
 			}
 			next(rw, r)
-			return
+			return true
 		}
 		http.Error(rw, "no user found", http.StatusUnauthorized)
-		return
+		return false
 	}
 
 	authenticator := GetAuthenticator(ctx)
 	if authenticator == nil {
 		http.Error(rw, "unable to determine an authenticator", http.StatusInternalServerError)
-		return
+		return false
 	}
 
 	if !authenticator.CheckAuthenticated(user) {
 		http.Error(rw, "not authenticated", http.StatusUnauthorized)
-		return
+		return false
 	}
 
 	if !user.HasPermission(opts) {
 		http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
-		return
+		return false
 	}
-
 	next(rw, r)
+	return true
 }
