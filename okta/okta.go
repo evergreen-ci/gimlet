@@ -333,6 +333,17 @@ func (m *userManager) setTemporaryCookie(w http.ResponseWriter, name, value stri
 	})
 }
 
+// unsetTemporaryCookie unsets a temporary cookie used for login.
+func (m *userManager) unsetTemporaryCookie(w http.ResponseWriter, name string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:   name,
+		Path:   m.cookiePath,
+		Domain: m.cookieDomain,
+		Value:  "",
+		MaxAge: -1,
+	})
+}
+
 func writeError(w http.ResponseWriter, err error) {
 	gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(gimlet.ErrorResponse{
 		StatusCode: http.StatusInternalServerError,
@@ -408,6 +419,9 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			return
 		}
 
+		m.unsetTemporaryCookie(w, nonceCookieName)
+		m.unsetTemporaryCookie(w, stateCookieName)
+		m.unsetTemporaryCookie(w, requestURICookieName)
 		m.setLoginCookie(w, loginToken)
 
 		http.Redirect(w, r, requestURI, http.StatusFound)
