@@ -266,7 +266,7 @@ func RequiresPermission(opts RequiresPermissionMiddlewareOpts) Middleware {
 
 func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	vars := GetVars(r)
-	resources := []string{}
+	var resources []string
 	var status int
 	var err error
 	if rp.opts.ResourceFunc != nil {
@@ -284,6 +284,10 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 		}
 	}
 
+	if len(resources) == 0 {
+		http.Error(rw, "no resources found", http.StatusUnauthorized)
+		return
+	}
 	for _, item := range resources {
 		if ok := rp.handleResource(rw, r.Context(), item); !ok {
 			return
