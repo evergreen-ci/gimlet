@@ -285,36 +285,37 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 	}
 
 	if len(resources) == 0 {
-		http.Error(rw, "no resources found", http.StatusUnauthorized)
+		http.Error(rw, "no resources found", http.StatusNotFound)
 		return
 	}
-	for _, item := range resources {
-		if ok := rp.handleResource(rw, r.Context(), item); !ok {
-			return
-		}
+	if ok := rp.checkPermissions(rw, r.Context(), resources); !ok {
+		return
 	}
+
 	next(rw, r)
 }
 
-func (rp *requiresPermissionHandler) handleResource(rw http.ResponseWriter, ctx context.Context, resource string) bool {
+func (rp *requiresPermissionHandler) checkPermissions(rw http.ResponseWriter, ctx context.Context, resources []string) bool {
+	user := GetUser(ctx)
 	opts := PermissionOpts{
-		Resource:      resource,
 		ResourceType:  rp.opts.ResourceType,
 		Permission:    rp.opts.PermissionKey,
 		RequiredLevel: rp.opts.RequiredLevel,
 	}
-
-	user := GetUser(ctx)
 	if user == nil {
-		if rp.opts.DefaultRoles != nil {
-			if !HasPermission(rp.opts.RM, opts, rp.opts.DefaultRoles) {
-				http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
-				return false
+		for _, item := range resources {
+			opts.Resource = item
+			if rp.opts.DefaultRoles != nil {
+				if !HasPermission(rp.opts.RM, opts, rp.opts.DefaultRoles) {
+					http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
+					return false
+				}
+				return true
 			}
-			return true
+			http.Error(rw, "no user found", http.StatusUnauthorized)
+			return false
 		}
-		http.Error(rw, "no user found", http.StatusUnauthorized)
-		return false
+		return true
 	}
 
 	authenticator := GetAuthenticator(ctx)
@@ -322,15 +323,16 @@ func (rp *requiresPermissionHandler) handleResource(rw http.ResponseWriter, ctx 
 		http.Error(rw, "unable to determine an authenticator", http.StatusInternalServerError)
 		return false
 	}
-
 	if !authenticator.CheckAuthenticated(user) {
 		http.Error(rw, "not authenticated", http.StatusUnauthorized)
 		return false
 	}
-
-	if !user.HasPermission(opts) {
-		http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
-		return false
+	for _, item := range resources {
+		opts.Resource = item
+		if !user.HasPermission(opts) {
+			http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
+			return false
+		}
 	}
 	return true
 }
