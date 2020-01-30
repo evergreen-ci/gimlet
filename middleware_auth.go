@@ -285,14 +285,14 @@ func (rp *requiresPermissionHandler) ServeHTTP(rw http.ResponseWriter, r *http.R
 	}
 
 	for _, item := range resources {
-		if ok := rp.handleResource(rw, r, next, item); !ok {
+		if ok := rp.handleResource(rw, r.Context(), item); !ok {
 			return
 		}
 	}
+	next(rw, r)
 }
 
-func (rp *requiresPermissionHandler) handleResource(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc, resource string) bool {
-	ctx := r.Context()
+func (rp *requiresPermissionHandler) handleResource(rw http.ResponseWriter, ctx context.Context, resource string) bool {
 	opts := PermissionOpts{
 		Resource:      resource,
 		ResourceType:  rp.opts.ResourceType,
@@ -307,7 +307,6 @@ func (rp *requiresPermissionHandler) handleResource(rw http.ResponseWriter, r *h
 				http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
 				return false
 			}
-			next(rw, r)
 			return true
 		}
 		http.Error(rw, "no user found", http.StatusUnauthorized)
@@ -329,6 +328,5 @@ func (rp *requiresPermissionHandler) handleResource(rw http.ResponseWriter, r *h
 		http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
 		return false
 	}
-	next(rw, r)
 	return true
 }
