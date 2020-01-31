@@ -27,14 +27,13 @@ type CreationOptions struct {
 	Issuer       string
 
 	UserGroup string
-	// If set, authentication and reauthorization will validate the group for
-	// the user.
-	ValidateGroups bool
-	// If set, user reauthorization will always refresh the access and refresh
-	// tokens without trying to use the existing access token.
-	AlwaysRefreshTokens bool
 	// If set, user can be reauthorized without needing to authenticate.
 	AllowReauthorization bool
+	// If set, authentication and reauthorization will validate the group for
+	// the user matches UserGroup. Otherwise, it simply checks that the user
+	// attempting to reauthorize has the same name as that returned by the ID
+	// token.
+	ValidateGroups bool
 
 	CookiePath   string
 	CookieDomain string
@@ -91,10 +90,11 @@ type userManager struct {
 
 	validateGroups       bool
 	allowReauthorization bool
-	alwaysRefreshTokens  bool
 
-	// This is used only for testing purposes. It skips all token validation.
-	insecureSkipTokenValidation bool
+	// Injected functions for validating tokens. Should only be set for mocking
+	// purposes.
+	doValidateIDToken     func(string, string) (*jwtverifier.Jwt, error)
+	doValidateAccessToken func(string) error
 
 	cookiePath   string
 	cookieDomain string
@@ -141,11 +141,12 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		loginCookieTTL:       opts.LoginCookieTTL,
 		validateGroups:       opts.ValidateGroups,
 		allowReauthorization: opts.AllowReauthorization,
-		alwaysRefreshTokens:  opts.AlwaysRefreshTokens,
 		getHTTPClient:        opts.GetHTTPClient,
 		putHTTPClient:        opts.PutHTTPClient,
 		reconciliateID:       opts.ReconciliateID,
 	}
+	m.doValidateIDToken = m.validateIDToken
+	m.doValidateAccessToken = m.validateAccessToken
 	return m, nil
 }
 
@@ -169,20 +170,17 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 	return user, nil
 }
 
-// doGroupReauthorize attempts to authorize the user based on their groups.
-func (m *userManager) doGroupReauthorize(accessToken, refreshToken string) error {
+// reauthorizeGroup attempts to reauthorize the user based on their groups.
+func (m *userManager) reauthorizeGroup(accessToken, refreshToken string) error {
 	catcher := grip.NewBasicCatcher()
-	var err error
-	if !m.insecureSkipTokenValidation {
-		err = m.validateAccessToken(accessToken)
-		catcher.Wrap(err, "invalid access token")
-	}
+	err := m.doValidateAccessToken(accessToken)
+	catcher.Wrap(err, "invalid access token")
 	if err == nil {
 		user, err := m.generateUserFromInfo(accessToken, refreshToken)
 		catcher.Wrap(err, "could not generate user from Okta user info")
 		if err == nil {
 			_, err = m.cache.Put(user)
-			catcher.Wrap(err, "could not update user in cache")
+			catcher.Wrap(err, "could not update reauthorized user in cache")
 			if err == nil {
 				return nil
 			}
@@ -191,32 +189,64 @@ func (m *userManager) doGroupReauthorize(accessToken, refreshToken string) error
 	return catcher.Resolve()
 }
 
-// doIDReauthorize authorizes the user as long as they have a valid ID token.
-func (m *userManager) doIDReauthorize(refreshToken string) error {
-	catcher := grip.NewBasicCatcher()
-	var err error
-	if !m.insecureSkipTokenValidation {
-		err = m.validateIDToken
+// reauthorizeID attempts to reauthorize the user based on their ID token.
+// Reauthorization succeeds if the username derived from their ID token matches
+// the given username.
+func (m *userManager) reauthorizeID(username string, tokens *tokenResponse) error {
+	idToken, err := m.doValidateIDToken(tokens.IDToken, "")
+	// When we receive an ID token from a refresh grant (i.e. during
+	// reauthorization), the ID token does not contain a nonce. However, the
+	// Okta token verification library requires that a nonce always be specified
+	// for verifying ID tokens.
+	// We ignore this error if it occurs. More info can be found here:
+	// https://bitbucket.org/openid/connect/issues/1025/ambiguity-with-how-nonce-is-handled-on
+	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "nonce") {
+		return errors.Wrap(err, "invalid ID token")
 	}
+	email, ok := idToken.Claims["email"].(string)
+	if ok {
+		checkUsername := m.reconciliateID(email)
+		if checkUsername != username {
+			return errors.Errorf("user name from ID token '%s' did not match user '%s'", checkUsername, username)
+		}
+	} else {
+		return errors.New("ID token is missing email claim")
+	}
+	catcher := grip.NewBasicCatcher()
+	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
+	catcher.Wrap(err, "could not generate user from Okta ID token")
+	if err == nil {
+		_, err = m.cache.Put(user)
+		catcher.Wrapf(err, "could not update reauthorized user in cache")
+		if err == nil {
+			return nil
+		}
+	}
+	return catcher.Resolve()
 }
 
-// reauthorizeUser attempts to reauthorize the user, first with their current
-// access token. If that fails, it refreshes the tokens and attempts to
+// reauthorizeUser attempts to reauthorize the user.
+// Reauthorization works as follows: if the user manager is configured to
+// validate their groups, it tries checking their user groups using their access
+// token. Otherwise, it just validates that the ID token user matches the
+// current user.
+// If reauthorization fails or the user manager is configured to always refresh
+// the user's tokens that fails, it refreshes the tokens and attempts to
 // reauthorize them again.
 func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) error {
 	refreshToken := user.GetRefreshToken()
 	catcher := grip.NewBasicCatcher()
-	if m.validateGroups && !m.alwaysRefreshTokens {
+
+	if m.validateGroups {
 		accessToken := user.GetAccessToken()
 		if accessToken == "" {
 			return errors.Errorf("user '%s' cannot reauthorize because user is missing access token", user.Username())
 		}
-		err := m.doGroupReauthorize(accessToken, refreshToken)
+		err := m.reauthorizeGroup(accessToken, refreshToken)
 		catcher.Wrap(err, "could not reauthorize user with current access token")
 		if err == nil {
 			return nil
 		}
-	} else if !m.alwaysRefreshTokens {
 	}
 
 	if refreshToken == "" {
@@ -225,10 +255,18 @@ func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) err
 	tokens, err := m.refreshTokens(ctx, refreshToken)
 	catcher.Wrap(err, "could not refresh authorization tokens")
 	if err == nil {
-		err = m.doGroupReauthorize(tokens.AccessToken, tokens.RefreshToken)
-		catcher.Wrap(err, "could  not reauthorize user after refreshing tokens")
-		if err == nil {
-			return nil
+		if m.validateGroups {
+			err = m.reauthorizeGroup(tokens.AccessToken, tokens.RefreshToken)
+			catcher.Wrap(err, "could not reauthorize user after refreshing tokens")
+			if err == nil {
+				return nil
+			}
+		} else {
+			err = m.reauthorizeID(user.Username(), tokens)
+			catcher.Wrap(err, "could not reauthorize user after refreshing tokens")
+			if err == nil {
+				return nil
+			}
 		}
 	}
 
@@ -308,7 +346,7 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		q.Add("client_id", m.clientID)
 		q.Add("response_type", "code")
 		q.Add("response_mode", "query")
-		q.Add("scope", "openid email profile offline_access groups")
+		q.Add("scope", m.scopes())
 		if !canSilentReauth {
 			q.Add("prompt", "login consent")
 		}
@@ -399,15 +437,15 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		}
 
 		var user gimlet.User
-		if m.skipGroupPopulation && !m.insecureSkipTokenValidation {
-			user, err = makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
+		if m.validateGroups {
+			user, err = m.generateUserFromInfo(tokens.AccessToken, tokens.RefreshToken)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
 				return
 			}
 		} else {
-			user, err = m.generateUserFromInfo(tokens.AccessToken, tokens.RefreshToken)
+			user, err = makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
@@ -447,19 +485,11 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not redeem authorization code for tokens")
 	}
-
-	if m.insecureSkipTokenValidation {
-		return tokens, nil, nil
-	}
-
-	idToken, err := m.validateIDToken(tokens.IDToken, nonce)
+	idToken, err := m.doValidateIDToken(tokens.IDToken, nonce)
 	if err != nil {
 		return tokens, nil, errors.Wrap(err, "invalid ID token from Okta")
 	}
-	if m.insecureSkipTokenValidation {
-		return tokens, idToken, nil
-	}
-	if err := m.validateAccessToken(tokens.AccessToken); err != nil {
+	if err := m.doValidateAccessToken(tokens.AccessToken); err != nil {
 		return tokens, idToken, errors.Wrap(err, "invalid access token from Okta")
 	}
 	return tokens, idToken, nil
@@ -611,8 +641,13 @@ func (m *userManager) refreshTokens(ctx context.Context, refreshToken string) (*
 	q := url.Values{}
 	q.Set("grant_type", "refresh_token")
 	q.Set("refresh_token", refreshToken)
-	q.Set("scope", "openid email profile offline_access groups")
+	q.Set("scope", m.scopes())
 	return m.redeemTokens(ctx, q.Encode())
+}
+
+// scopes returns the necessary scopes for Okta to return.
+func (m *userManager) scopes() string {
+	return "openid email profile offline_access groups"
 }
 
 // redeemTokens sends the request to redeem tokens with the required client
@@ -789,8 +824,8 @@ func makeUserFromInfo(info *userInfoResponse, accessToken, refreshToken string, 
 }
 
 // makeUserFromIDToken returns a user based on information from an ID token.
-func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
-	email, ok := jwt.Claims["email"].(string)
+func makeUserFromIDToken(idToken *jwtverifier.Jwt, accessToken, refreshToken string, reconciliateID func(string) string) (gimlet.User, error) {
+	email, ok := idToken.Claims["email"].(string)
 	if !ok {
 		return nil, errors.New("user is missing email")
 	}
@@ -801,7 +836,7 @@ func makeUserFromIDToken(jwt *jwtverifier.Jwt, accessToken, refreshToken string,
 	if id == "" {
 		return nil, errors.New("could not create user ID from email")
 	}
-	name, ok := jwt.Claims["name"].(string)
+	name, ok := idToken.Claims["name"].(string)
 	if !ok {
 		return nil, errors.New("user is missing name")
 	}
