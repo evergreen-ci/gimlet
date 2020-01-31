@@ -27,9 +27,9 @@ type CreationOptions struct {
 	Issuer       string
 
 	UserGroup string
-	// If set, user authentication will not attempt to populate the user's
-	// groups.
-	SkipGroupPopulation bool
+	// If set, authentication and reauthorization will validate the group for
+	// the user.
+	ValidateGroups bool
 	// If set, user reauthorization will always refresh the access and refresh
 	// tokens without trying to use the existing access token.
 	AlwaysRefreshTokens bool
@@ -60,7 +60,9 @@ func (opts *CreationOptions) Validate() error {
 	catcher.NewWhen(opts.ClientSecret == "", "must specify client secret")
 	catcher.NewWhen(opts.RedirectURI == "", "must specify redirect URI")
 	catcher.NewWhen(opts.Issuer == "", "must specify issuer")
-	catcher.NewWhen(opts.UserGroup == "", "must specify user group")
+	if opts.ValidateGroups {
+		catcher.NewWhen(opts.UserGroup == "", "must specify user group")
+	}
 	catcher.NewWhen(opts.CookiePath == "", "must specify cookie path")
 	catcher.NewWhen(opts.LoginCookieName == "", "must specify login cookie name")
 	if opts.LoginCookieTTL == time.Duration(0) {
@@ -87,11 +89,11 @@ type userManager struct {
 
 	userGroup string
 
-	skipGroupPopulation  bool
+	validateGroups       bool
 	allowReauthorization bool
 	alwaysRefreshTokens  bool
 
-	// This is used only for testing purposes.
+	// This is used only for testing purposes. It skips all token validation.
 	insecureSkipTokenValidation bool
 
 	cookiePath   string
@@ -137,7 +139,7 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 		cookieTTL:            opts.CookieTTL,
 		loginCookieName:      opts.LoginCookieName,
 		loginCookieTTL:       opts.LoginCookieTTL,
-		skipGroupPopulation:  opts.SkipGroupPopulation,
+		validateGroups:       opts.ValidateGroups,
 		allowReauthorization: opts.AllowReauthorization,
 		alwaysRefreshTokens:  opts.AlwaysRefreshTokens,
 		getHTTPClient:        opts.GetHTTPClient,
@@ -167,8 +169,8 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 	return user, nil
 }
 
-// doReauthorize attempts to authorize the user based on their tokens.
-func (m *userManager) doReauthorize(accessToken, refreshToken string) error {
+// doGroupReauthorize attempts to authorize the user based on their groups.
+func (m *userManager) doGroupReauthorize(accessToken, refreshToken string) error {
 	catcher := grip.NewBasicCatcher()
 	var err error
 	if !m.insecureSkipTokenValidation {
@@ -189,22 +191,32 @@ func (m *userManager) doReauthorize(accessToken, refreshToken string) error {
 	return catcher.Resolve()
 }
 
+// doIDReauthorize authorizes the user as long as they have a valid ID token.
+func (m *userManager) doIDReauthorize(refreshToken string) error {
+	catcher := grip.NewBasicCatcher()
+	var err error
+	if !m.insecureSkipTokenValidation {
+		err = m.validateIDToken
+	}
+}
+
 // reauthorizeUser attempts to reauthorize the user, first with their current
 // access token. If that fails, it refreshes the tokens and attempts to
 // reauthorize them again.
 func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) error {
-	accessToken := user.GetAccessToken()
-	if accessToken == "" {
-		return errors.Errorf("user '%s' cannot reauthorize because user is missing access token", user.Username())
-	}
 	refreshToken := user.GetRefreshToken()
 	catcher := grip.NewBasicCatcher()
-	if !m.alwaysRefreshTokens {
-		err := m.doReauthorize(accessToken, refreshToken)
+	if m.validateGroups && !m.alwaysRefreshTokens {
+		accessToken := user.GetAccessToken()
+		if accessToken == "" {
+			return errors.Errorf("user '%s' cannot reauthorize because user is missing access token", user.Username())
+		}
+		err := m.doGroupReauthorize(accessToken, refreshToken)
 		catcher.Wrap(err, "could not reauthorize user with current access token")
 		if err == nil {
 			return nil
 		}
+	} else if !m.alwaysRefreshTokens {
 	}
 
 	if refreshToken == "" {
@@ -213,7 +225,7 @@ func (m *userManager) reauthorizeUser(ctx context.Context, user gimlet.User) err
 	tokens, err := m.refreshTokens(ctx, refreshToken)
 	catcher.Wrap(err, "could not refresh authorization tokens")
 	if err == nil {
-		err = m.doReauthorize(tokens.AccessToken, tokens.RefreshToken)
+		err = m.doGroupReauthorize(tokens.AccessToken, tokens.RefreshToken)
 		catcher.Wrap(err, "could  not reauthorize user after refreshing tokens")
 		if err == nil {
 			return nil
@@ -461,13 +473,15 @@ func (m *userManager) generateUserFromInfo(accessToken, refreshToken string) (gi
 		err = errors.Wrap(err, "could not retrieve user info from Okta")
 		return nil, err
 	}
-	if err := m.validateGroup(userInfo.Groups); err != nil {
-		err = errors.Wrap(err, "could not authorize user")
-		grip.Error(message.WrapError(err, message.Fields{
-			"expected_group": m.userGroup,
-			"actual_groups":  userInfo.Groups,
-		}))
-		return nil, err
+	if m.validateGroups {
+		if err := m.validateGroup(userInfo.Groups); err != nil {
+			err = errors.Wrap(err, "could not authorize user")
+			grip.Error(message.WrapError(err, message.Fields{
+				"expected_group": m.userGroup,
+				"actual_groups":  userInfo.Groups,
+			}))
+			return nil, err
+		}
 	}
 	return makeUserFromInfo(userInfo, accessToken, refreshToken, m.reconciliateID)
 }
