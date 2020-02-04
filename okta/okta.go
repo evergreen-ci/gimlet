@@ -489,6 +489,9 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 	if err != nil {
 		return tokens, nil, errors.Wrap(err, "invalid ID token from Okta")
 	}
+	if !m.validateGroups {
+		return tokens, idToken, nil
+	}
 	if err := m.doValidateAccessToken(tokens.AccessToken); err != nil {
 		return tokens, idToken, errors.Wrap(err, "invalid access token from Okta")
 	}
