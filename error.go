@@ -25,4 +25,4 @@ func (e ErrorResponse) Error() string {
 
 func (e ErrorResponse) String() string   { return e.Error() }
 func (e ErrorResponse) Raw() interface{} { return e }
-func (e ErrorResponse) Loggable() bool   { return e.StatusCode > 299 }
+func (e ErrorResponse) Loggable() bool   { return e.StatusCode > 399 }
