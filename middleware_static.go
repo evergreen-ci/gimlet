@@ -13,7 +13,7 @@ func NewStatic(prefix string, fs http.FileSystem) Middleware {
 	return &negroni.Static{
 		Dir:       fs,
 		Prefix:    prefix,
-		IndexFile: "index.HTML",
+		IndexFile: "index.html",
 	}
 }
 
