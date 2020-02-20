@@ -741,6 +741,15 @@ func (b *base) isValidPermission(permission string) bool {
 	return valid
 }
 
+func (b *base) IsValidPermissions(permissions gimlet.Permissions) error {
+	for permission := range permissions {
+		if !b.isValidPermission(permission) {
+			return errors.Errorf("'%s' is not a valid permission", permission)
+		}
+	}
+	return nil
+}
+
 // HighestPermissionsForRoles takes in a list of roles and returns an aggregated list of the highest
 // levels for all permissions
 func HighestPermissionsForRoles(rolesIDs []string, rm gimlet.RoleManager, opts gimlet.PermissionOpts) (gimlet.Permissions, error) {
@@ -806,6 +815,9 @@ func HighestPermissionsForRolesAndResourceType(roleIDs []string, resourceType st
 }
 
 func MakeRoleWithPermissions(rm gimlet.RoleManager, resourceType string, resources []string, permissions gimlet.Permissions) (*gimlet.Role, error) {
+	if err := rm.IsValidPermissions(permissions); err != nil {
+		return nil, err
+	}
 	existing, err := rm.FindRoleWithPermissions(resourceType, resources, permissions)
 	if err != nil {
 		return nil, err
