@@ -742,12 +742,11 @@ func (b *base) isValidPermission(permission string) bool {
 }
 
 func (b *base) IsValidPermissions(permissions gimlet.Permissions) error {
+	catcher := grip.NewBasicCatcher()
 	for permission := range permissions {
-		if !b.isValidPermission(permission) {
-			return errors.Errorf("'%s' is not a valid permission", permission)
-		}
+		catcher.AddWhen(!b.isValidPermission(permission), errors.Errorf("'%s' is not a valid permission", permission))
 	}
-	return nil
+	return catcher.Resolve()
 }
 
 // HighestPermissionsForRoles takes in a list of roles and returns an aggregated list of the highest
