@@ -108,7 +108,7 @@ func TestProxyService(t *testing.T) {
 		req, err := http.NewRequest(http.MethodGet, "http://example.com/target/path", nil)
 		require.NoError(t, err)
 		router.ServeHTTP(nil, req)
-		assert.Equal(t, "/", req.URL.Path)
+		assert.Equal(t, "/", tp.finalRequest.URL.Path)
 	})
 	t.Run("ReplacePrefix", func(t *testing.T) {
 		tp := &testProxy{
@@ -124,14 +124,16 @@ func TestProxyService(t *testing.T) {
 		req, err := http.NewRequest(http.MethodGet, "http://example.com/target/path", nil)
 		require.NoError(t, err)
 		router.ServeHTTP(nil, req)
-		assert.Equal(t, "/proxy/add/", req.URL.Path)
+		assert.Equal(t, "/proxy/add/", tp.finalRequest.URL.Path)
 	})
 }
 
 type testProxy struct {
-	director func(*http.Request)
+	director     func(*http.Request)
+	finalRequest http.Request
 }
 
 func (p *testProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.director(r)
+	p.finalRequest = *r
 }
