@@ -31,8 +31,8 @@ type userService struct {
 	serviceUserPassword string
 	serviceUserPath     string
 	cache               usercache.Cache
-	convertID           func(old string) (new string)
-	unconvertID         func(new string) (old string)
+	convertIDIn         func(old string) (new string)
+	unconvertIDOut      func(new string) (old string)
 	connect             connectFunc
 	conn                ldap.Client
 }
@@ -55,8 +55,8 @@ type CreationOpts struct {
 	// Functions to produce a UserCache
 	ExternalCache *usercache.ExternalOptions
 
-	ConvertID   func(old string) (new string)
-	UnconvertID func(new string) (old string)
+	ConvertIDIn    func(old string) (new string)
+	UnconvertIDOut func(new string) (old string)
 
 	connect connectFunc // connect changes connection behavior for testing
 }
@@ -92,8 +92,8 @@ func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
 		serviceUserName:     opts.ServiceUserName,
 		serviceUserPassword: opts.ServiceUserPassword,
 		serviceUserPath:     opts.ServiceUserPath,
-		convertID:           opts.ConvertID,
-		unconvertID:         opts.UnconvertID,
+		convertIDIn:         opts.ConvertIDIn,
+		unconvertIDOut:      opts.UnconvertIDOut,
 	}
 
 	// override, typically, for testing
@@ -122,13 +122,6 @@ func (opts CreationOpts) validate() error {
 
 	if opts.UserCache == nil && opts.ExternalCache == nil {
 		catcher.New("must specify user cache")
-	}
-
-	if opts.ConvertID == nil {
-		opts.ConvertID = func(id string) string { return id }
-	}
-	if opts.UnconvertID == nil {
-		opts.UnconvertID = func(id string) string { return id }
 	}
 
 	return catcher.Resolve()
@@ -408,6 +401,9 @@ func findCnsWithGroup(dnString, ouName string) []string {
 }
 
 func (u *userService) validateGroup(username string) error {
+	if u.unconvertIDOut != nil {
+		username = u.unconvertIDOut(username)
+	}
 	errs := make([]error, 0, 3)
 	var (
 		err    error
@@ -508,12 +504,12 @@ func (u *userService) getUserFromLDAP(username string) (gimlet.User, error) {
 	}
 
 	if found {
-		return makeUser(result, u.convertID), nil
+		return makeUser(result, u.convertIDIn), nil
 	}
 	return nil, catcher.Resolve()
 }
 
-func makeUser(result *ldap.SearchResult, convertID func(string) string) gimlet.User {
+func makeUser(result *ldap.SearchResult, convertIDIn func(string) string) gimlet.User {
 	var (
 		id     string
 		name   string
@@ -524,6 +520,9 @@ func makeUser(result *ldap.SearchResult, convertID func(string) string) gimlet.U
 	for _, entry := range result.Entries[0].Attributes {
 		if entry.Name == "uid" {
 			id = entry.Values[0]
+			if convertIDIn != nil {
+				id = convertIDIn(id)
+			}
 		}
 		if entry.Name == "cn" {
 			name = entry.Values[0]
@@ -535,5 +534,6 @@ func makeUser(result *ldap.SearchResult, convertID func(string) string) gimlet.U
 			groups = append(groups, entry.Values...)
 		}
 	}
-	return gimlet.NewBasicUser(id, convertID(name), email, "", "", "", "", groups, false, nil)
+
+	return gimlet.NewBasicUser(id, name, email, "", "", "", "", groups, false, nil)
 }
