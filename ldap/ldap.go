@@ -31,6 +31,8 @@ type userService struct {
 	serviceUserPassword string
 	serviceUserPath     string
 	cache               usercache.Cache
+	convertID           func(old string) (new string)
+	unconvertID         func(new string) (old string)
 	connect             connectFunc
 	conn                ldap.Client
 }
@@ -52,6 +54,9 @@ type CreationOpts struct {
 	UserCache usercache.Cache
 	// Functions to produce a UserCache
 	ExternalCache *usercache.ExternalOptions
+
+	ConvertID   func(old string) (new string)
+	UnconvertID func(new string) (old string)
 
 	connect connectFunc // connect changes connection behavior for testing
 }
@@ -87,6 +92,8 @@ func NewUserService(opts CreationOpts) (gimlet.UserManager, error) {
 		serviceUserName:     opts.ServiceUserName,
 		serviceUserPassword: opts.ServiceUserPassword,
 		serviceUserPath:     opts.ServiceUserPath,
+		convertID:           opts.ConvertID,
+		unconvertID:         opts.UnconvertID,
 	}
 
 	// override, typically, for testing
@@ -115,6 +122,13 @@ func (opts CreationOpts) validate() error {
 
 	if opts.UserCache == nil && opts.ExternalCache == nil {
 		catcher.New("must specify user cache")
+	}
+
+	if opts.ConvertID == nil {
+		opts.ConvertID = func(id string) string { return id }
+	}
+	if opts.UnconvertID == nil {
+		opts.UnconvertID = func(id string) string { return id }
 	}
 
 	return catcher.Resolve()
@@ -494,12 +508,12 @@ func (u *userService) getUserFromLDAP(username string) (gimlet.User, error) {
 	}
 
 	if found {
-		return makeUser(result), nil
+		return makeUser(result, u.convertID), nil
 	}
 	return nil, catcher.Resolve()
 }
 
-func makeUser(result *ldap.SearchResult) gimlet.User {
+func makeUser(result *ldap.SearchResult, convertID func(string) string) gimlet.User {
 	var (
 		id     string
 		name   string
@@ -521,5 +535,5 @@ func makeUser(result *ldap.SearchResult) gimlet.User {
 			groups = append(groups, entry.Values...)
 		}
 	}
-	return gimlet.NewBasicUser(id, name, email, "", "", "", "", groups, false, nil)
+	return gimlet.NewBasicUser(id, convertID(name), email, "", "", "", "", groups, false, nil)
 }
