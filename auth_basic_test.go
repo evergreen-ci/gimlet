@@ -56,7 +56,7 @@ func TestSimpleAuthenticator(t *testing.T) {
 	assert.True(auth.CheckGroupAccess(usr3, "admin"))
 
 	// check user-based role access
-	usr.(*basicUser).AccessRoles = []string{"admin", "project", "one"}
+	usr.(*BasicUser).AccessRoles = []string{"admin", "project", "one"}
 	assert.False(auth.CheckResourceAccess(usr, "admin")) // not currently authenticated
 	auth.(*simpleAuthenticator).users[usr.Username()] = usr
 	assert.True(auth.CheckResourceAccess(usr, "admin")) // now it's defined
@@ -77,7 +77,7 @@ func TestBasicAuthenticator(t *testing.T) {
 	// authenticated users are all non-nil users that have
 	// usernames
 	assert.False(auth.CheckAuthenticated(nil))
-	assert.False(auth.CheckAuthenticated(&basicUser{}))
+	assert.False(auth.CheckAuthenticated(&BasicUser{}))
 	usr := NewBasicUser("id", "name", "email", "pass", "key", "", "", []string{}, false, nil)
 	assert.True(auth.CheckAuthenticated(usr))
 

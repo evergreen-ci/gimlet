@@ -10,15 +10,13 @@ func TestBasicUserImplementation(t *testing.T) {
 	assert := assert.New(t)
 
 	// constructors
-	assert.Implements((*User)(nil), &basicUser{})
-	assert.Implements((*User)(nil), MakeBasicUser())
+	assert.Implements((*User)(nil), &BasicUser{})
 	assert.Implements((*User)(nil), NewBasicUser("", "", "", "", "", "", "", []string{}, false, nil))
-	assert.Equal(MakeBasicUser(), NewBasicUser("", "", "", "", "", "", "", nil, false, nil))
 
-	var usr *basicUser
+	var usr *BasicUser
 
 	// accessors
-	usr = &basicUser{
+	usr = &BasicUser{
 		ID:           "usrid",
 		EmailAddress: "usr@example.net",
 		Key:          "sekret",

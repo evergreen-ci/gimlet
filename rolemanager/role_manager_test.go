@@ -248,7 +248,7 @@ func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
 	}
 	authenticator := gimlet.NewBasicAuthenticator(nil, nil)
 	user := gimlet.NewBasicUser("user", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, s.m)
-	um, err := gimlet.NewBasicUserManager([]gimlet.User{user}, s.m)
+	um, err := gimlet.NewBasicUserManager([]gimlet.BasicUser{*user}, s.m)
 	s.NoError(err)
 	authHandler := gimlet.NewAuthenticationHandler(authenticator, um)
 	req := httptest.NewRequest("GET", "http://foo.com/bar", nil)

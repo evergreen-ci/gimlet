@@ -7,8 +7,8 @@ import (
 
 // NewBasicUser constructs a simple user. The underlying type has
 // serialization tags.
-func NewBasicUser(id, name, email, password, key, accessToken, refreshToken string, roles []string, invalid bool, rm RoleManager) User {
-	return &basicUser{
+func NewBasicUser(id, name, email, password, key, accessToken, refreshToken string, roles []string, invalid bool, rm RoleManager) *BasicUser {
+	return &BasicUser{
 		ID:           id,
 		Name:         name,
 		EmailAddress: email,
@@ -22,11 +22,7 @@ func NewBasicUser(id, name, email, password, key, accessToken, refreshToken stri
 	}
 }
 
-// MakeBasicUser constructs an empty basic user structure to ease
-// serialization.
-func MakeBasicUser() User { return &basicUser{} }
-
-type basicUser struct {
+type BasicUser struct {
 	ID           string   `bson:"_id" json:"id" yaml:"id"`
 	Name         string   `bson:"name" json:"name" yaml:"name"`
 	EmailAddress string   `bson:"email" json:"email" yaml:"email"`
@@ -39,18 +35,18 @@ type basicUser struct {
 	roleManager  RoleManager
 }
 
-func (u *basicUser) Username() string        { return u.ID }
-func (u *basicUser) Email() string           { return u.EmailAddress }
-func (u *basicUser) DisplayName() string     { return u.Name }
-func (u *basicUser) GetAPIKey() string       { return u.Key }
-func (u *basicUser) GetAccessToken() string  { return u.AccessToken }
-func (u *basicUser) GetRefreshToken() string { return u.RefreshToken }
-func (u *basicUser) Roles() []string {
+func (u *BasicUser) Username() string        { return u.ID }
+func (u *BasicUser) Email() string           { return u.EmailAddress }
+func (u *BasicUser) DisplayName() string     { return u.Name }
+func (u *BasicUser) GetAPIKey() string       { return u.Key }
+func (u *BasicUser) GetAccessToken() string  { return u.AccessToken }
+func (u *BasicUser) GetRefreshToken() string { return u.RefreshToken }
+func (u *BasicUser) Roles() []string {
 	out := make([]string, len(u.AccessRoles))
 	copy(out, u.AccessRoles)
 	return out
 }
-func (u *basicUser) HasPermission(opts PermissionOpts) bool {
+func (u *BasicUser) HasPermission(opts PermissionOpts) bool {
 	roles, err := u.roleManager.GetRoles(u.Roles())
 	if err != nil {
 		grip.Error(message.WrapError(err, message.Fields{
