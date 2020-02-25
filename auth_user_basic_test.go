@@ -11,7 +11,7 @@ func TestBasicUserImplementation(t *testing.T) {
 
 	// constructors
 	assert.Implements((*User)(nil), &BasicUser{})
-	assert.Implements((*User)(nil), NewBasicUser("", "", "", "", "", "", "", []string{}, false, nil))
+	assert.Implements((*User)(nil), NewBasicUser("", "", "", "", "", "", "", []string{}, nil))
 
 	var usr *BasicUser
 

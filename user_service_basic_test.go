@@ -63,15 +63,15 @@ func TestBasicUserManager(t *testing.T) {
 	assert.Equal("new_user", user.Username())
 	assert.Equal("email@example.com", user.Email())
 
-	assert.False(u.IsInvalid(user.Username()))
-	u.SetInvalid(user.Username(), true)
-	assert.True(u.IsInvalid(user.Username()))
+	assert.False(u.isInvalid(user.Username()))
+	u.setInvalid(user.Username(), true)
+	assert.True(u.isInvalid(user.Username()))
 	returnedUser, err := u.GetUserByID(user.Username())
 	assert.Nil(returnedUser)
 	assert.Error(err)
-	u.SetInvalid(user.Username(), false)
-	assert.False(u.IsInvalid(user.Username()))
-	assert.True(u.IsInvalid("DNE"))
+	u.setInvalid(user.Username(), false)
+	assert.False(u.isInvalid(user.Username()))
+	assert.True(u.isInvalid("DNE"))
 
 	assert.Error(u.ClearUser(newUser, false))
 }

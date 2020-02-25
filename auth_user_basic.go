@@ -7,7 +7,7 @@ import (
 
 // NewBasicUser constructs a simple user. The underlying type has
 // serialization tags.
-func NewBasicUser(id, name, email, password, key, accessToken, refreshToken string, roles []string, invalid bool, rm RoleManager) *BasicUser {
+func NewBasicUser(id, name, email, password, key, accessToken, refreshToken string, roles []string, rm RoleManager) *BasicUser {
 	return &BasicUser{
 		ID:           id,
 		Name:         name,
@@ -17,7 +17,6 @@ func NewBasicUser(id, name, email, password, key, accessToken, refreshToken stri
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		AccessRoles:  roles,
-		Invalid:      invalid,
 		roleManager:  rm,
 	}
 }
@@ -31,8 +30,8 @@ type BasicUser struct {
 	AccessToken  string   `bson:"access_token" json:"access_token" yaml:"access_token"`
 	RefreshToken string   `bson:"refresh_token" json:"refresh_token" yaml:"refresh_token"`
 	AccessRoles  []string `bson:"roles" json:"roles" yaml:"roles"`
-	Invalid      bool     `bson:"invalid" json:"invalid" yaml:"invalid"`
 	roleManager  RoleManager
+	invalid      bool
 }
 
 func (u *BasicUser) Username() string        { return u.ID }
@@ -47,6 +46,9 @@ func (u *BasicUser) Roles() []string {
 	return out
 }
 func (u *BasicUser) HasPermission(opts PermissionOpts) bool {
+	if u.roleManager == nil {
+		return false
+	}
 	roles, err := u.roleManager.GetRoles(u.Roles())
 	if err != nil {
 		grip.Error(message.WrapError(err, message.Fields{

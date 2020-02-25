@@ -63,20 +63,20 @@ func (um *BasicUserManager) ReauthorizeUser(user User) error {
 	return errors.Errorf("user '%s 'not found", user.Username())
 }
 
-func (um *BasicUserManager) IsInvalid(username string) bool {
+func (um *BasicUserManager) isInvalid(username string) bool {
 	for _, user := range um.users {
 		if user.ID == username {
-			return user.Invalid
+			return user.invalid
 		}
 	}
 
 	return true
 }
 
-func (um *BasicUserManager) SetInvalid(username string, invalid bool) {
+func (um *BasicUserManager) setInvalid(username string, invalid bool) {
 	for i := range um.users {
 		if um.users[i].ID == username {
-			um.users[i].Invalid = invalid
+			um.users[i].invalid = invalid
 			return
 		}
 	}
@@ -85,7 +85,7 @@ func (um *BasicUserManager) SetInvalid(username string, invalid bool) {
 func (um *BasicUserManager) GetUserByID(id string) (User, error) {
 	for _, user := range um.users {
 		if user.ID == id {
-			if user.Invalid {
+			if user.invalid {
 				return nil, errors.Errorf("user %s not authorized!", id)
 			}
 			return &user, nil

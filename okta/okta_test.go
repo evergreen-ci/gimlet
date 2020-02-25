@@ -600,7 +600,7 @@ func TestCreateUserToken(t *testing.T) {
 }
 
 func TestGetUserByID(t *testing.T) {
-	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, nil)
+	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, nil)
 	for testName, testCase := range map[string]struct {
 		modifyOpts       func(CreationOptions) CreationOptions
 		shouldPass       bool
@@ -663,7 +663,7 @@ func TestGetUserByID(t *testing.T) {
 }
 
 func TestGetOrCreateUser(t *testing.T) {
-	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, nil)
+	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, nil)
 	for testName, testCase := range map[string]struct {
 		modifyOpts func(CreationOptions) CreationOptions
 		shouldPass bool
@@ -702,7 +702,7 @@ func TestGetOrCreateUser(t *testing.T) {
 }
 
 func TestClearUser(t *testing.T) {
-	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, false, nil)
+	expectedUser := gimlet.NewBasicUser("username", "name", "email", "password", "key", "access_token", "refresh_token", nil, nil)
 	for testName, testCase := range map[string]struct {
 		modifyOpts func(CreationOptions) CreationOptions
 		shouldPass bool
@@ -1110,7 +1110,7 @@ func TestReauthorization(t *testing.T) {
 			um.validateGroups = true
 
 			accessToken := "access_token"
-			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", accessToken, "", nil, false, nil)
+			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", accessToken, "", nil, nil)
 			_, err := um.cache.GetOrCreate(user)
 			require.NoError(t, err)
 
@@ -1141,7 +1141,7 @@ func TestReauthorization(t *testing.T) {
 		},
 		"SucceedsWithoutGroupValidation": func(t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			refreshToken := "refresh_token"
-			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", "", refreshToken, nil, false, nil)
+			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", "", refreshToken, nil, nil)
 			_, err := um.cache.GetOrCreate(user)
 			require.NoError(t, err)
 
@@ -1190,7 +1190,7 @@ func TestReauthorization(t *testing.T) {
 		},
 		"FailsIfAccessTokenAndRefreshTokensMissingAndValidatingGroups": func(t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			um.validateGroups = true
-			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", "", "", nil, false, nil)
+			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", "", "", nil, nil)
 
 			require.Error(t, um.ReauthorizeUser(user))
 			assert.Empty(t, s.TokenHeaders, "should not refresh tokens if refresh token missing")
@@ -1200,7 +1200,7 @@ func TestReauthorization(t *testing.T) {
 			assert.Empty(t, s.UserInfoHeaders, "should not get user info if missing access and refresh tokens")
 		},
 		"FailsIfRefreshTokensMissingAndNotValidatingGroups": func(t *testing.T, um *userManager, s *mockAuthorizationServer) {
-			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", "access_token", "", nil, false, nil)
+			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", "access_token", "", nil, nil)
 
 			require.Error(t, um.ReauthorizeUser(user))
 			assert.Empty(t, s.TokenHeaders, "should not refresh tokens if refresh token missing")
@@ -1214,7 +1214,7 @@ func TestReauthorization(t *testing.T) {
 
 			accessToken := "access_token"
 			refreshToken := "refresh_token"
-			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", accessToken, refreshToken, nil, false, nil)
+			user := gimlet.NewBasicUser("foo", "foo", "foo@bar.com", "password", "key", accessToken, refreshToken, nil, nil)
 
 			_, err := um.cache.GetOrCreate(user)
 			require.NoError(t, err)
@@ -1266,7 +1266,7 @@ func TestReauthorization(t *testing.T) {
 				Scope:        "scope",
 			}
 			s.UserInfoResponse = &userInfoResponse{Name: "foo", Email: "foo@bar.com", Groups: []string{"invalid_group"}}
-			user := gimlet.NewBasicUser("id", "name", "email", "password", "key", accessToken, refreshToken, nil, false, nil)
+			user := gimlet.NewBasicUser("id", "name", "email", "password", "key", accessToken, refreshToken, nil, nil)
 			_, err := um.cache.GetOrCreate(user)
 			require.NoError(t, err)
 

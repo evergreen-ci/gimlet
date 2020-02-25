@@ -534,6 +534,5 @@ func makeUser(result *ldap.SearchResult, convertIDIn func(string) string) gimlet
 			groups = append(groups, entry.Values...)
 		}
 	}
-
-	return gimlet.NewBasicUser(id, name, email, "", "", "", "", groups, false, nil)
+	return gimlet.NewBasicUser(id, name, email, "", "", "", "", groups, nil)
 }
