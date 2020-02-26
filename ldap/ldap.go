@@ -504,12 +504,12 @@ func (u *userService) getUserFromLDAP(username string) (gimlet.User, error) {
 	}
 
 	if found {
-		return makeUser(result, u.convertIDIn), nil
+		return makeUser(result, u.convertIDIn)
 	}
 	return nil, catcher.Resolve()
 }
 
-func makeUser(result *ldap.SearchResult, convertIDIn func(string) string) gimlet.User {
+func makeUser(result *ldap.SearchResult, convertIDIn func(string) string) (gimlet.User, error) {
 	var (
 		id     string
 		name   string
@@ -534,6 +534,9 @@ func makeUser(result *ldap.SearchResult, convertIDIn func(string) string) gimlet
 			groups = append(groups, entry.Values...)
 		}
 	}
-
-	return gimlet.NewBasicUser(id, name, email, "", "", "", "", groups, false, nil)
+	opts, err := gimlet.NewBasicUserOptions(id)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create user")
+	}
+	return gimlet.NewBasicUser(opts.Name(name).Email(email).Roles(groups...)), nil
 }
