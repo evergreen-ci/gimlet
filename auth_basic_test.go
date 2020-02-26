@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSimpleAuthenticator(t *testing.T) {
@@ -26,7 +27,9 @@ func TestSimpleAuthenticator(t *testing.T) {
 	assert.Len(auth.(*simpleAuthenticator).users, 0)
 
 	// constructor avoids nils
-	usr := NewBasicUser("id", "name", "email", "pass", "key", "", "", []string{}, nil)
+	opts, err := NewBasicUserOptions("id")
+	require.NoError(t, err)
+	usr := NewBasicUser(opts.Name("name").Email("email").Password("pass").Key("key"))
 	auth = NewSimpleAuthenticator([]User{usr}, nil)
 	assert.NotNil(auth)
 	assert.NotNil(auth.(*simpleAuthenticator).groups)
@@ -38,11 +41,15 @@ func TestSimpleAuthenticator(t *testing.T) {
 	assert.True(auth.CheckAuthenticated(usr))
 
 	// a second user shouldn't validate
-	usr2 := NewBasicUser("id2", "name", "email", "pass", "key", "", "", []string{}, nil)
+	opts2, err := NewBasicUserOptions("id2")
+	require.NoError(t, err)
+	usr2 := NewBasicUser(opts2.Name("name").Email("email").Password("pass").Key("key"))
 	assert.False(auth.CheckAuthenticated(usr2))
 
-	usr3 := NewBasicUser("id3", "name", "email", "pass", "key", "", "", []string{"admin"}, nil)
-	usr3broken := NewBasicUser("id3", "name", "email", "pass", "yek", "", "", []string{"admin"}, nil)
+	opts3, err := NewBasicUserOptions("id3")
+	require.NoError(t, err)
+	usr3 := NewBasicUser(opts3.Name("name").Email("email").Password("pass").Key("key").Roles("admin"))
+	usr3broken := NewBasicUser(opts3.Key("yek"))
 	auth = NewSimpleAuthenticator([]User{usr3}, map[string][]string{
 		"none":  []string{"_"},
 		"admin": []string{"id3"}})
@@ -78,7 +85,9 @@ func TestBasicAuthenticator(t *testing.T) {
 	// usernames
 	assert.False(auth.CheckAuthenticated(nil))
 	assert.False(auth.CheckAuthenticated(&BasicUser{}))
-	usr := NewBasicUser("id", "name", "email", "pass", "key", "", "", []string{}, nil)
+	opts, err := NewBasicUserOptions("id")
+	require.NoError(t, err)
+	usr := NewBasicUser(opts.Name("name").Email("email").Password("pass").Key("key"))
 	assert.True(auth.CheckAuthenticated(usr))
 
 	auth = NewBasicAuthenticator(map[string][]string{"one": []string{"id"}}, nil)

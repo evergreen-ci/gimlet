@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBasicUserImplementation(t *testing.T) {
@@ -11,7 +12,9 @@ func TestBasicUserImplementation(t *testing.T) {
 
 	// constructors
 	assert.Implements((*User)(nil), &BasicUser{})
-	assert.Implements((*User)(nil), NewBasicUser("", "", "", "", "", "", "", []string{}, nil))
+	opts, err := NewBasicUserOptions("id")
+	require.NoError(t, err)
+	assert.Implements((*User)(nil), NewBasicUser(opts))
 
 	var usr *BasicUser
 

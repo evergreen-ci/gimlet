@@ -5,19 +5,82 @@ import (
 	"github.com/mongodb/grip/message"
 )
 
+type BasicUserOptions struct {
+	id           string
+	name         string
+	email        string
+	password     string
+	key          string
+	accessToken  string
+	refreshToken string
+	roles        []string
+	roleManager  RoleManager
+}
+
+func NewBasicUserOptions(id string) (BasicUserOptions, error) {
+	catcher := grip.NewBasicCatcher()
+	catcher.NewWhen(id == "", "ID must not be empty")
+	if catcher.HasErrors() {
+		return BasicUserOptions{}, catcher.Resolve()
+	}
+	return BasicUserOptions{
+		id: id,
+	}, nil
+}
+
+func (opts BasicUserOptions) Name(name string) BasicUserOptions {
+	opts.name = name
+	return opts
+}
+
+func (opts BasicUserOptions) Email(email string) BasicUserOptions {
+	opts.email = email
+	return opts
+}
+
+func (opts BasicUserOptions) Password(password string) BasicUserOptions {
+	opts.password = password
+	return opts
+}
+
+func (opts BasicUserOptions) Key(key string) BasicUserOptions {
+	opts.key = key
+	return opts
+}
+
+func (opts BasicUserOptions) AccessToken(token string) BasicUserOptions {
+	opts.accessToken = token
+	return opts
+}
+
+func (opts BasicUserOptions) RefreshToken(token string) BasicUserOptions {
+	opts.refreshToken = token
+	return opts
+}
+
+func (opts BasicUserOptions) Roles(roles ...string) BasicUserOptions {
+	opts.roles = roles
+	return opts
+}
+
+func (opts BasicUserOptions) RoleManager(rm RoleManager) BasicUserOptions {
+	opts.roleManager = rm
+	return opts
+}
+
 // NewBasicUser constructs a simple user. The underlying type has
 // serialization tags.
-func NewBasicUser(id, name, email, password, key, accessToken, refreshToken string, roles []string, rm RoleManager) *BasicUser {
+func NewBasicUser(opts BasicUserOptions) *BasicUser {
 	return &BasicUser{
-		ID:           id,
-		Name:         name,
-		EmailAddress: email,
-		Password:     password,
-		Key:          key,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		AccessRoles:  roles,
-		roleManager:  rm,
+		ID:           opts.id,
+		Name:         opts.name,
+		EmailAddress: opts.email,
+		Password:     opts.password,
+		Key:          opts.key,
+		AccessToken:  opts.accessToken,
+		RefreshToken: opts.refreshToken,
+		AccessRoles:  opts.roles,
+		roleManager:  opts.roleManager,
 	}
 }
 
