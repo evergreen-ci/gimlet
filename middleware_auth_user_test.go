@@ -161,7 +161,7 @@ func TestUserMiddleware(t *testing.T) {
 	assert.Equal(http.StatusOK, rw.Code)
 
 	// test that if get-or-create fails that the op does
-	usermanager.CreateUserFails = true
+	usermanager.FailGetOrCreateUser = true
 	req, err = http.NewRequest("GET", "http://localhost/bar", body)
 	assert.NoError(err)
 	assert.NotNil(req)
