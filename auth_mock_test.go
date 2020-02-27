@@ -130,11 +130,16 @@ func (m *MockUserManager) CreateUserToken(username, password string) (string, er
 func (m *MockUserManager) GetLoginHandler(url string) http.HandlerFunc { return m.LoginHandler }
 func (m *MockUserManager) GetLoginCallbackHandler() http.HandlerFunc   { return m.LoginCallbackHandler }
 func (m *MockUserManager) IsRedirect() bool                            { return m.Redirect }
-func (m *MockUserManager) ReauthorizeUser(User) error {
+func (m *MockUserManager) ReauthorizeUser(user User) error {
 	if m.FailReauthorizeUser {
 		return errors.New("mock fail")
 	}
-	return nil
+	for _, u := range m.Users {
+		if user.Username() == u.Username() {
+			return nil
+		}
+	}
+	return errors.New("user not found")
 }
 
 func (m *MockUserManager) GetUserByID(id string) (User, error) {
@@ -161,12 +166,17 @@ func (m *MockUserManager) ClearUser(u User, all bool) error {
 	if m.FailClearUser {
 		return errors.New("mock fail")
 	}
-	return errors.New("MockUserManager does not support Clear User")
+	return nil
 }
 
 func (m *MockUserManager) GetGroupsForUser(username string) ([]string, error) {
 	if m.FailGetGroupsForUser {
 		return nil, errors.New("mock fail")
 	}
-	return nil, errors.New("not implemented")
+	for _, u := range m.Users {
+		if username == u.Username() {
+			return u.Groups, nil
+		}
+	}
+	return nil, errors.New("not found")
 }
