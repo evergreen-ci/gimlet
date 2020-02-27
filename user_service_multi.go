@@ -110,7 +110,7 @@ func (um *multiUserManager) GetOrCreateUser(u User) (User, error) {
 	}); err != nil {
 		return nil, errors.Wrap(err, "could not get existing or create new user")
 	}
-	return u, nil
+	return newUser, nil
 }
 
 func (um *multiUserManager) ClearUser(u User, all bool) error {

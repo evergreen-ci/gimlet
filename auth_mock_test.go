@@ -27,6 +27,8 @@ type MockUser struct {
 	ID           string
 	Name         string
 	EmailAddress string
+	Password     string
+	Token        string
 	ReportNil    bool
 	APIKey       string
 	AccessToken  string
@@ -89,9 +91,7 @@ func (a *MockAuthenticator) GetUserFromRequest(um UserManager, r *http.Request) 
 }
 
 type MockUserManager struct {
-	// kim: TODO: replace with just slice of users and don't use TokenToUsers
-	// for ID map
-	TokenToUsers         map[string]User
+	Users                []*MockUser
 	FailGetOrCreateUser  bool
 	FailGetUserByToken   bool
 	FailCreateUserToken  bool
@@ -108,23 +108,23 @@ func (m *MockUserManager) GetUserByToken(_ context.Context, token string) (User,
 	if m.FailGetUserByToken {
 		return nil, errors.New("mock fail")
 	}
-	if m.TokenToUsers == nil {
-		return nil, errors.New("no users configured")
+	for _, u := range m.Users {
+		if token == u.Token {
+			return u, nil
+		}
 	}
+	return nil, errors.New("user not found")
+}
 
-	u, ok := m.TokenToUsers[token]
-	if !ok {
-		return nil, errors.New("user does not exist")
-	}
-
-	return u, nil
+func mockUserToken(username, password string) string {
+	return strings.Join([]string{username, password}, ".")
 }
 
 func (m *MockUserManager) CreateUserToken(username, password string) (string, error) {
 	if m.FailCreateUserToken {
 		return "", errors.New("mock fail")
 	}
-	return strings.Join([]string{username, password}, "."), nil
+	return mockUserToken(username, password), nil
 }
 
 func (m *MockUserManager) GetLoginHandler(url string) http.HandlerFunc { return m.LoginHandler }
@@ -141,13 +141,14 @@ func (m *MockUserManager) GetUserByID(id string) (User, error) {
 	if m.FailGetUserByID {
 		return nil, errors.New("mock fail")
 	}
-	u, ok := m.TokenToUsers[id]
-	if !ok {
-		return nil, errors.New("not exist")
+	for _, u := range m.Users {
+		if id == u.Username() {
+			return u, nil
+		}
 	}
-
-	return u, nil
+	return nil, errors.New("user does not exist")
 }
+
 func (m *MockUserManager) GetOrCreateUser(u User) (User, error) {
 	if m.FailGetOrCreateUser {
 		return nil, errors.New("mock fail")
