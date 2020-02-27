@@ -59,6 +59,11 @@ func TestMultiUserManager(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, makeUser(1).Username(), u.Username())
 		},
+		"GetUserByTokenTriesReadManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
+			u, err := um.GetUserByToken(ctx, makeUser(3).Token)
+			require.NoError(t, err)
+			assert.Equal(t, makeUser(3).Username(), u.Username())
+		},
 		"GetUserByTokenPrioritizesReadWriteManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
 			readOnly.FailGetUserByToken = true
 			u, err := um.GetUserByToken(ctx, makeUser(1).Token)
@@ -93,6 +98,12 @@ func TestMultiUserManager(t *testing.T) {
 			u, err := um.GetUserByID(makeUser(1).Username())
 			require.NoError(t, err)
 			assert.Equal(t, makeUser(1).Username(), u.Username())
+		},
+		"GetUserByIDTriesReadManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
+			readWrite.FailGetUserByID = true
+			u, err := um.GetUserByID(makeUser(3).Username())
+			require.NoError(t, err)
+			assert.Equal(t, makeUser(3).Username(), u.Username())
 		},
 		"GetUserByIDPrioritizesReadWriteManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
 			readOnly.FailGetUserByID = true
@@ -129,6 +140,11 @@ func TestMultiUserManager(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, makeUser(1).Groups, groups)
 		},
+		"GetGroupsForUserTriesReadManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
+			groups, err := um.GetGroupsForUser(makeUser(3).Username())
+			require.NoError(t, err)
+			assert.Equal(t, makeUser(3).Groups, groups)
+		},
 		"GetGroupsForUserPrioritizesReadWriteManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
 			readOnly.FailGetGroupsForUser = true
 			groups, err := um.GetGroupsForUser(makeUser(1).Username())
@@ -143,26 +159,18 @@ func TestMultiUserManager(t *testing.T) {
 			assert.Empty(t, u)
 		},
 		"ReauthorizeUserSucceeds": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
-			assert.NoError(t, um.ReauthorizeUser(makeUser(2)))
+			assert.NoError(t, um.ReauthorizeUser(makeUser(1)))
 		},
-		"ReauthorizeUserFails": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
-			readWrite.FailReauthorizeUser = true
-			assert.Error(t, um.ReauthorizeUser(makeUser(2)))
+		"ReauthorizeUserIgnoresReadOnlyUserManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
+			assert.Error(t, um.ReauthorizeUser(makeUser(3)))
+			readOnly.FailReauthorizeUser = true
+			assert.NoError(t, um.ReauthorizeUser(makeUser(1)))
 		},
 		"ReauthorizeUserNonexistentFails": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
 			assert.Error(t, um.ReauthorizeUser(makeUser(4)))
 		},
-		"ReauthorizeUserTriesAllManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
+		"ReauthorizeUserFails": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
 			readWrite.FailReauthorizeUser = true
-			assert.NoError(t, um.ReauthorizeUser(makeUser(1)))
-		},
-		"ReauthorizeUserPrioritizesReadWriteManagers": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
-			readOnly.FailReauthorizeUser = true
-			assert.NoError(t, um.ReauthorizeUser(makeUser(1)))
-		},
-		"ReauthorizeUserFailsIfAllManagersFail": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {
-			readWrite.FailReauthorizeUser = true
-			readOnly.FailReauthorizeUser = true
 			assert.Error(t, um.ReauthorizeUser(makeUser(1)))
 		},
 		"CreateUserTokenSucceeds": func(ctx context.Context, t *testing.T, um UserManager, readWrite *MockUserManager, readOnly *MockUserManager) {

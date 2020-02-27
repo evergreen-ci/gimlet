@@ -80,7 +80,7 @@ func (um *multiUserManager) IsRedirect() bool {
 
 func (um *multiUserManager) ReauthorizeUser(u User) error {
 	var err error
-	if err = um.tryAllManagers(func(m UserManager) (bool, error) {
+	if err = um.tryReadWriteManagers(func(m UserManager) (bool, error) {
 		err = m.ReauthorizeUser(u)
 		return err == nil, err
 	}); err != nil {
