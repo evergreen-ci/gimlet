@@ -10,7 +10,6 @@ import (
 )
 
 // cacheUserManager creates a thin wrapper around a user cache.
-// caching layer.
 type cachedUserManager struct {
 	cache usercache.Cache
 }
