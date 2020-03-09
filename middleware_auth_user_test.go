@@ -181,14 +181,14 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 	require.NoError(t, conf.Validate())
 
 	t.Run("DiabledChecksAreValid", func(t *testing.T) {
-		conf := UserMiddlewareConfiguration{
+		conf = UserMiddlewareConfiguration{
 			SkipCookie:      true,
 			SkipHeaderCheck: true,
 		}
 		assert.NoError(t, conf.Validate())
 	})
 	t.Run("ZeroValueIsNotValid", func(t *testing.T) {
-		conf := UserMiddlewareConfiguration{}
+		conf = UserMiddlewareConfiguration{}
 		assert.Zero(t, conf.CookiePath)
 		assert.Error(t, conf.Validate())
 		// also we expect that the validate will populate the Tl
