@@ -568,7 +568,7 @@ func (s *RoleManagerSuite) TestPermissionSummaryForRoles() {
 	}
 	s.NoError(s.m.UpdateRole(r3))
 
-	summary, err := PermissionSummaryForRoles([]string{"r1", "r2", "r3"}, s.m)
+	summary, err := PermissionSummaryForRoles(context.Background(), []string{"r1", "r2", "r3"}, s.m)
 	s.NoError(err)
 	s.Len(summary[0].Permissions, 3)
 	s.Equal("project", summary[0].Type)

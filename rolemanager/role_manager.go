@@ -271,10 +271,10 @@ func (m *mongoBackedRoleManager) DeleteScope(scope gimlet.Scope) error {
 	return m.retryTransaction(updateFunc)
 }
 
-func (m *mongoBackedRoleManager) GetScope(id string) (*gimlet.Scope, error) {
+func (m *mongoBackedRoleManager) GetScope(ctx context.Context, id string) (*gimlet.Scope, error) {
 	var err error
 	scopeCollection := m.client.Database(m.db).Collection(m.scopeColl)
-	result := scopeCollection.FindOne(context.Background(), bson.M{"_id": id})
+	result := scopeCollection.FindOne(ctx, bson.M{"_id": id})
 	if err = result.Err(); err != nil {
 		return nil, err
 	}
@@ -626,7 +626,7 @@ func (m *inMemoryRoleManager) DeleteScope(scope gimlet.Scope) error {
 	return nil
 }
 
-func (m *inMemoryRoleManager) GetScope(id string) (*gimlet.Scope, error) {
+func (m *inMemoryRoleManager) GetScope(_ context.Context, id string) (*gimlet.Scope, error) {
 	scope, found := m.scopes[id]
 	if !found {
 		return nil, nil
@@ -779,7 +779,7 @@ type PermissionSummary struct {
 
 type PermissionsForResources map[string]gimlet.Permissions
 
-func PermissionSummaryForRoles(rolesIDs []string, rm gimlet.RoleManager) ([]PermissionSummary, error) {
+func PermissionSummaryForRoles(ctx context.Context, rolesIDs []string, rm gimlet.RoleManager) ([]PermissionSummary, error) {
 	roles, err := rm.GetRoles(rolesIDs)
 	if err != nil {
 		return nil, err
@@ -787,7 +787,7 @@ func PermissionSummaryForRoles(rolesIDs []string, rm gimlet.RoleManager) ([]Perm
 	summary := []PermissionSummary{}
 	highestPermissions := map[string]PermissionsForResources{}
 	for _, role := range roles {
-		scope, err := rm.GetScope(role.Scope)
+		scope, err := rm.GetScope(ctx, role.Scope)
 		if err != nil {
 			return nil, err
 		}
