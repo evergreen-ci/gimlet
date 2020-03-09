@@ -773,8 +773,8 @@ func (b *base) IsValidPermissions(permissions gimlet.Permissions) error {
 }
 
 type PermissionSummary struct {
-	Type        string                  `json:'type'`
-	Permissions PermissionsForResources `json:'permissions'`
+	Type        string                  `json:"type"`
+	Permissions PermissionsForResources `json:"permissions"`
 }
 
 type PermissionsForResources map[string]gimlet.Permissions
