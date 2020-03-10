@@ -141,9 +141,9 @@ $(buildDir)/output.$(name).race: $(buildDir) .FORCE
 	$(goEnv) $(gobin) test $(testArgs) -race ./ | tee $@
 #  targets to generate gotest output from the linter.
 $(buildDir)/output.%.lint:$(buildDir)/run-linter $(buildDir)/.lintSetup .FORCE
-	@./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$*'
+	@$(goEnv) ./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$*'
 $(buildDir)/output.lint:$(buildDir)/run-linter $(buildDir)/.lintSetup .FORCE
-	@./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$(packages)'
+	@$(goEnv) ./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$(packages)'
 # end test and coverage artifacts
 
 
