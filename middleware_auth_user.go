@@ -185,7 +185,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			authDataName = r.Header[u.conf.HeaderUserName][0]
 		}
 
-		if len(authDataAPIKey) > 0 {
+		if len(authDataName) > 0 && len(authDataAPIKey) > 0 {
 			usr, err = u.manager.GetUserByID(authDataName)
 			logger.Debug(message.WrapError(err, message.Fields{
 				"message":   "problem getting user by id",
