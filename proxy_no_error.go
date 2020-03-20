@@ -35,8 +35,9 @@ func (r *APIRoute) Proxy(opts ProxyOptions) *APIRoute {
 	}
 
 	r.handler = (&httputil.ReverseProxy{
-		ErrorLog: grip.MakeStandardLogger(level.Warning),
-		Director: opts.director,
+		Transport: opts.Transport,
+		ErrorLog:  grip.MakeStandardLogger(level.Warning),
+		Director:  opts.director,
 	}).ServeHTTP
 
 	return r
