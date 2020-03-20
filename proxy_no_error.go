@@ -25,6 +25,15 @@ func (r *APIRoute) Proxy(opts ProxyOptions) *APIRoute {
 		return r
 	}
 
+	if opts.ErrorHandler != nil {
+		grip.Alert(message.Fields{
+			"message":          "custom error handler ignored in < go1.11",
+			"route":            r.route,
+			"version":          r.version,
+			"existing_handler": r.handler != nil,
+		})
+	}
+
 	r.handler = (&httputil.ReverseProxy{
 		ErrorLog: grip.MakeStandardLogger(level.Warning),
 		Director: opts.director,
