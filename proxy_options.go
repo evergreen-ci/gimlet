@@ -24,6 +24,7 @@ type ProxyOptions struct {
 	FindTarget        func(*http.Request) ([]string, error)
 	RemoteScheme      string
 	ErrorHandler      func(http.ResponseWriter, *http.Request, error)
+	Transport         http.RoundTripper
 }
 
 // Validate checks the default configuration of a proxy configuration.
