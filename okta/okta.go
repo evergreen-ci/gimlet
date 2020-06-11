@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -684,7 +685,16 @@ func (m *userManager) redeemTokens(ctx context.Context, query string) (*tokenRes
 	if resp.StatusCode != http.StatusOK {
 		catcher := grip.NewBasicCatcher()
 		catcher.Errorf("received unexpected status code %d", resp.StatusCode)
+		body, err := ioutil.ReadAll(resp.Body)
 		catcher.Wrap(resp.Body.Close(), "error closing response body")
+		catcher.Wrap(err, "could not read error response body")
+		grip.ErrorWhen(len(body) != 0, message.Fields{
+			"message":     "received non-OK status code from server",
+			"status_code": resp.StatusCode,
+			"body":        string(body),
+			"endpoint":    "token",
+			"context":     "Okta user manager",
+		})
 		return nil, catcher.Resolve()
 	}
 	tokens := &tokenResponse{}
