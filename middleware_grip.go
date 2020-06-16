@@ -174,14 +174,29 @@ func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, n
 			}
 			rw.WriteHeader(http.StatusInternalServerError)
 
-			_ = recovery.SendMessageWithPanicError(err, nil, l.Journaler, message.Fields{
-				"action":   "aborted",
-				"request":  GetRequestID(ctx),
-				"duration": time.Since(getRequestStartAt(ctx)),
-				"path":     r.URL.Path,
-				"remote":   r.RemoteAddr,
-				"length":   r.ContentLength,
-			})
+			// handlers panic with http.ErrAbortHandler to abort and suppress logging
+			// (https://golang.org/pkg/net/http/#Handler)
+			// log at a lower level
+			if err == http.ErrAbortHandler {
+				l.Debug(message.Fields{
+					"message":  "hit suppressed abort panic",
+					"action":   "aborted",
+					"request":  GetRequestID(ctx),
+					"duration": time.Since(getRequestStartAt(ctx)),
+					"path":     r.URL.Path,
+					"remote":   r.RemoteAddr,
+					"length":   r.ContentLength,
+				})
+			} else {
+				_ = recovery.SendMessageWithPanicError(err, nil, l.Journaler, message.Fields{
+					"action":   "aborted",
+					"request":  GetRequestID(ctx),
+					"duration": time.Since(getRequestStartAt(ctx)),
+					"path":     r.URL.Path,
+					"remote":   r.RemoteAddr,
+					"length":   r.ContentLength,
+				})
+			}
 
 			WriteJSONInternalError(rw, ErrorResponse{
 				StatusCode: http.StatusInternalServerError,
