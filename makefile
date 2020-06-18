@@ -27,7 +27,6 @@ goEnv := GOPATH=$(gopath) $(if $(GO_BIN_PATH),PATH="$(shell dirname $(GO_BIN_PAT
 # start lint setup targets
 lintDeps := $(buildDir)/run-linter $(buildDir)/golangci-lint
 $(buildDir)/golangci-lint:$(buildDir)
-	echo "making golangci-lint"
 	@curl --retry 10 --retry-max-time 60 -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/76a82c6ed19784036bbf2d4c84d0228ca12381a4/install.sh | sh -s -- -b $(buildDir) v1.23.8 >/dev/null 2>&1
 $(buildDir)/run-linter:buildscripts/run-linter.go $(buildDir)/golangci-lint
 	@$(goEnv) $(gobin) build -o $@ $<
@@ -139,9 +138,9 @@ $(buildDir)/output.$(name).test: $(buildDir) .FORCE
 $(buildDir)/output.$(name).race: $(buildDir) .FORCE
 	$(goEnv) $(gobin) test $(testArgs) -race ./ | tee $@
 #  targets to generate gotest output from the linter.
-$(buildDir)/output.%.lint:$(buildDir)/run-linter $(buildDir)/.lintSetup .FORCE
+$(buildDir)/output.%.lint:$(buildDir)/run-linter .FORCE
 	@$(goEnv) ./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$*'
-$(buildDir)/output.lint:$(buildDir)/run-linter $(buildDir)/.lintSetup .FORCE
+$(buildDir)/output.lint:$(buildDir)/run-linter .FORCE
 	@$(goEnv) ./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$(packages)'
 # end test and coverage artifacts
 
