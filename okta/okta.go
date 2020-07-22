@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -238,6 +237,10 @@ func (m *userManager) ReauthorizeUser(user gimlet.User) error {
 	refreshToken := user.GetRefreshToken()
 	catcher := grip.NewBasicCatcher()
 
+	// This is just an optimization to use the access token without needing to
+	// make a request to refresh the tokens. Validating the groups may fail if
+	// the access token is expired, in which case it has to refresh the access
+	// token and try again.
 	if m.validateGroups {
 		accessToken := user.GetAccessToken()
 		if accessToken == "" {
@@ -250,11 +253,10 @@ func (m *userManager) ReauthorizeUser(user gimlet.User) error {
 		}
 	}
 
+	// Refresh the tokens and reauthenticate.
 	if refreshToken == "" {
 		return errors.Errorf("user '%s' cannot refresh tokens because refresh token is missing", user.Username())
 	}
-	// kim: TODO: validate own token using introspect endpoint and see what it
-	// returns.
 	tokenInfo, err := m.getTokenInfo(context.Background(), refreshToken, "refresh_token")
 	if err != nil {
 		return errors.Wrapf(err, "introspecting refresh token for user '%s'", user.Username())
@@ -641,14 +643,34 @@ func (m *userManager) validateAccessToken(token string) error {
 
 // tokenResponse represents a response received from the token endpoint.
 type tokenResponse struct {
-	AccessToken      string `json:"access_token,omitempty"`
-	IDToken          string `json:"id_token,omitempty"`
-	RefreshToken     string `json:"refresh_token,omitempty"`
-	TokenType        string `json:"token_type,omitempty"`
-	ExpiresIn        int    `json:"expires_in,omitempty"`
-	Scope            string `json:"scope,omitempty"`
+	responseError
+	AccessToken  string `json:"access_token,omitempty"`
+	IDToken      string `json:"id_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	TokenType    string `json:"token_type,omitempty"`
+	ExpiresIn    int    `json:"expires_in,omitempty"`
+	Scope        string `json:"scope,omitempty"`
+}
+
+// responseError is the common section of the Okta endpoint responses that
+// contains error information.
+type responseError struct {
 	ErrorCode        string `json:"error,omitempty"`
 	ErrorDescription string `json:"error_description,omitempty"`
+}
+
+func (re *responseError) Error() string {
+	var msg string
+	if re.ErrorCode != "" {
+		msg += re.ErrorCode
+		if re.ErrorDescription != "" {
+			msg += ": "
+		}
+	}
+	if re.ErrorDescription != "" {
+		msg += re.ErrorDescription
+	}
+	return msg
 }
 
 // exchangeCodeForTokens exchanges the given code to redeem tokens from the
@@ -704,38 +726,16 @@ func (m *userManager) redeemTokens(ctx context.Context, query string) (*tokenRes
 	if err != nil {
 		return nil, errors.Wrap(err, "request to redeem token returned error")
 	}
-	if resp.StatusCode != http.StatusOK {
-		catcher := grip.NewBasicCatcher()
-		catcher.Errorf("received unexpected status code %d", resp.StatusCode)
-		body, err := ioutil.ReadAll(resp.Body)
-		catcher.Wrap(resp.Body.Close(), "error closing response body")
-		catcher.Wrap(err, "could not read error response body")
-		grip.ErrorWhen(len(body) != 0, message.Fields{
-			"message":     "received non-OK status code from server",
-			"status_code": resp.StatusCode,
-			"body":        string(body),
-			"endpoint":    "token",
-			"context":     "Okta user manager",
-		})
-		return nil, catcher.Resolve()
-	}
 	tokens := &tokenResponse{}
-	if err := gimlet.GetJSONUnlimited(resp.Body, tokens); err != nil {
-		return nil, errors.WithStack(err)
-	}
-	if tokens.ErrorCode != "" {
-		return tokens, errors.Errorf("%s: %s", tokens.ErrorCode, tokens.ErrorDescription)
-	}
-	return tokens, nil
+	return tokens, readResp(resp, tokens)
 }
 
 // userInfo represents a response received from the userinfo endpoint.
 type userInfoResponse struct {
-	Name             string   `json:"name"`
-	Email            string   `json:"email"`
-	Groups           []string `json:"groups"`
-	ErrorCode        string   `json:"error,omitempty"`
-	ErrorDescription string   `json:"error_description,omitempty"`
+	responseError
+	Name   string   `json:"name"`
+	Email  string   `json:"email"`
+	Groups []string `json:"groups"`
 }
 
 // getUserInfo uses the access token to retrieve user information from the
@@ -762,44 +762,31 @@ func (m *userManager) getUserInfo(ctx context.Context, accessToken string) (*use
 	if err != nil {
 		return nil, errors.Wrap(err, "error during request for user info")
 	}
-	if resp.StatusCode != http.StatusOK {
-		catcher := grip.NewBasicCatcher()
-		catcher.Errorf("received unexpected status code %d", resp.StatusCode)
-		catcher.Wrap(resp.Body.Close(), "error closing response body")
-		return nil, catcher.Resolve()
-	}
 	userInfo := &userInfoResponse{}
-	if err := gimlet.GetJSONUnlimited(resp.Body, userInfo); err != nil {
-		return nil, errors.WithStack(err)
-	}
-	if userInfo.ErrorCode != "" {
-		return userInfo, errors.Errorf("%s: %s", userInfo.ErrorCode, userInfo.ErrorDescription)
-	}
-	return userInfo, nil
+	return userInfo, readResp(resp, userInfo)
 }
 
 // introspectResponse represents a response received from the introspect
 // endpoint.
 type introspectResponse struct {
-	Active           bool   `json:"active,omitempty"`
-	Audience         string `json:"aud,omitempty"`
-	ClientID         string `json:"client_id"`
-	DeviceID         string `json:"device_id"`
-	ExpiresUnix      int    `json:"exp"`
-	IssuedAtUnix     int    `json:"iat"`
-	Issuer           string `json:"iss"`
-	TokenIdentifier  string `json:"jti"`
-	NotBeforeUnix    int    `json:"nbf"`
-	Scopes           string `json:"scope"`
-	Subject          string `json:"sub"`
-	TokenType        string `json:"token_type"`
-	UserID           string `json:"uid"`
-	UserName         string `json:"username"`
-	ErrorCode        string `json:"error_code,omitempty"`
-	ErrorDescription string `json:"error_description,omitempty"`
+	responseError
+	Active          bool   `json:"active,omitempty"`
+	Audience        string `json:"aud,omitempty"`
+	ClientID        string `json:"client_id"`
+	DeviceID        string `json:"device_id"`
+	ExpiresUnix     int    `json:"exp"`
+	IssuedAtUnix    int    `json:"iat"`
+	Issuer          string `json:"iss"`
+	TokenIdentifier string `json:"jti"`
+	NotBeforeUnix   int    `json:"nbf"`
+	Scopes          string `json:"scope"`
+	Subject         string `json:"sub"`
+	TokenType       string `json:"token_type"`
+	UserID          string `json:"uid"`
+	UserName        string `json:"username"`
 }
 
-// getTokenInfo information about the given token.
+// getTokenInfo returns information about the given token.
 func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string) (*introspectResponse, error) {
 	q := url.Values{}
 	q.Add("token", token)
@@ -829,21 +816,26 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 	if err != nil {
 		return nil, errors.Wrap(err, "request to introspect token returned error")
 	}
+	tokenInfo := &introspectResponse{}
+	return tokenInfo, readResp(resp, tokenInfo)
+}
+
+// readResp verifies that an Okta response is OK and reads an Okta response body
+// in JSON format to the given output out.
+func readResp(resp *http.Response, out error) error {
+	catcher := grip.NewBasicCatcher()
 	if resp.StatusCode != http.StatusOK {
-		catcher := grip.NewBasicCatcher()
-		catcher.Errorf("received unexpected status code %d", resp.StatusCode)
-		catcher.Wrap(resp.Body.Close(), "error closing response body")
-		return nil, catcher.Resolve()
+		catcher.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+	if err := gimlet.GetJSONUnlimited(resp.Body, out); err != nil {
+		catcher.Wrap(err, "reading JSON response body")
+		return catcher.Resolve()
 	}
 
-	tokenInfo := &introspectResponse{}
-	if err := gimlet.GetJSONUnlimited(resp.Body, tokenInfo); err != nil {
-		return nil, errors.WithStack(err)
+	if errMsg := out.Error(); len(errMsg) != 0 {
+		catcher.New(errMsg)
 	}
-	if tokenInfo.ErrorCode != "" {
-		return tokenInfo, errors.Errorf("%s: %s", tokenInfo.ErrorCode, tokenInfo.ErrorDescription)
-	}
-	return tokenInfo, nil
+	return catcher.Resolve()
 }
 
 // makeUserFromInfo returns a user based on information from a userinfo request.
