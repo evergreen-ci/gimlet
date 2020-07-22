@@ -627,7 +627,7 @@ func (m *userManager) validateAccessToken(token string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not check if token is valid")
 	}
-	if !info.Active || int64(info.ExpiresUnix) <= time.Now().Unix() {
+	if !info.Active || info.ExpiresUnix != 0 && int64(info.ExpiresUnix) <= time.Now().Unix() {
 		return errors.New("access token is inactive, so authorization is not possible")
 	}
 	return nil
