@@ -1193,14 +1193,8 @@ func TestReauthorization(t *testing.T) {
 				"Content-Type": {"application/x-www-form-urlencoded"},
 				"Accept":       {"application/json"},
 			})
-			mapContains(t, s.IntrospectParameters, map[string][]string{
-				"token":           {refreshToken},
-				"token_type_hint": {"refresh_token"},
-			})
-			mapContains(t, s.IntrospectHeaders, map[string][]string{
-				"Content-Type": {"application/x-www-form-urlencoded"},
-				"Accept":       {"application/json"},
-			})
+			assert.Empty(t, s.IntrospectParameters, "should not introspect token if not validating groups")
+			assert.Empty(t, s.IntrospectHeaders, "should not introspect token if not validating groups")
 			assert.Empty(t, s.UserInfoHeaders, "should not get user info if not validating groups")
 
 			cachedUser, _, err := um.cache.Find(user.Username())
@@ -1233,7 +1227,7 @@ func TestReauthorization(t *testing.T) {
 			assert.Empty(t, s.IntrospectParameters, "should not check access token if not validating groups")
 			assert.Empty(t, s.UserInfoHeaders, "should not get user info if not validating groups")
 		},
-		"FailsIfAccessTokenAndRefreshTokenExpired": func(t *testing.T, um *userManager, s *mockAuthorizationServer) {
+		"FailsIfAccessTokenAndTokensCannotRefresh": func(t *testing.T, um *userManager, s *mockAuthorizationServer) {
 			um.validateGroups = true
 
 			accessToken := "access_token"
@@ -1256,18 +1250,16 @@ func TestReauthorization(t *testing.T) {
 				},
 			}
 
-			err = um.ReauthorizeUser(user)
-			assert.Equal(t, gimlet.ErrNeedsReauthentication, errors.Cause(err))
+			assert.Error(t, um.ReauthorizeUser(user))
 
 			mapContains(t, s.IntrospectParameters, map[string][]string{
-				"token":           {refreshToken},
-				"token_type_hint": {"refresh_token"},
+				"token":           {accessToken},
+				"token_type_hint": {"access_token"},
 			})
 			mapContains(t, s.IntrospectHeaders, map[string][]string{
 				"Content-Type": {"application/x-www-form-urlencoded"},
 				"Accept":       {"application/json"},
 			})
-			assert.Empty(t, s.TokenHeaders)
 			assert.Empty(t, s.UserInfoHeaders)
 
 			cachedUser, _, err := um.cache.Find(user.Username())

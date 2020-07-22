@@ -257,14 +257,6 @@ func (m *userManager) ReauthorizeUser(user gimlet.User) error {
 	if refreshToken == "" {
 		return errors.Errorf("user '%s' cannot refresh tokens because refresh token is missing", user.Username())
 	}
-	tokenInfo, err := m.getTokenInfo(context.Background(), refreshToken, "refresh_token")
-	if err != nil {
-		return errors.Wrapf(err, "introspecting refresh token for user '%s'", user.Username())
-	}
-	if !tokenInfo.Active || time.Now().Unix() > int64(tokenInfo.ExpiresUnix) {
-		return gimlet.ErrNeedsReauthentication
-	}
-
 	tokens, err := m.refreshTokens(context.Background(), refreshToken)
 	catcher.Wrap(err, "refreshing authorization tokens")
 	if err == nil {
@@ -635,7 +627,7 @@ func (m *userManager) validateAccessToken(token string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not check if token is valid")
 	}
-	if !info.Active {
+	if !info.Active || int64(info.ExpiresUnix) <= time.Now().Unix() {
 		return errors.New("access token is inactive, so authorization is not possible")
 	}
 	return nil
