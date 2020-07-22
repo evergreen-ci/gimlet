@@ -253,18 +253,28 @@ func (m *userManager) ReauthorizeUser(user gimlet.User) error {
 	if refreshToken == "" {
 		return errors.Errorf("user '%s' cannot refresh tokens because refresh token is missing", user.Username())
 	}
+	// kim: TODO: validate own token using introspect endpoint and see what it
+	// returns.
+	tokenInfo, err := m.getTokenInfo(context.Background(), refreshToken, "refresh_token")
+	if err != nil {
+		return errors.Wrapf(err, "introspecting refresh token for user '%s'", user.Username())
+	}
+	if !tokenInfo.Active || time.Now().Unix() > int64(tokenInfo.ExpiresUnix) {
+		return gimlet.ErrNeedsReauthentication
+	}
+
 	tokens, err := m.refreshTokens(context.Background(), refreshToken)
-	catcher.Wrap(err, "could not refresh authorization tokens")
+	catcher.Wrap(err, "refreshing authorization tokens")
 	if err == nil {
 		if m.validateGroups {
 			err = m.reauthorizeGroup(tokens.AccessToken, tokens.RefreshToken)
-			catcher.Wrap(err, "could not reauthorize user after refreshing tokens")
+			catcher.Wrap(err, "reauthorizing user groups user after refreshing tokens")
 			if err == nil {
 				return nil
 			}
 		} else {
 			err = m.reauthorizeID(user.Username(), tokens)
-			catcher.Wrap(err, "could not reauthorize user after refreshing tokens")
+			catcher.Wrap(err, "reauthorizing user ID token after refreshing tokens")
 			if err == nil {
 				return nil
 			}
