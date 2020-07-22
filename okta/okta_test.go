@@ -1193,8 +1193,8 @@ func TestReauthorization(t *testing.T) {
 				"Content-Type": {"application/x-www-form-urlencoded"},
 				"Accept":       {"application/json"},
 			})
-			assert.Empty(t, s.IntrospectParameters, "should not introspect token if not validating groups")
-			assert.Empty(t, s.IntrospectHeaders, "should not introspect token if not validating groups")
+			assert.Empty(t, s.IntrospectParameters, "should not introspect access token if not validating groups")
+			assert.Empty(t, s.IntrospectHeaders, "should not introspect access token if not validating groups")
 			assert.Empty(t, s.UserInfoHeaders, "should not get user info if not validating groups")
 
 			cachedUser, _, err := um.cache.Find(user.Username())

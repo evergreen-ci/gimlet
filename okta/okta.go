@@ -237,10 +237,10 @@ func (m *userManager) ReauthorizeUser(user gimlet.User) error {
 	refreshToken := user.GetRefreshToken()
 	catcher := grip.NewBasicCatcher()
 
-	// This is just an optimization to use the access token without needing to
-	// make a request to refresh the tokens. Validating the groups may fail if
-	// the access token is expired, in which case it has to refresh the access
-	// token and try again.
+	// This is just an optimization to try using the access token without
+	// needing to make a request to refresh the tokens. Validating the groups
+	// may fail if the access token is expired, in which case it has to refresh
+	// the access token and try again.
 	if m.validateGroups {
 		accessToken := user.GetAccessToken()
 		if accessToken == "" {
