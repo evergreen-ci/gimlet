@@ -616,13 +616,15 @@ func (s *RoleManagerSuite) TestFindAllowedResources() {
 	for _, role := range roles {
 		s.NoError(s.m.UpdateRole(role))
 	}
-	resources, err := FindAllowedResources(s.m, []string{"1"}, "project", "read", 10)
+	ctx := context.Background()
+
+	resources, err := FindAllowedResources(ctx, s.m, []string{"1"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 2)
 	s.Contains(resources, "resource1")
 	s.Contains(resources, "resource2")
 
-	resources, err = FindAllowedResources(s.m, []string{"1", "all"}, "project", "read", 10)
+	resources, err = FindAllowedResources(ctx, s.m, []string{"1", "all"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 4)
 	s.Contains(resources, "resource1")
@@ -630,11 +632,11 @@ func (s *RoleManagerSuite) TestFindAllowedResources() {
 	s.Contains(resources, "resource3")
 	s.Contains(resources, "resource4")
 
-	resources, err = FindAllowedResources(s.m, []string{"no_permissions"}, "project", "read", 10)
+	resources, err = FindAllowedResources(ctx, s.m, []string{"no_permissions"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 0)
 
-	resources, err = FindAllowedResources(s.m, []string{}, "project", "read", 10)
+	resources, err = FindAllowedResources(ctx, s.m, []string{}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 0)
 }

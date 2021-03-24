@@ -928,7 +928,7 @@ func MakeRoleWithPermissions(rm gimlet.RoleManager, resourceType string, resourc
 // a list of all resources that the given roles have access to with the given permission check.
 // It answers the question "Given this list of roles (likely from a singe user), what resources
 // can they access, given this permission check?"
-func FindAllowedResources(rm gimlet.RoleManager, roles []string, resourceType, requiredPermission string, requiredLevel int) ([]string, error) {
+func FindAllowedResources(ctx context.Context, rm gimlet.RoleManager, roles []string, resourceType, requiredPermission string, requiredLevel int) ([]string, error) {
 	if resourceType == "" {
 		return nil, errors.New("must specify a resource type")
 	}
@@ -936,7 +936,6 @@ func FindAllowedResources(rm gimlet.RoleManager, roles []string, resourceType, r
 		return nil, errors.New("must specify a required permission")
 	}
 	allowedResources := map[string]bool{}
-	ctx := context.Background()
 	roleDocs, err := rm.GetRoles(roles)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting roles")
