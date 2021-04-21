@@ -138,7 +138,7 @@ buildvariants:
       TEST_TIMEOUT: 15m
       mongodb_url: https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1604-4.0.3.tgz
     run_on:
-      - ubuntu1604-test
+      - archlinux-new-small
     tasks:
       - name: ".test"
 
