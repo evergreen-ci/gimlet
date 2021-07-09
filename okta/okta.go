@@ -64,7 +64,6 @@ func (opts *CreationOptions) Validate() error {
 	catcher.NewWhen(opts.ClientSecret == "", "must specify client secret")
 	catcher.NewWhen(opts.RedirectURI == "", "must specify redirect URI")
 	catcher.NewWhen(opts.Issuer == "", "must specify issuer")
-	catcher.NewWhen(len(opts.Scopes) == 0, "must specify at least one scope")
 	if opts.ValidateGroups {
 		catcher.NewWhen(opts.UserGroup == "", "must specify user group")
 	}
