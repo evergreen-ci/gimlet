@@ -23,7 +23,7 @@ func GetVars(r *http.Request) map[string]string {
 	for k, v := range vars {
 		unescapedVar, err := url.PathUnescape(v)
 		if err != nil {
-			return nil
+			return make(map[string]string)
 		}
 		vars[k] = unescapedVar
 	}
