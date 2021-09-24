@@ -65,8 +65,7 @@ func (s *Static) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.Ha
 	if fi.IsDir() {
 		// redirect if missing trailing slash
 		if !strings.HasSuffix(r.URL.Path, "/") {
-			r.URL.Path += "/"
-			http.Redirect(rw, r, r.URL.String(), http.StatusFound)
+			http.Redirect(rw, r, r.URL.Path+"/", http.StatusFound)
 			return
 		}
 
