@@ -13,9 +13,13 @@ ifneq (,$(GOROOT))
 gobin := $(GOROOT)/bin/go
 endif
 
-gocache := $(GOCACHE)
-ifeq (,$(gocache))
-gocache := $(abspath $(buildDir)/.cache)
+goCache := $(GOCACHE)
+ifeq (,$(goCache))
+goCache := $(abspath $(buildDir)/.cache)
+endif
+goModCache := $(GOMODCACHE)
+ifeq (,$(goModCache))
+goModCache := $(abspath $(buildDir)/.mod-cache)
 endif
 lintCache := $(GOLANGCI_LINT_CACHE)
 ifeq (,$(lintCache))
@@ -24,25 +28,27 @@ endif
 
 ifeq ($(OS),Windows_NT)
 gobin := $(shell cygpath $(gobin))
-gocache := $(shell cygpath -m $(gocache))
+goCache := $(shell cygpath -m $(goCache))
+goModCache := $(shell cygpath -m $(goModCache))
 lintCache := $(shell cygpath -m $(lintCache))
-export GOPATH := $(shell cygpath -m $(GOPATH))
 export GOROOT := $(shell cygpath -m $(GOROOT))
 endif
 
-ifneq ($(gocache),$(GOCACHE))
-export GOCACHE := $(gocache)
+ifneq ($(goCache),$(GOCACHE))
+export GOCACHE := $(goCache)
+endif
+ifneq ($(goModCache),$(GOMODCACHE))
+export GOMODCACHE := $(goModCache)
 endif
 ifneq ($(lintCache),$(GOLANGCI_LINT_CACHE))
 export GOLANGCI_LINT_CACHE := $(lintCache)
 endif
 
-export GO111MODULE := off
 ifneq (,$(RACE_DETECTOR))
 # cgo is required for using the race detector.
-export CGO_ENABLED=1
+export CGO_ENABLED := 1
 else
-export CGO_ENABLED=0
+export CGO_ENABLED := 0
 endif
 # end environment setup
 
@@ -85,7 +91,7 @@ coverage-%: $(buildDir)/output.%.coverage
 html-coverage-%: $(buildDir)/output.%.coverage.html
 	
 lint-%: $(buildDir)/output.%.lint
-	@grep -v -s -q "^--- FAIL" $<
+	
 # end convenience targets
 # end basic development operations
 
@@ -124,17 +130,6 @@ $(buildDir)/output.%.lint: $(buildDir)/run-linter .FORCE
 	@$(lintEnvVars) ./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$*'
 # end test and coverage artifacts
 
-# start vendoring configuration
-vendor-clean:
-	rm -rf vendor/github.com/mongodb/grip/vendor/github.com/pkg/
-	rm -rf vendor/github.com/mongodb/grip/vendor/github.com/stretchr/
-	rm -rf vendor/gopkg.in/asn1-ber.v1/tests/
-	rm -rf vendor/github.com/rs/cors/examples/
-	find vendor/ -name "*.gif" -o -name "*.gz" -o -name "*.png" -o -name "*.ico" -o -name "*.dat" -o -name "*testdata" | xargs rm -rf
-	find vendor/ -type d -name '.git' | xargs rm -rf
-phony += vendor-clean
-# end vendoring tooling configuration
-
 # start mongodb targets
 mongodb/.get-mongodb:
 	rm -rf mongodb
@@ -153,6 +148,12 @@ check-mongod: mongodb/.get-mongodb
 	@echo "mongod is up"
 phony += get-mongodb start-mongod init-rs check-mongod
 # end mongodb targets
+
+# start module management targets
+mod-tidy:
+	$(gobin) mod tidy
+phony += mod-tidy
+# end module management targets
 
 # start cleanup targets
 clean:
