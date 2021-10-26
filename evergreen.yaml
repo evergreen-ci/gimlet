@@ -3,7 +3,7 @@ command_type: test
 ignore:
   - "*.md" # don't schedule tests if a commit only changes markdown files
   - "*.rst"
-  - ".github/"
+  - ".github/*"
 
 #######################################
 #         YAML Templates              #
