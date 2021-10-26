@@ -49,23 +49,23 @@ functions:
         env:
           MONGODB_URL: ${mongodb_url}
           DECOMPRESS: ${decompress}
-        working_dir: gopath/src/github.com/evergreen-ci/gimlet
+        working_dir: gimlet
         command: make get-mongodb
     - command: subprocess.exec
       type: setup
       params:
         background: true
-        working_dir: gopath/src/github.com/evergreen-ci/gimlet
+        working_dir: gimlet
         command: make start-mongod
     - command: subprocess.exec
       type: setup
       params:
-        working_dir: gopath/src/github.com/evergreen-ci/gimlet
+        working_dir: gimlet
         command: make check-mongod
     - command: subprocess.exec
       type: setup
       params:
-        working_dir: gopath/src/github.com/evergreen-ci/gimlet
+        working_dir: gimlet
         command: make init-rs
 
 #######################################
@@ -84,7 +84,7 @@ post:
       aws_secret: ${aws_secret}
       local_files_include_filter:
         [
-          "gopath/src/github.com/evergreen-ci/gimlet/build/output.*.coverage.html",
+          "gimlet/build/output.*.coverage.html",
         ]
       remote_file: evergreen/${task_id}/
       bucket: mciuploads
@@ -97,7 +97,7 @@ post:
       aws_key: ${aws_key}
       aws_secret: ${aws_secret}
       local_files_include_filter:
-        ["gopath/src/github.com/evergreen-ci/gimlet/build/output.*.coverage"]
+        ["gimlet/build/output.*.coverage"]
       remote_file: evergreen/${task_id}/
       bucket: mciuploads
       content_type: text/plain
