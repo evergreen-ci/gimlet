@@ -8,9 +8,9 @@ import (
 
 	"github.com/evergreen-ci/gimlet"
 	"github.com/evergreen-ci/gimlet/usercache"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/suite"
-	ldap "gopkg.in/ldap.v3"
 )
 
 type LDAPSuite struct {
@@ -147,11 +147,12 @@ type mockConnErr struct {
 
 type mockConn struct{}
 
-func (m *mockConn) Start()                               {}
-func (m *mockConn) StartTLS(config *tls.Config) error    { return nil }
-func (m *mockConn) Close()                               {}
-func (m *mockConn) SetTimeout(time.Duration)             {}
-func (m *mockConn) ModifyDN(*ldap.ModifyDNRequest) error { return nil }
+func (m *mockConn) Start()                                                           {}
+func (m *mockConn) StartTLS(config *tls.Config) error                                { return nil }
+func (m *mockConn) Close()                                                           {}
+func (m *mockConn) SetTimeout(time.Duration)                                         {}
+func (m *mockConn) ModifyDN(*ldap.ModifyDNRequest) error                             { return nil }
+func (m *mockConn) ModifyWithResult(*ldap.ModifyRequest) (*ldap.ModifyResult, error) { return nil, nil }
 func (m *mockConn) Bind(username, password string) error {
 	if username == "uid=foo,path" && password == "hunter2" {
 		return nil
@@ -181,20 +182,20 @@ func (m *mockConn) ExternalBind() error { return nil }
 func (m *mockConnSuccess) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	return &ldap.SearchResult{
 		Entries: []*ldap.Entry{
-			&ldap.Entry{
+			{
 				Attributes: []*ldap.EntryAttribute{
-					&ldap.EntryAttribute{
+					{
 						Values: []string{"cn=10gen,ou=groups,dc=mongodb,dc=com"},
 					},
-					&ldap.EntryAttribute{
+					{
 						Name:   "uid",
 						Values: []string{"foo"},
 					},
-					&ldap.EntryAttribute{
+					{
 						Name:   "mail",
 						Values: []string{"foo@example.com"},
 					},
-					&ldap.EntryAttribute{
+					{
 						Name:   "cn",
 						Values: []string{"Foo Bar"},
 					},
@@ -210,6 +211,10 @@ func (m *mockConnErr) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchRes
 
 func (m *mockConn) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error) {
 	return nil, nil
+}
+
+func (m *mockConn) IsClosing() bool {
+	return false
 }
 
 type mockUser struct{ name string }

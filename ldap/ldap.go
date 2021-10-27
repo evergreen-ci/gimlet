@@ -11,10 +11,10 @@ import (
 
 	"github.com/evergreen-ci/gimlet"
 	"github.com/evergreen-ci/gimlet/usercache"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
-	ldap "gopkg.in/ldap.v3"
 )
 
 // userService provides authentication and authorization of users against an LDAP service. It
