@@ -3,8 +3,8 @@ package gimlet
 import (
 	"net/http"
 
+	"github.com/evergreen-ci/negroni"
 	"github.com/phyber/negroni-gzip/gzip"
-	"github.com/urfave/negroni"
 )
 
 // NewStatic provides a convince wrapper around negroni's static file

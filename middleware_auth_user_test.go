@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/evergreen-ci/negroni"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/urfave/negroni"
 )
 
 func TestUserMiddleware(t *testing.T) {

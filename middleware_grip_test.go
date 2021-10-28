@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/evergreen-ci/negroni"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/level"
 	"github.com/mongodb/grip/logging"
 	"github.com/mongodb/grip/message"
 	"github.com/mongodb/grip/send"
 	"github.com/stretchr/testify/assert"
-	"github.com/urfave/negroni"
 )
 
 func TestReqestLogger(t *testing.T) {

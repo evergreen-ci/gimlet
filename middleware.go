@@ -1,7 +1,7 @@
 package gimlet
 
 import (
-	"github.com/urfave/negroni"
+	"github.com/evergreen-ci/negroni"
 )
 
 // Middleware is a local alias for negroni.Handler types.
