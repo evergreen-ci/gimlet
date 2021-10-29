@@ -3,10 +3,10 @@ package gimlet
 import (
 	"net/http"
 
+	"github.com/evergreen-ci/negroni"
 	"github.com/gorilla/mux"
 	"github.com/mongodb/grip"
 	"github.com/pkg/errors"
-	"github.com/urfave/negroni"
 )
 
 // AssembleHandler takes a router and one or more applications and

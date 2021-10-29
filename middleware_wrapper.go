@@ -3,7 +3,7 @@ package gimlet
 import (
 	"net/http"
 
-	"github.com/urfave/negroni"
+	"github.com/evergreen-ci/negroni"
 )
 
 // WrapperMiddleware is convenience function to produce middlewares

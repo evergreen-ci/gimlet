@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/evergreen-ci/negroni"
 	"github.com/gorilla/mux"
 	"github.com/mongodb/grip"
-	"github.com/urfave/negroni"
 )
 
 // Handler returns a handler interface for integration with other

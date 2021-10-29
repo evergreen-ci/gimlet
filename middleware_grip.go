@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/evergreen-ci/negroni"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/logging"
 	"github.com/mongodb/grip/message"
 	"github.com/mongodb/grip/recovery"
-	"github.com/urfave/negroni"
 )
 
 const (
