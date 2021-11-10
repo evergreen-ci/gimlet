@@ -121,6 +121,16 @@ tasks:
     tags: ["report"]
     name: lint-rolemanager
 
+  - name: verify-mod-tidy
+    tags: ["report"]
+    commands:
+      - command: git.get_project
+        type: system
+        params:
+          directory: jasper
+      - func: run-make
+        vars: { target: "${task_name}" }
+
   - name: coverage
     tags: ["report"]
     commands:
