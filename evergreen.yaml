@@ -127,7 +127,7 @@ tasks:
       - command: git.get_project
         type: system
         params:
-          directory: jasper
+          directory: gimlet
       - func: run-make
         vars: { target: "${task_name}" }
 
