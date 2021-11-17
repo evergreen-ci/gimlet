@@ -69,8 +69,8 @@ $(buildDir)/run-linter: cmd/run-linter/run-linter.go $(buildDir)/golangci-lint
 testOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).test))
 lintOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).lint))
 coverageOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).coverage))
-coverageHtmlOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).coverage.html))
-.PRECIOUS: $(testOutput) $(lintOuptut) $(coverageOutput) $(coverageHtmlOutput)
+htmlCoverageOutput := $(subst -,/,$(foreach target,$(packages),$(buildDir)/output.$(target).coverage.html))
+.PRECIOUS: $(testOutput) $(lintOuptut) $(coverageOutput) $(htmlCoverageOutput)
 # end output files
 
 # start basic development operations
@@ -79,8 +79,8 @@ compile:
 	$(gobin) build $(compilePackages)
 test: $(testOutput)
 coverage: $(coverageOutput)
-coverage-html: $(coverageHtmlOutput)
-phony := compile test coverage coverage-html
+html-coverage: $(htmlCoverageOutput)
+phony := compile test lint coverage html-coverage
 
 # start convenience targets for running tests and coverage tasks on a
 # specific package.

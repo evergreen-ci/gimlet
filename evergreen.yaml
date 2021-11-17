@@ -140,7 +140,7 @@ tasks:
       - func: setup-mongodb
       - func: run-make
         vars:
-          target: "coverage-html"
+          target: html-coverage
 
   - <<: *run-build
     tags: ["test"]
