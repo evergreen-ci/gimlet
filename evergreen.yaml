@@ -13,6 +13,16 @@ variables:
     # runs a build operations. The task name in evergreen should
     # correspond to a make target for the build operation.
     name: test
+    must_have_test_results: true
+    commands:
+      - func: get-project-and-modules
+      - func: setup-mongodb
+      - func: run-make
+        vars: { target: "${task_name}" }
+  - &run-build-with-mongodb
+    # The same as run-build but ensure that there's a mongod running for testing.
+    name: test
+    must_have_test_results: true
     commands:
       - func: get-project-and-modules
       - func: setup-mongodb
@@ -131,16 +141,9 @@ tasks:
       - func: run-make
         vars: { target: "${task_name}" }
 
-  - name: coverage
+  - <<: *run-build-with-mongodb
     tags: ["report"]
-    commands:
-      - command: git.get_project
-        params:
-          directory: gimlet
-      - func: setup-mongodb
-      - func: run-make
-        vars:
-          target: html-coverage
+    name: html-coverage
 
   - <<: *run-build
     tags: ["test"]
@@ -154,7 +157,7 @@ tasks:
   - <<: *run-build
     tags: ["test"]
     name: test-okta
-  - <<: *run-build
+  - <<: *run-build-with-mongodb
     tags: ["test"]
     name: test-rolemanager
 
