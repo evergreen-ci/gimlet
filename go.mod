@@ -5,13 +5,13 @@ go 1.16
 require (
 	github.com/evergreen-ci/negroni v1.0.1-0.20211028183800-67b6d7c2c035
 	github.com/go-ldap/ldap/v3 v3.4.1
-	github.com/gorilla/mux v1.7.0
+	github.com/gorilla/mux v1.8.0
 	github.com/mongodb/grip v0.0.0-20211018154934-e661a71929d5
-	github.com/okta/okta-jwt-verifier-golang v1.1.1
+	github.com/okta/okta-jwt-verifier-golang v1.1.2
 	github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.8.0
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.7.3
 	gopkg.in/yaml.v2 v2.2.8
 )
