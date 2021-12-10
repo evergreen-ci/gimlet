@@ -7,7 +7,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.1
 	github.com/gorilla/mux v1.7.0
 	github.com/mongodb/grip v0.0.0-20211018154934-e661a71929d5
-	github.com/okta/okta-jwt-verifier-golang v1.1.1
+	github.com/okta/okta-jwt-verifier-golang v1.1.2
 	github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.7.0
