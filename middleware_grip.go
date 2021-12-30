@@ -36,34 +36,40 @@ func setServiceLogger(r *http.Request, logger grip.Journaler) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), loggerKey, logger))
 }
 
-type logAnnotation struct {
-	key   string
-	value interface{}
-}
+type loggingAnnotations map[string]interface{}
 
 // AddLoggingAnnotation adds a key-value pair to be added to logging
-// messages used by the application logging information. There can be
-// only one annotation registered per-request.
-func AddLoggingAnnotation(r *http.Request, key string, data interface{}) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), loggingAnnotationsKey, &logAnnotation{key: key, value: data}))
+// messages used by the application logging information, overwriting
+// any previous value for the key.
+// This will noop if the logger hasn't already been set up.
+func AddLoggingAnnotation(r *http.Request, key string, value interface{}) {
+	annotations := getLoggingAnnotations(r.Context())
+	if annotations == nil {
+		return
+	}
+
+	annotations[key] = value
+}
+
+func setLoggingAnnotations(r *http.Request) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), loggingAnnotationsKey, make(loggingAnnotations)))
+}
+
+func getLoggingAnnotations(ctx context.Context) loggingAnnotations {
+	rv := ctx.Value(loggingAnnotationsKey)
+	if rv == nil {
+		return nil
+	}
+	a, ok := rv.(loggingAnnotations)
+	if !ok {
+		return nil
+	}
+
+	return a
 }
 
 func setStartAtTime(r *http.Request, startAt time.Time) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), startAtKey, startAt))
-}
-
-func getLogAnnotation(ctx context.Context) *logAnnotation {
-	if rv := ctx.Value(loggingAnnotationsKey); rv != nil {
-		switch a := rv.(type) {
-		case *logAnnotation:
-			return a
-		case logAnnotation:
-			return &a
-		default:
-			return nil
-		}
-	}
-	return nil
 }
 
 func getRequestStartAt(ctx context.Context) time.Time {
@@ -110,6 +116,7 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 	r = setRequestID(r, id)
 	startAt := time.Now()
 	r = setStartAtTime(r, startAt)
+	r = setLoggingAnnotations(r)
 
 	logger.Info(message.Fields{
 		"action":  "started",
@@ -126,7 +133,6 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 	ctx := r.Context()
 	startAt := getRequestStartAt(ctx)
 	dur := time.Since(startAt)
-	a := getLogAnnotation(ctx)
 	m := message.Fields{
 		"method":      r.Method,
 		"remote":      r.RemoteAddr,
@@ -138,12 +144,12 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 		"outcome":     http.StatusText(res.Status()),
 		"length":      r.ContentLength,
 	}
-	if u := GetUser(ctx); u != nil {
-		m["user"] = u.Username()
-	}
 
+	a := getLoggingAnnotations(ctx)
 	if a != nil {
-		m[a.key] = a.value
+		for key, val := range a {
+			m[key] = val
+		}
 	}
 
 	logger.Info(m)

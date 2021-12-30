@@ -80,7 +80,6 @@ func TestReqestPanicLoggerWithPanic(t *testing.T) {
 		URL:    &url.URL{},
 		Header: http.Header{},
 	}
-	req = AddLoggingAnnotation(req, "annie", "hall")
 	testrw := httptest.NewRecorder()
 	rw := negroni.NewResponseWriter(testrw)
 
@@ -94,9 +93,8 @@ func TestReqestPanicLoggerWithPanic(t *testing.T) {
 	m, ok := sender.GetMessageSafe()
 	assert.True(ok)
 	assert.NotNil(m)
-	fields, ok := m.Message.Raw().(message.Fields)
+	_, ok = m.Message.Raw().(message.Fields)
 	assert.True(ok)
-	fmt.Println(fields)
 }
 
 func TestReqestPanicLoggerWithErrAbortHandler(t *testing.T) {
@@ -166,24 +164,20 @@ func TestDefaultGripMiddlwareSetters(t *testing.T) {
 
 }
 
-func TestLoggingAnnotationRetreive(t *testing.T) {
+func TestLoggingAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, loggingAnnotationsKey, logAnnotation{"k", "v"})
+	req := &http.Request{
+		URL:    &url.URL{},
+		Header: http.Header{},
+	}
+	req = setLoggingAnnotations(req)
+	AddLoggingAnnotation(req, "key", "value")
 
-	la := getLogAnnotation(ctx)
-	assert.Equal("k", la.key)
-	assert.Equal("v", la.value)
-
-	ctx = context.WithValue(ctx, loggingAnnotationsKey, 1)
-	la = getLogAnnotation(ctx)
-	assert.Nil(la)
-
-	ctx = context.WithValue(ctx, loggingAnnotationsKey, &logAnnotation{"key", "val"})
-	la = getLogAnnotation(ctx)
-	assert.Equal("key", la.key)
-	assert.Equal("val", la.value)
+	la := getLoggingAnnotations(req.Context())
+	val, ok := la["key"]
+	assert.True(ok)
+	assert.Equal("value", val)
 }
 
 func TestLoggingAnnotation(t *testing.T) {
@@ -195,6 +189,7 @@ func TestLoggingAnnotation(t *testing.T) {
 
 	var called bool
 	next := func(w http.ResponseWriter, r *http.Request) {
+		AddLoggingAnnotation(r, "key", "value")
 		called = true
 	}
 
@@ -203,7 +198,7 @@ func TestLoggingAnnotation(t *testing.T) {
 		URL:    &url.URL{},
 		Header: http.Header{},
 	}
-	req = AddLoggingAnnotation(req, "annie", "hall")
+
 	testrw := httptest.NewRecorder()
 	rw := negroni.NewResponseWriter(testrw)
 
@@ -228,7 +223,7 @@ func TestLoggingAnnotation(t *testing.T) {
 	fields, ok := m.Message.Raw().(message.Fields)
 	assert.True(ok)
 	fmt.Println(fields)
-	val, ok := fields["annie"]
+	val, ok := fields["key"]
 	assert.True(ok)
-	assert.Equal("hall", val)
+	assert.Equal("value", val)
 }
