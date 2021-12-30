@@ -84,6 +84,7 @@ func (umc UserMiddlewareConfiguration) ClearCookie(rw http.ResponseWriter) {
 }
 
 func setUserForRequest(r *http.Request, u User) *http.Request {
+	AddLoggingAnnotation(r, "user", u.Username())
 	return r.WithContext(AttachUser(r.Context(), u))
 }
 
