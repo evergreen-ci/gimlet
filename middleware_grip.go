@@ -51,8 +51,8 @@ func AddLoggingAnnotation(r *http.Request, key string, value interface{}) {
 	annotations[key] = value
 }
 
-func setLoggingAnnotations(r *http.Request) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), loggingAnnotationsKey, make(loggingAnnotations)))
+func setLoggingAnnotations(r *http.Request, annotations loggingAnnotations) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), loggingAnnotationsKey, annotations))
 }
 
 func getLoggingAnnotations(ctx context.Context) loggingAnnotations {
@@ -116,7 +116,7 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 	r = setRequestID(r, id)
 	startAt := time.Now()
 	r = setStartAtTime(r, startAt)
-	r = setLoggingAnnotations(r)
+	r = setLoggingAnnotations(r, loggingAnnotations{})
 
 	logger.Info(message.Fields{
 		"action":  "started",
