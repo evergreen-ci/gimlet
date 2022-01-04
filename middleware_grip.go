@@ -117,6 +117,7 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 		"remote":  r.RemoteAddr,
 		"request": id,
 		"path":    r.URL.Path,
+		"params":  r.URL.Query(),
 	})
 
 	return r
@@ -132,6 +133,7 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 		"remote":      r.RemoteAddr,
 		"request":     GetRequestID(ctx),
 		"path":        r.URL.Path,
+		"params":      r.URL.Query(),
 		"duration_ms": int64(dur / time.Millisecond),
 		"action":      "completed",
 		"status":      res.Status(),
