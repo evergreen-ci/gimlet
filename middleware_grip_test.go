@@ -171,7 +171,7 @@ func TestLoggingAnnotations(t *testing.T) {
 		URL:    &url.URL{},
 		Header: http.Header{},
 	}
-	req = setLoggingAnnotations(req)
+	req = setLoggingAnnotations(req, loggingAnnotations{})
 	AddLoggingAnnotation(req, "key", "value")
 
 	la := getLoggingAnnotations(req.Context())
