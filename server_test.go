@@ -35,7 +35,7 @@ func TestServer(t *testing.T) {
 		require.Contains(t, err.Error(), "must specify a handler")
 	})
 	t.Run("BuildNewServer", func(t *testing.T) {
-		srv, err := BuildNewServer("1.2.3.4:80", nil, &tls.Config{Certificates: []tls.Certificate{tls.Certificate{}}})
+		srv, err := BuildNewServer("1.2.3.4:80", nil, &tls.Config{Certificates: []tls.Certificate{{}}})
 		require.Nil(t, srv)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "must specify a handler")
@@ -47,7 +47,7 @@ func TestServer(t *testing.T) {
 		app := NewApp()
 		h, err := app.Handler()
 		require.NoError(t, err)
-		srv, err := BuildNewServer("1.2.3.4:80", h, &tls.Config{Certificates: []tls.Certificate{tls.Certificate{}}})
+		srv, err := BuildNewServer("1.2.3.4:80", h, &tls.Config{Certificates: []tls.Certificate{{}}})
 		require.NotNil(t, srv)
 		require.NoError(t, err)
 		assert.NotNil(t, srv.GetServer())

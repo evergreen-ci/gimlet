@@ -51,8 +51,8 @@ func TestSimpleAuthenticator(t *testing.T) {
 	usr3 := NewBasicUser(opts3.Name("name").Email("email").Password("pass").Key("key").Roles("admin"))
 	usr3broken := NewBasicUser(opts3.Key("yek"))
 	auth = NewSimpleAuthenticator([]User{usr3}, map[string][]string{
-		"none":  []string{"_"},
-		"admin": []string{"id3"}})
+		"none":  {"_"},
+		"admin": {"id3"}})
 	assert.NotNil(auth)
 	assert.Len(auth.(*simpleAuthenticator).groups, 2)
 	assert.Len(auth.(*simpleAuthenticator).users, 1)
@@ -90,14 +90,14 @@ func TestBasicAuthenticator(t *testing.T) {
 	usr := NewBasicUser(opts.Name("name").Email("email").Password("pass").Key("key"))
 	assert.True(auth.CheckAuthenticated(usr))
 
-	auth = NewBasicAuthenticator(map[string][]string{"one": []string{"id"}}, nil)
+	auth = NewBasicAuthenticator(map[string][]string{"one": {"id"}}, nil)
 	assert.False(auth.CheckGroupAccess(usr, "two"))
 	assert.False(auth.CheckGroupAccess(usr, ""))
 	assert.True(auth.CheckGroupAccess(usr, "one"))
 	assert.False(auth.CheckGroupAccess(nil, "one"))
 	assert.False(auth.CheckGroupAccess(nil, ""))
 
-	auth = NewBasicAuthenticator(nil, map[string][]string{"/one": []string{"id"}})
+	auth = NewBasicAuthenticator(nil, map[string][]string{"/one": {"id"}})
 	assert.False(auth.CheckResourceAccess(usr, "two"))
 	assert.False(auth.CheckResourceAccess(usr, ""))
 	assert.False(auth.CheckResourceAccess(usr, "one"))
