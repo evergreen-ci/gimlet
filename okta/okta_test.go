@@ -792,10 +792,10 @@ func TestLoginHandler(t *testing.T) {
 			require.NoError(t, err)
 			q := parsed.Query()
 			mapContains(t, q, map[string][]string{
-				"client_id":     []string{"client_id"},
-				"response_type": []string{"code"},
-				"response_mode": []string{"query"},
-				"redirect_uri":  []string{"redirect_uri"},
+				"client_id":     {"client_id"},
+				"response_type": {"code"},
+				"response_mode": {"query"},
+				"redirect_uri":  {"redirect_uri"},
 			})
 			scope := q.Get("scope")
 			for _, requestedScope := range mockCreationOptions().Scopes {
