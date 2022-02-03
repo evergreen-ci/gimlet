@@ -175,6 +175,11 @@ func MakeRecoveryLogger() Middleware {
 }
 
 func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	if r.URL.Path == "/api/status/info" {
+		next(rw, r)
+		return
+	}
+
 	r = setupLogger(l.Journaler, r)
 	ctx := r.Context()
 
