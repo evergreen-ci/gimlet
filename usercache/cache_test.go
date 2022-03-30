@@ -32,57 +32,86 @@ func TestCache(t *testing.T) {
 		{
 			name: "InMemory",
 			factory: func() (Cache, error) {
-				return NewInMemory(ctx, time.Millisecond), nil
+				return NewInMemory(ctx, 100*time.Millisecond), nil
 			},
 			cases: []implCases{
 				{
 					name: "CleanMethodPrunes",
 					test: func(t *testing.T, cache Cache) {
 						c := cache.(*userCache)
+						c.mu.Lock()
 						c.cache["foo"] = cacheValue{
 							user:    gimlet.NewBasicUser(opts),
 							created: time.Now().Add(-time.Hour),
 						}
+						c.mu.Unlock()
+
+						c.mu.RLock()
 						assert.Len(t, c.cache, 1)
+						c.mu.RUnlock()
+
 						c.clean()
-						assert.Len(t, c.cache, 0)
+
+						c.mu.RLock()
+						assert.Empty(t, c.cache)
+						c.mu.RUnlock()
 					},
 				},
 				{
 					name: "CleanMethodIsRunPeriodically",
 					test: func(t *testing.T, cache Cache) {
 						c := cache.(*userCache)
+						c.mu.Lock()
 						c.cache["foo"] = cacheValue{
 							user:    gimlet.NewBasicUser(opts),
 							created: time.Now().Add(-time.Hour),
 						}
+						c.mu.Unlock()
+
+						c.mu.RLock()
 						assert.Len(t, c.cache, 1)
-						time.Sleep(2 * time.Millisecond)
-						assert.Len(t, c.cache, 0)
+						c.mu.RUnlock()
+
+						time.Sleep(500 * time.Millisecond)
+
+						c.mu.RLock()
+						assert.Empty(t, c.cache)
+						c.mu.RUnlock()
 					},
 				},
 				{
 					name: "CleanLeavesNoTimeout",
 					test: func(t *testing.T, cache Cache) {
 						c := cache.(*userCache)
+						c.mu.Lock()
 						c.cache["foo"] = cacheValue{
 							user:    gimlet.NewBasicUser(opts),
 							created: time.Now().Add(time.Hour),
 						}
+						c.mu.Unlock()
+
+						c.mu.RLock()
 						assert.Len(t, c.cache, 1)
+						c.mu.RUnlock()
+
 						c.clean()
+
+						c.mu.RLock()
 						assert.Len(t, c.cache, 1)
+						c.mu.RUnlock()
 					},
 				},
 				{
 					name: "FindWithBrokenCache",
 					test: func(t *testing.T, cache Cache) {
 						c := cache.(*userCache)
+						c.mu.Lock()
 						c.userToToken["foo"] = "0"
 						c.cache["foo"] = cacheValue{
 							user:    gimlet.NewBasicUser(opts),
 							created: time.Now().Add(time.Hour),
 						}
+						c.mu.Unlock()
 						_, _, err := cache.Find("foo")
 						assert.Error(t, err)
 					},
@@ -91,10 +120,12 @@ func TestCache(t *testing.T) {
 					name: "GetRespectsTTL",
 					test: func(t *testing.T, cache Cache) {
 						c := cache.(*userCache)
+						c.mu.Lock()
 						c.cache["foo"] = cacheValue{
 							user:    gimlet.NewBasicUser(opts),
 							created: time.Now().Add(-time.Hour),
 						}
+						c.mu.Unlock()
 						u, exists, err := cache.Get("foo")
 						assert.NoError(t, err)
 						assert.False(t, exists)

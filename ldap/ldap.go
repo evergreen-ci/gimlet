@@ -404,13 +404,12 @@ func (u *userService) validateGroup(username string) error {
 	if u.unconvertIDOut != nil {
 		username = u.unconvertIDOut(username)
 	}
-	errs := make([]error, 0, 3)
 	catcher := grip.NewBasicCatcher()
 	var (
 		err    error
 		result *ldap.SearchResult
 	)
-	for idx, path := range u.getSearchPaths() {
+	for _, path := range u.getSearchPaths() {
 		if path == "" {
 			catcher.New("path is not specified")
 			continue

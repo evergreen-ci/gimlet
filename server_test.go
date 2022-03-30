@@ -26,7 +26,7 @@ func TestServer(t *testing.T) {
 		srv, err := BuildNewServer("example.com", nil, nil)
 		require.Nil(t, srv)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "nil tls config")
+		require.Contains(t, err.Error(), "nil TLS config")
 	})
 	t.Run("NewServer", func(t *testing.T) {
 		srv, err := NewServer("1.2.3.4:80", nil)
