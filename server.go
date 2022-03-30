@@ -49,15 +49,15 @@ type ServerConfig struct {
 // the configuration.
 func (c *ServerConfig) Validate() error {
 	catcher := grip.NewBasicCatcher()
-	catcher.NewWhen(c.TLS != nil && c.TLS.Certificates == nil, "tls config specified without certificates")
-	catcher.NewWhen(c.Handler == nil && c.App == nil, "must specify a handler or a gimlet app")
+	catcher.NewWhen(c.TLS != nil && c.TLS.Certificates == nil, "TLS config specified without certificates")
+	catcher.NewWhen(c.Handler == nil && c.App == nil, "must specify a handler or an app")
 	catcher.NewWhen(c.Handler != nil && c.App != nil && !c.handlerGenerated, "can only specify a handler or an app")
 	catcher.NewWhen(c.Address == "", "must specify an address")
-	catcher.ErrorfWhen(c.Timeout < time.Second, "must specify timeout greater than a second, '%s'", c.Timeout)
-	catcher.ErrorfWhen(c.Timeout > 10*time.Minute, "must specify timeout less than 10 minutes, '%s'", c.Timeout)
+	catcher.NewWhen(c.Timeout < time.Second, "must specify timeout greater than a second")
+	catcher.NewWhen(c.Timeout > 10*time.Minute, "must specify timeout less than 10 minutes")
 
 	_, _, err := net.SplitHostPort(c.Address)
-	catcher.Add(err)
+	catcher.Wrap(err, "splitting host and port in address")
 
 	if c.App != nil {
 		c.Handler, err = c.App.Handler()
@@ -105,7 +105,7 @@ func NewServer(addr string, n http.Handler) (Server, error) {
 // error if you pass a nil TLS configuration.
 func BuildNewServer(addr string, n http.Handler, tlsConf *tls.Config) (Server, error) {
 	if tlsConf == nil {
-		return nil, errors.New("must specify a non-nil tls config")
+		return nil, errors.New("must specify a non-nil TLS config")
 	}
 
 	conf := ServerConfig{
@@ -130,10 +130,10 @@ func (s server) Run(ctx context.Context) (WaitFunc, error) {
 		defer recovery.LogStackTraceAndContinue("app service")
 		if s.Server.TLSConfig != nil {
 			err := s.ListenAndServeTLS("", "")
-			grip.ErrorWhen(err != http.ErrServerClosed, errors.Wrap(err, "problem starting tls service"))
+			grip.ErrorWhen(err != http.ErrServerClosed, errors.Wrap(err, "starting TLS service"))
 		} else {
 			err := s.ListenAndServe()
-			grip.ErrorWhen(err != http.ErrServerClosed, errors.Wrap(err, "problem starting service"))
+			grip.ErrorWhen(err != http.ErrServerClosed, errors.Wrap(err, "starting service"))
 		}
 
 		close(serviceWait)

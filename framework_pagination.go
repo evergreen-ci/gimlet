@@ -1,12 +1,14 @@
 package gimlet
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/message"
 )
 
 // ResponsePages holds pagination metadata for a route built with the
@@ -111,7 +113,10 @@ func (p *Page) Validate() error {
 func (p *Page) GetLink(route string) string {
 	url, err := url.Parse(fmt.Sprintf("%s/%s", p.BaseURL, route))
 	if err != nil {
-		grip.Alertf("encountered error '%v' building page, falling back to baseURL '%s'", err, p.BaseURL)
+		grip.Alert(message.WrapError(err, message.Fields{
+			"message":  "failed to build page, falling back to base URL",
+			"base_url": p.BaseURL,
+		}))
 		url = p.url
 	}
 

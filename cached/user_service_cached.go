@@ -25,7 +25,7 @@ func NewUserManager(cache usercache.Cache) (gimlet.UserManager, error) {
 func (um *cachedUserManager) GetUserByToken(_ context.Context, token string) (gimlet.User, error) {
 	user, _, err := um.cache.Get(token)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get cached user with token")
+		return nil, errors.Wrap(err, "getting cached user with token")
 	}
 	if user == nil {
 		return nil, errors.New("user not found in cache with token")
@@ -52,7 +52,7 @@ func (*cachedUserManager) IsRedirect() bool                          { return fa
 func (um *cachedUserManager) GetUserByID(id string) (gimlet.User, error) {
 	user, valid, err := um.cache.Find(id)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get cached user with ID")
+		return nil, errors.Wrap(err, "getting cached user with ID")
 	}
 	if user == nil {
 		return nil, errors.New("user not found in cache with ID")

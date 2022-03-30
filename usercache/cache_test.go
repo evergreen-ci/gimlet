@@ -255,10 +255,10 @@ func TestCache(t *testing.T) {
 				opts, err := gimlet.NewBasicUserOptions("usr")
 				require.NoError(t, err)
 				u := gimlet.NewBasicUser(opts)
-				u, err = cache.GetOrCreate(u)
+				cachedUser, err := cache.GetOrCreate(u)
 				require.NoError(t, err)
-				require.NotNil(t, u)
-				token, err := cache.Put(u)
+				require.NotNil(t, cachedUser)
+				token, err := cache.Put(cachedUser)
 				require.NoError(t, err)
 
 				// Clear just this user
@@ -277,8 +277,8 @@ func TestCache(t *testing.T) {
 				err = cache.Clear(nil, true)
 				assert.NoError(t, err)
 
-				u, isValidToken, err = cache.Get(token)
-				assert.Nil(t, u)
+				cachedUser, isValidToken, err = cache.Get(token)
+				assert.Nil(t, cachedUser)
 				assert.False(t, isValidToken)
 				assert.NoError(t, err)
 			})

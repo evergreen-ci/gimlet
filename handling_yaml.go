@@ -14,7 +14,7 @@ import (
 func WriteYAMLResponse(w http.ResponseWriter, code int, data interface{}) {
 	defer func() {
 		if msg := recover(); msg != nil {
-			m := fmt.Sprintf("problem yaml parsing message: %v", msg)
+			m := fmt.Sprintf("parsing YAML message: %v", msg)
 			grip.Debug(m)
 			http.Error(w, m, http.StatusInternalServerError)
 		}
