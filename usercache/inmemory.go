@@ -63,7 +63,7 @@ func (c *userCache) clean() {
 func (c *userCache) Add(u gimlet.User) error {
 	_, err := c.Put(u)
 
-	return errors.Wrap(err, "problem adding user")
+	return errors.Wrap(err, "adding user")
 }
 
 func (c *userCache) Put(u gimlet.User) (string, error) {
@@ -73,7 +73,7 @@ func (c *userCache) Put(u gimlet.User) (string, error) {
 	id := u.Username()
 	token, err := util.RandomString()
 	if err != nil {
-		return "", errors.Wrap(err, "error generating token")
+		return "", errors.Wrap(err, "generating token")
 	}
 
 	c.userToToken[id] = token
@@ -128,12 +128,12 @@ func (c *userCache) Find(id string) (gimlet.User, bool, error) {
 
 	token, ok := c.userToToken[id]
 	if !ok {
-		return nil, false, errors.Errorf("could not find user of id %s", id)
+		return nil, false, errors.Errorf("could not find user '%s'", id)
 	}
 
 	user, exists := c.cache[token]
 	if !exists {
-		return nil, false, errors.Errorf("could not find user of id %s", id)
+		return nil, false, errors.Errorf("could not find user '%s'", id)
 	}
 
 	if time.Since(user.created) >= c.ttl {

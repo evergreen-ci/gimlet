@@ -23,7 +23,7 @@ func AssembleHandler(router *mux.Router, apps ...*APIApp) (http.Handler, error) 
 	for _, app := range apps {
 		if app.prefix != "" {
 			if _, ok := seenPrefixes[app.prefix]; ok {
-				catcher.Add(errors.Errorf("route prefix '%s' defined more than once", app.prefix))
+				catcher.Errorf("route prefix '%s' defined more than once", app.prefix)
 			}
 			seenPrefixes[app.prefix] = struct{}{}
 
@@ -33,7 +33,7 @@ func AssembleHandler(router *mux.Router, apps ...*APIApp) (http.Handler, error) 
 			}
 
 			r := router.PathPrefix(app.prefix).Subrouter()
-			catcher.Add(app.attachRoutes(r, false)) // this adds wrapper middlware
+			catcher.Add(app.attachRoutes(r, false)) // this adds wrapper middleware
 			n.UseHandler(r)
 			router.PathPrefix(app.prefix).Handler(n)
 		} else {

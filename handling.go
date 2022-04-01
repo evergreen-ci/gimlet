@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
 )
 
@@ -20,7 +21,11 @@ func writeResponse(of OutputFormat, w http.ResponseWriter, code int, data interf
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		grip.Warningf("encountered error '%s' writing a %d (%s) response ", err.Error(), size, of)
+		grip.Warning(message.WrapError(err, message.Fields{
+			"message":       "failed to write response",
+			"size":          size,
+			"output_format": of,
+		}))
 	}
 }
 

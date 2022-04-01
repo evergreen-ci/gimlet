@@ -129,6 +129,9 @@ tasks:
     name: lint-okta
   - <<: *run-build
     tags: ["report"]
+    name: lint-usercache
+  - <<: *run-build
+    tags: ["report"]
     name: lint-rolemanager
 
   - name: verify-mod-tidy
@@ -157,6 +160,9 @@ tasks:
   - <<: *run-build
     tags: ["test"]
     name: test-okta
+  - <<: *run-build
+    tags: ["test"]
+    name: test-usercache
   - <<: *run-build-with-mongodb
     tags: ["test"]
     name: test-rolemanager

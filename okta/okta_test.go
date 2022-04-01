@@ -758,7 +758,7 @@ func cookieMap(cookies []*http.Cookie) (map[string]string, error) {
 		var err error
 		m[cookie.Name], err = url.QueryUnescape(cookie.Value)
 		if err != nil {
-			return m, errors.Wrapf(err, "could not decode cookie %s", cookie.Name)
+			return m, errors.Wrapf(err, "decoding cookie '%s'", cookie.Name)
 		}
 	}
 	return m, nil

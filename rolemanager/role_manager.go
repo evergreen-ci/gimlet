@@ -146,11 +146,11 @@ func (m *mongoBackedRoleManager) FilterScopesByResourceType(scopeIDs []string, r
 	}
 	cursor, err := coll.Find(ctx, query)
 	if err != nil {
-		return nil, errors.Wrap(err, "problem filtering scopeIDs by resource type in db")
+		return nil, errors.Wrap(err, "filtering scopeIDs by resource type in DB")
 	}
 	scopes := []gimlet.Scope{}
 	if err = cursor.All(ctx, &scopes); err != nil {
-		return nil, errors.Wrap(err, "problem marshalling scope data")
+		return nil, errors.Wrap(err, "marshalling scope data")
 	}
 
 	return scopes, nil
@@ -849,7 +849,7 @@ func HighestPermissionsForRoles(rolesIDs []string, rm gimlet.RoleManager, opts g
 func HighestPermissionsForRolesAndResourceType(roleIDs []string, resourceType string, rm gimlet.RoleManager) (map[string]gimlet.Permissions, error) {
 	roles, err := rm.GetRoles(roleIDs)
 	if err != nil {
-		return nil, errors.Wrap(err, "problem getting roles")
+		return nil, errors.Wrap(err, "getting roles")
 	}
 	scopeIDs := make([]string, len(roles))
 	for i, role := range roles {
@@ -858,7 +858,7 @@ func HighestPermissionsForRolesAndResourceType(roleIDs []string, resourceType st
 
 	scopes, err := rm.FilterScopesByResourceType(scopeIDs, resourceType)
 	if err != nil {
-		return nil, errors.Wrap(err, "problem filtering scopes by resource types")
+		return nil, errors.Wrap(err, "filtering scopes by resource types")
 	}
 	scopeMap := map[string][]string{}
 	for _, scope := range scopes {
@@ -938,7 +938,7 @@ func FindAllowedResources(ctx context.Context, rm gimlet.RoleManager, roles []st
 	allowedResources := map[string]bool{}
 	roleDocs, err := rm.GetRoles(roles)
 	if err != nil {
-		return nil, errors.Wrap(err, "error getting roles")
+		return nil, errors.Wrap(err, "getting roles")
 	}
 	for _, role := range roleDocs {
 		level := role.Permissions[requiredPermission]
@@ -947,7 +947,7 @@ func FindAllowedResources(ctx context.Context, rm gimlet.RoleManager, roles []st
 		}
 		scope, err := rm.GetScope(ctx, role.Scope)
 		if err != nil {
-			return nil, errors.Wrapf(err, "unable to get scope '%s'", role.Scope)
+			return nil, errors.Wrapf(err, "getting scope '%s'", role.Scope)
 		}
 		if scope == nil {
 			return nil, errors.Errorf("scope '%s' not found", role.Scope)

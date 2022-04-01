@@ -44,7 +44,6 @@ func (um *BasicUserManager) GetUserByToken(_ context.Context, token string) (Use
 func (um *BasicUserManager) CreateUserToken(username, password string) (string, error) {
 	for i, user := range um.users {
 		if user.ID == username && user.Password == password {
-			// return a token that is a hash of the index, user's email and username and password hashed.
 			return makeToken(user, i), nil
 		}
 	}
@@ -86,12 +85,12 @@ func (um *BasicUserManager) GetUserByID(id string) (User, error) {
 	for _, user := range um.users {
 		if user.ID == id {
 			if user.invalid {
-				return nil, errors.Errorf("user %s not authorized!", id)
+				return nil, errors.Errorf("user '%s' not authorized", id)
 			}
 			return &user, nil
 		}
 	}
-	return nil, errors.Errorf("user %s not found!", id)
+	return nil, errors.Errorf("user '%s' not found", id)
 }
 
 func (um *BasicUserManager) GetOrCreateUser(u User) (User, error) {
@@ -121,7 +120,7 @@ func (b *BasicUserManager) GetGroupsForUser(userId string) ([]string, error) {
 		}
 	}
 
-	return nil, errors.Errorf("user %s not found", userId)
+	return nil, errors.Errorf("user '%s' not found", userId)
 }
 
 // makeToken generates a token for a user.
