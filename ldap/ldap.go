@@ -435,7 +435,7 @@ func (u *userService) validateGroup(username string) error {
 			continue
 		}
 		if len(result.Entries[0].Attributes) == 0 {
-			catcher.Errorf("entry's attributes are empty")
+			catcher.New("entry's attributes are empty")
 			continue
 		}
 

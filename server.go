@@ -53,7 +53,7 @@ func (c *ServerConfig) Validate() error {
 	catcher.NewWhen(c.Handler == nil && c.App == nil, "must specify a handler or an app")
 	catcher.NewWhen(c.Handler != nil && c.App != nil && !c.handlerGenerated, "can only specify a handler or an app")
 	catcher.NewWhen(c.Address == "", "must specify an address")
-	catcher.NewWhen(c.Timeout < time.Second, "must specify timeout greater than a second")
+	catcher.NewWhen(c.Timeout < time.Second, "must specify timeout greater than or equal to a second")
 	catcher.NewWhen(c.Timeout > 10*time.Minute, "must specify timeout less than 10 minutes")
 
 	_, _, err := net.SplitHostPort(c.Address)

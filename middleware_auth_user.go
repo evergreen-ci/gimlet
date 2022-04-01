@@ -32,7 +32,7 @@ func (umc *UserMiddlewareConfiguration) Validate() error {
 
 	if !umc.SkipCookie {
 		catcher.NewWhen(umc.CookieName == "", "must specify cookie name when cookie authentication is enabled")
-		catcher.NewWhen(umc.CookieTTL < time.Second, "cookie timeout is less than a second")
+		catcher.NewWhen(umc.CookieTTL < time.Second, "cookie timeout must be greater than or equal to a second")
 
 		if umc.CookiePath == "" {
 			umc.CookiePath = "/"
@@ -42,8 +42,8 @@ func (umc *UserMiddlewareConfiguration) Validate() error {
 	}
 
 	if !umc.SkipHeaderCheck {
-		catcher.NewWhen(umc.HeaderUserName == "", "when header auth is enabled, must specify a header user name")
-		catcher.NewWhen(umc.HeaderKeyName == "", "when header auth is enabled, must specify a header key name")
+		catcher.NewWhen(umc.HeaderUserName == "", "must specify a header user name when header auth is enabled")
+		catcher.NewWhen(umc.HeaderKeyName == "", "must specify a header key name when header auth is enabled")
 	}
 
 	return catcher.Resolve()
