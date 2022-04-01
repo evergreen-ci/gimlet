@@ -11,7 +11,7 @@ require (
 	github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.8.2
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	go.mongodb.org/mongo-driver v1.8.3
 	gopkg.in/yaml.v2 v2.4.0
 )
