@@ -175,8 +175,8 @@ github.com/mattn/go-xmpp v0.0.0-20210723025538-3871461df959/go.mod h1:Cs5mF0OsrR
 github.com/mongodb/grip v0.0.0-20211018154934-e661a71929d5 h1:JILA8R+47yXPGrfZIfA2kkPEQRCkYLmD759mx2TwOvI=
 github.com/mongodb/grip v0.0.0-20211018154934-e661a71929d5/go.mod h1:g0r93iHSTLD50bDT7vNj+z+Y3nKz9o/tQXtB9esq2tk=
 github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe/go.mod h1:wL8QJuTMNUDYhXwkmfOly8iTdp5TEcJFWZD2D7SIkUc=
-github.com/okta/okta-jwt-verifier-golang v1.2.1 h1:H3Mr7BMYaTih6VqUVL0SnuPhIlvhUsocAyKo60iFKFI=
-github.com/okta/okta-jwt-verifier-golang v1.2.1/go.mod h1:cHffA777f7Yi4K+yDzUp89sGD5v8sk04Pc3CiT1OMR8=
+github.com/okta/okta-jwt-verifier-golang v1.3.0 h1:vWW2yd2Kkh17CPu/PTbUhhX9+BCSW1ViIXCGO19GlVg=
+github.com/okta/okta-jwt-verifier-golang v1.3.0/go.mod h1:cHffA777f7Yi4K+yDzUp89sGD5v8sk04Pc3CiT1OMR8=
 github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627 h1:pSCLCl6joCFRnjpeojzOpEYs4q7Vditq8fySFG5ap3Y=
 github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029 h1:d6HcSW4ZoNlUWrPyZtBwIu8yv4WAWIU3R/jorwVkFtQ=
