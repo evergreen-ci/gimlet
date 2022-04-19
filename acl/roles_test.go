@@ -21,17 +21,28 @@ func TestRoleRouteHandlers(t *testing.T) {
 
 func testRoleUpdate(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
 	return func(t *testing.T) {
+		// should error when no ID is provided
 		body := map[string]interface{}{
-			"id":          "myRole",
 			"permissions": map[string]int{"p1": 1},
 			"owners":      []string{"me"},
 		}
 		handler := NewUpdateRoleHandler(m)
-
 		jsonBody, err := json.Marshal(body)
 		assert.NoError(t, err)
 		buffer := bytes.NewBuffer(jsonBody)
 		request, err := http.NewRequest(http.MethodPost, "/roles", buffer)
+		assert.NoError(t, err)
+		assert.Error(t, handler.Parse(context.Background(), request))
+
+		body = map[string]interface{}{
+			"id":          "myRole",
+			"permissions": map[string]int{"p1": 1},
+			"owners":      []string{"me"},
+		}
+		jsonBody, err = json.Marshal(body)
+		assert.NoError(t, err)
+		buffer = bytes.NewBuffer(jsonBody)
+		request, err = http.NewRequest(http.MethodPost, "/roles", buffer)
 		assert.NoError(t, err)
 		assert.NoError(t, handler.Parse(context.Background(), request))
 		resp := handler.Run(context.Background())

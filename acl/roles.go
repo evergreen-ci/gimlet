@@ -3,6 +3,7 @@ package acl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 
@@ -35,6 +36,9 @@ func (h *updateRoleHandler) Parse(ctx context.Context, r *http.Request) error {
 	err = json.Unmarshal(data, h.role)
 	if err != nil {
 		return err
+	}
+	if h.role.ID == "" {
+		return errors.New("must specify a role id")
 	}
 	return nil
 }
