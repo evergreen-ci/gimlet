@@ -34,7 +34,7 @@ func (um *multiUserManager) GetUserByToken(ctx context.Context, token string) (U
 		u, err = m.GetUserByToken(ctx, token)
 		return err == nil, err
 	}); err != nil {
-		return nil, errors.Wrap(err, "could not get user by token")
+		return nil, errors.Wrap(err, "getting user by token")
 	}
 	return u, nil
 }
@@ -46,7 +46,7 @@ func (um *multiUserManager) CreateUserToken(username, password string) (string, 
 		token, err = m.CreateUserToken(username, password)
 		return err == nil, err
 	}); err != nil {
-		return "", errors.Wrap(err, "could not create user token")
+		return "", errors.Wrap(err, "creating user token")
 	}
 	return token, nil
 }
@@ -84,7 +84,7 @@ func (um *multiUserManager) ReauthorizeUser(u User) error {
 		err = m.ReauthorizeUser(u)
 		return err == nil, err
 	}); err != nil {
-		return errors.Wrap(err, "could not reauthorize user")
+		return errors.Wrap(err, "reauthorizing user")
 	}
 	return nil
 }
@@ -96,7 +96,7 @@ func (um *multiUserManager) GetUserByID(id string) (User, error) {
 		u, err = m.GetUserByID(id)
 		return err == nil, err
 	}); err != nil {
-		return nil, errors.Wrap(err, "could not get user by ID")
+		return nil, errors.Wrap(err, "getting user by ID")
 	}
 	return u, nil
 }
@@ -108,7 +108,7 @@ func (um *multiUserManager) GetOrCreateUser(u User) (User, error) {
 		newUser, err = m.GetOrCreateUser(u)
 		return err == nil, err
 	}); err != nil {
-		return nil, errors.Wrap(err, "could not get existing or create new user")
+		return nil, errors.Wrap(err, "getting existing user or creating new user")
 	}
 	return newUser, nil
 }
@@ -119,7 +119,7 @@ func (um *multiUserManager) ClearUser(u User, all bool) error {
 		err = m.ClearUser(u, all)
 		return err == nil, err
 	}); err != nil {
-		return errors.Wrap(err, "could not clear user")
+		return errors.Wrap(err, "clearing user")
 	}
 	return nil
 }
@@ -131,7 +131,7 @@ func (um *multiUserManager) GetGroupsForUser(username string) ([]string, error) 
 		groups, err = m.GetGroupsForUser(username)
 		return err == nil, err
 	}); err != nil {
-		return nil, errors.Wrap(err, "could not get groups for user")
+		return nil, errors.Wrap(err, "getting groups for user")
 	}
 	return groups, nil
 }

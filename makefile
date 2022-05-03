@@ -1,7 +1,7 @@
 # start project configuration
 name := gimlet
 buildDir := build
-packages := $(name) acl ldap okta rolemanager
+packages := $(name) acl ldap okta rolemanager usercache
 compilePackages := $(subst $(name),,$(subst -,/,$(foreach target,$(packages),./$(target))))
 orgPath := github.com/evergreen-ci
 projectPath := $(orgPath)/$(name)

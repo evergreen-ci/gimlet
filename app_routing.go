@@ -168,7 +168,7 @@ func (r *APIRoute) Handler(h http.HandlerFunc) *APIRoute {
 		grip.Warningf("called Handler more than once for route %s", r.route)
 	}
 	if h == nil {
-		grip.Alertf("adding nil route handler will prorobably result in runtime panics for '%s'", r.route)
+		grip.Alertf("adding nil route handler will probably result in runtime panics for '%s'", r.route)
 	}
 
 	r.handler = h
@@ -184,7 +184,7 @@ func (r *APIRoute) HandlerType(h http.Handler) *APIRoute {
 	}
 
 	if h == nil {
-		grip.Alertf("adding nil route handler will prorobably result in runtime panics for '%s'", r.route)
+		grip.Alertf("adding nil route handler will probably result in runtime panics for '%s'", r.route)
 	}
 
 	r.handler = h.ServeHTTP
@@ -201,7 +201,7 @@ func (r *APIRoute) RouteHandler(h RouteHandler) *APIRoute {
 	}
 
 	if h == nil {
-		grip.Alertf("adding nil route handler will prorobably result in runtime panics for '%s'", r.route)
+		grip.Alertf("adding nil route handler will probably result in runtime panics for '%s'", r.route)
 	}
 
 	r.handler = handleHandler(h)

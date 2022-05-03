@@ -11,7 +11,7 @@ import (
 func RandomString() (string, error) {
 	b := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return "", errors.Wrap(err, "could not generate random string")
+		return "", errors.Wrap(err, "reading from random number generator")
 	}
 	return hex.EncodeToString(b), nil
 }

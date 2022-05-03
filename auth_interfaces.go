@@ -140,7 +140,9 @@ func HasPermission(rm RoleManager, opts PermissionOpts, roles []Role) bool {
 	roles, err := rm.FilterForResource(roles, opts.Resource, opts.ResourceType)
 	if err != nil {
 		grip.Error(message.WrapError(err, message.Fields{
-			"message": "error filtering for resource",
+			"message":       "error filtering for resource",
+			"resource":      opts.Resource,
+			"resource_type": opts.ResourceType,
 		}))
 		return false
 	}
