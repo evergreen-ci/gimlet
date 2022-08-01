@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/evergreen-ci/negroni v1.0.1-0.20211028183800-67b6d7c2c035
-	github.com/go-ldap/ldap/v3 v3.4.3
+	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/gorilla/mux v1.8.0
 	github.com/mongodb/grip v0.0.0-20211018154934-e661a71929d5
 	github.com/okta/okta-jwt-verifier-golang v1.3.1
