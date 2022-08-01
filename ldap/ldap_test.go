@@ -147,10 +147,14 @@ type mockConnErr struct {
 
 type mockConn struct{}
 
-func (m *mockConn) Start()                                                           {}
-func (m *mockConn) StartTLS(config *tls.Config) error                                { return nil }
-func (m *mockConn) Close()                                                           {}
-func (m *mockConn) SetTimeout(time.Duration)                                         {}
+func (m *mockConn) Start()                            {}
+func (m *mockConn) StartTLS(config *tls.Config) error { return nil }
+func (m *mockConn) Close()                            {}
+func (m *mockConn) SetTimeout(time.Duration)          {}
+
+func (m *mockConn) TLSConnectionState() (tls.ConnectionState, bool) {
+	return tls.ConnectionState{}, false
+}
 func (m *mockConn) ModifyDN(*ldap.ModifyDNRequest) error                             { return nil }
 func (m *mockConn) ModifyWithResult(*ldap.ModifyRequest) (*ldap.ModifyResult, error) { return nil, nil }
 func (m *mockConn) Bind(username, password string) error {
@@ -165,10 +169,12 @@ func (m *mockConn) Bind(username, password string) error {
 	}
 	return errors.Errorf("failed to Bind (%s, %s)", username, password)
 }
-func (m *mockConn) UnauthenticatedBind(username string) error { return nil }
+func (m *mockConn) UnauthenticatedBind(username string) error             { return nil }
+func (m *mockConn) NTLMUnauthenticatedBind(domain, username string) error { return nil }
 func (m *mockConn) SimpleBind(simpleBindRequest *ldap.SimpleBindRequest) (*ldap.SimpleBindResult, error) {
 	return nil, nil
 }
+func (m *mockConn) Unbind() error                                     { return nil }
 func (m *mockConn) Add(addRequest *ldap.AddRequest) error             { return nil }
 func (m *mockConn) Del(delRequest *ldap.DelRequest) error             { return nil }
 func (m *mockConn) Modify(modifyRequest *ldap.ModifyRequest) error    { return nil }
