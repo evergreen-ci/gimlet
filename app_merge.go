@@ -58,11 +58,16 @@ func AssembleHandler(router *mux.Router, apps ...*APIApp) (http.Handler, error) 
 
 // MergeApplications takes a number of gimlet applications and
 // resolves them, returning an http.Handler.
-func MergeApplications(router *mux.Router, apps ...*APIApp) (http.Handler, error) {
+func MergeApplications(apps ...*APIApp) (http.Handler, error) {
+	return MergeApplicationsWithRouter(nil, apps...)
+}
+
+// MergeApplicationsWithRouter takes a preconfigured router and
+// a number of gimlet applications and resolves them, returning an http.Handler.
+func MergeApplicationsWithRouter(router *mux.Router, apps ...*APIApp) (http.Handler, error) {
 	if len(apps) == 0 {
 		return nil, errors.New("must specify at least one application")
 	}
-
 	if router == nil {
 		router = mux.NewRouter().UseEncodedPath()
 	}

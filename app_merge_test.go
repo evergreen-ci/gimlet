@@ -41,10 +41,8 @@ func TestAssembleHandler(t *testing.T) {
 }
 
 func TestMergeAppsIntoRoute(t *testing.T) {
-	router := mux.NewRouter()
-
 	// error when no apps
-	h, err := MergeApplications(router)
+	h, err := MergeApplications()
 	assert.Error(t, err)
 	assert.Nil(t, h)
 
@@ -53,7 +51,7 @@ func TestMergeAppsIntoRoute(t *testing.T) {
 	app.SetPrefix("foo")
 	app.AddMiddleware(MakeRecoveryLogger())
 
-	h, err = MergeApplications(router, app)
+	h, err = MergeApplications(app)
 	assert.NoError(t, err)
 	assert.NotNil(t, h)
 
@@ -61,12 +59,12 @@ func TestMergeAppsIntoRoute(t *testing.T) {
 	bad := NewApp()
 	bad.AddRoute("/foo").version = -1
 
-	h, err = MergeApplications(router, bad)
+	h, err = MergeApplications(bad)
 	assert.Error(t, err)
 	assert.Nil(t, h)
 
 	// even when it's combined with a good one
-	h, err = MergeApplications(router, bad, app)
+	h, err = MergeApplications(bad, app)
 	assert.Error(t, err)
 	assert.Nil(t, h)
 
