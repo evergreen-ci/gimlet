@@ -63,6 +63,10 @@ func MergeApplications(router *mux.Router, apps ...*APIApp) (http.Handler, error
 		return nil, errors.New("must specify at least one application")
 	}
 
+	if router == nil {
+		router = mux.NewRouter().UseEncodedPath()
+	}
+
 	return AssembleHandler(router, apps...)
 }
 

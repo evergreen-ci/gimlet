@@ -69,6 +69,11 @@ func TestMergeAppsIntoRoute(t *testing.T) {
 	h, err = MergeApplications(router, bad, app)
 	assert.Error(t, err)
 	assert.Nil(t, h)
+
+	// nil router makes its own
+	h, err = MergeApplications(nil, app)
+	assert.NoError(t, err)
+	assert.NotNil(t, h)
 }
 
 func TestMergeApps(t *testing.T) {
