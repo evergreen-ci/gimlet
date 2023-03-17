@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/mongodb/grip v0.0.0-20211018154934-e661a71929d5
 	github.com/okta/okta-jwt-verifier-golang v1.3.1
-	github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029
+	github.com/phyber/negroni-gzip v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.8.3
 	github.com/stretchr/testify v1.8.2
@@ -31,7 +31,6 @@ require (
 	github.com/shirou/gopsutil v3.21.9+incompatible // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.9 // indirect
-	github.com/urfave/negroni v1.0.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
