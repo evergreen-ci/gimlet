@@ -11,7 +11,7 @@ require (
 	github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.8.3
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	go.mongodb.org/mongo-driver v1.11.1
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -24,6 +24,7 @@ require (
 	github.com/dghubble/oauth1 v0.7.0 // indirect
 	github.com/fuyufjh/splunk-hec-go v0.3.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/go-github v17.0.0+incompatible // indirect
 	github.com/mattn/go-xmpp v0.0.0-20210723025538-3871461df959 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect

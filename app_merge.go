@@ -58,12 +58,12 @@ func AssembleHandler(router *mux.Router, apps ...*APIApp) (http.Handler, error) 
 
 // MergeApplications takes a number of gimlet applications and
 // resolves them, returning an http.Handler.
-func MergeApplications(apps ...*APIApp) (http.Handler, error) {
+func MergeApplications(router *mux.Router, apps ...*APIApp) (http.Handler, error) {
 	if len(apps) == 0 {
 		return nil, errors.New("must specify at least one application")
 	}
 
-	return AssembleHandler(mux.NewRouter().UseEncodedPath(), apps...)
+	return AssembleHandler(router, apps...)
 }
 
 // Merge takes multiple application instances and merges all of their
