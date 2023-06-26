@@ -6,14 +6,17 @@ import (
 	"time"
 
 	"github.com/evergreen-ci/negroni"
+	"github.com/evergreen-ci/utility"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/logging"
 	"github.com/mongodb/grip/message"
 	"github.com/mongodb/grip/recovery"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
 	remoteAddrHeaderName = "X-Forwarded-For"
+	requestIDAttribute   = "gimlet.request.id"
 )
 
 // appLogging provides a Negroni-compatible middleware to send all
@@ -114,6 +117,8 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 
 	id := getNumber()
 	r = setRequestID(r, id)
+	r = r.WithContext(utility.ContextWithAttributes(r.Context(), []attribute.KeyValue{attribute.Int(requestIDAttribute, id)}))
+
 	startAt := time.Now()
 	r = setStartAtTime(r, startAt)
 	r = setLoggingAnnotations(r, loggingAnnotations{})
