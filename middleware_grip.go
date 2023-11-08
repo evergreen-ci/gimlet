@@ -123,15 +123,6 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 	r = setStartAtTime(r, startAt)
 	r = setLoggingAnnotations(r, loggingAnnotations{})
 
-	logger.Info(message.Fields{
-		"action":  "started",
-		"method":  r.Method,
-		"remote":  r.RemoteAddr,
-		"request": id,
-		"path":    r.URL.Path,
-		"params":  r.URL.Query(),
-	})
-
 	return r
 }
 
