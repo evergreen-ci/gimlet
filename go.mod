@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/evergreen-ci/negroni v1.0.1-0.20211028183800-67b6d7c2c035
 	github.com/evergreen-ci/utility v0.0.0-20230616220713-1332f9621270
-	github.com/go-ldap/ldap/v3 v3.4.4
+	github.com/go-ldap/ldap/v3 v3.4.5
 	github.com/gorilla/mux v1.8.0
 	github.com/mongodb/grip v0.0.0-20211018154934-e661a71929d5
 	github.com/okta/okta-jwt-verifier-golang v1.3.1
@@ -19,7 +19,7 @@ require (
 )
 
 require (
-	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
+	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/PuerkitoBio/rehttp v1.1.0 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/andygrunwald/go-jira v1.14.0 // indirect
@@ -68,12 +68,12 @@ require (
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.15.1 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
-	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
-	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
+	golang.org/x/crypto v0.7.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	google.golang.org/appengine v1.6.6 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
