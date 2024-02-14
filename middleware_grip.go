@@ -131,16 +131,16 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 	startAt := getRequestStartAt(ctx)
 	dur := time.Since(startAt)
 	m := message.Fields{
+		"action":      "completed",
 		"method":      r.Method,
 		"remote":      r.RemoteAddr,
 		"request":     GetRequestID(ctx),
 		"path":        r.URL.Path,
-		"params":      r.URL.Query(),
 		"duration_ms": int64(dur / time.Millisecond),
-		"action":      "completed",
 		"status":      res.Status(),
-		"outcome":     http.StatusText(res.Status()),
-		"length":      r.ContentLength,
+	}
+	if len(r.URL.Query()) > 0 {
+		m["params"] = r.URL.Query()
 	}
 
 	a := getLoggingAnnotations(ctx)

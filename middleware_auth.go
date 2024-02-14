@@ -3,9 +3,6 @@ package gimlet
 import (
 	"context"
 	"net/http"
-
-	"github.com/mongodb/grip"
-	"github.com/mongodb/grip/message"
 )
 
 // NewAuthenticationHandler produces middleware that attaches
@@ -101,15 +98,6 @@ func (rr *requiredRole) ServeHTTP(rw http.ResponseWriter, r *http.Request, next 
 		return
 	}
 
-	grip.Info(message.Fields{
-		"path":          r.URL.Path,
-		"remote":        r.RemoteAddr,
-		"request":       GetRequestID(ctx),
-		"user":          user.Username(),
-		"user_roles":    user.Roles(),
-		"required_role": rr.role,
-	})
-
 	next(rw, r)
 }
 
@@ -142,15 +130,6 @@ func (rg *requiredGroup) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		return
 	}
 
-	grip.Info(message.Fields{
-		"path":           r.URL.Path,
-		"remote":         r.RemoteAddr,
-		"request":        GetRequestID(ctx),
-		"user":           user.Username(),
-		"user_roles":     user.Roles(),
-		"required_group": rg.group,
-	})
-
 	next(rw, r)
 }
 
@@ -180,14 +159,6 @@ func (*requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, ne
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-
-	grip.Info(message.Fields{
-		"path":       r.URL.Path,
-		"remote":     r.RemoteAddr,
-		"request":    GetRequestID(ctx),
-		"user":       user.Username(),
-		"user_roles": user.Roles(),
-	})
 
 	next(rw, r)
 }
