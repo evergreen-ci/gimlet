@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+
+	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/message"
 )
 
 // RouteHandler provides an alternate method for defining routes with
@@ -65,7 +68,21 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 			routeURL := url.URL{Path: r.URL.Path, RawQuery: r.URL.RawQuery}
 			w.Header().Set("Link", resp.Pages().GetLinks(routeURL.String()))
 		}
-
+		if resp.Status() >= http.StatusInternalServerError {
+			m := message.Fields{
+				"message": "request encountered internal error",
+				"method":  r.Method,
+				"remote":  r.RemoteAddr,
+				"request": GetRequestID(ctx),
+				"path":    r.URL.Path,
+				"status":  resp.Status(),
+				"error":   resp.Data(),
+			}
+			if len(r.URL.Query()) > 0 {
+				m["params"] = r.URL.Query()
+			}
+			grip.Error(m)
+		}
 		WriteResponse(w, resp)
 	}
 }
