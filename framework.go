@@ -81,7 +81,7 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 			if len(r.URL.Query()) > 0 {
 				m["params"] = r.URL.Query()
 			}
-			grip.Error(m)
+			grip.Debug(m)
 		}
 		WriteResponse(w, resp)
 	}
