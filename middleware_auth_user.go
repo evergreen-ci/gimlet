@@ -124,7 +124,7 @@ type userMiddleware struct {
 // UserMiddleware produces a middleware that parses requests and uses
 // the UserManager attached to the request to find and attach a user
 // to the request.
-func UserMiddleware(ctx context.Context, um UserManager, conf UserMiddlewareConfiguration) (Middleware, error) {
+func UserMiddleware(ctx context.Context, um UserManager, conf UserMiddlewareConfiguration) Middleware {
 	middleware := &userMiddleware{
 		conf:    conf,
 		manager: um,
@@ -138,7 +138,7 @@ func UserMiddleware(ctx context.Context, um UserManager, conf UserMiddlewareConf
 		)
 	}
 
-	return middleware, nil
+	return middleware
 }
 
 var ErrNeedsReauthentication = errors.New("user session has expired so they must be reauthenticated")
