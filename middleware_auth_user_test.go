@@ -2,6 +2,7 @@ package gimlet
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +14,9 @@ import (
 )
 
 func TestUserMiddleware(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	assert := assert.New(t)
 
 	// set up test fixtures
@@ -31,7 +35,7 @@ func TestUserMiddleware(t *testing.T) {
 	conf := UserMiddlewareConfiguration{}
 
 	// make sure the constructor works right
-	m := UserMiddleware(usermanager, conf)
+	m := UserMiddleware(ctx, usermanager, conf)
 	assert.NotNil(m)
 	assert.Implements((*Middleware)(nil), m)
 	assert.Implements((*negroni.Handler)(nil), m)
@@ -40,7 +44,7 @@ func TestUserMiddleware(t *testing.T) {
 
 	// first test: make sure that if nothing is enabled, we pass
 	conf = UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true}
-	m = UserMiddleware(usermanager, conf)
+	m = UserMiddleware(ctx, usermanager, conf)
 	assert.NotNil(m)
 	req := httptest.NewRequest("GET", "http://localhost/bar", body)
 	rw := httptest.NewRecorder()
@@ -56,7 +60,7 @@ func TestUserMiddleware(t *testing.T) {
 		{SkipHeaderCheck: false, SkipCookie: true},
 		{SkipHeaderCheck: false, SkipCookie: false},
 	} {
-		m = UserMiddleware(usermanager, conf)
+		m = UserMiddleware(ctx, usermanager, conf)
 		assert.NotNil(m)
 		req = httptest.NewRequest("GET", "http://localhost/bar", body)
 		rw = httptest.NewRecorder()
@@ -75,7 +79,7 @@ func TestUserMiddleware(t *testing.T) {
 		HeaderUserName:  "api-user",
 		HeaderKeyName:   "api-key",
 	}
-	m = UserMiddleware(usermanager, conf)
+	m = UserMiddleware(ctx, usermanager, conf)
 	assert.NotNil(m)
 
 	req = httptest.NewRequest("GET", "http://localhost/bar", body)
@@ -105,7 +109,7 @@ func TestUserMiddleware(t *testing.T) {
 		SkipCookie:      false,
 		CookieName:      "gimlet-token",
 	}
-	m = UserMiddleware(usermanager, conf)
+	m = UserMiddleware(ctx, usermanager, conf)
 	var err error
 	// begin with the wrong cookie value
 	req, err = http.NewRequest("GET", "http://localhost/bar", body)
