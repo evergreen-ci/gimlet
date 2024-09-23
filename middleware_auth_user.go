@@ -40,6 +40,15 @@ type OIDCConfig struct {
 	DisplayNameFromID func(string) string
 }
 
+func (o *OIDCConfig) validate() error {
+	catcher := grip.NewBasicCatcher()
+	catcher.NewWhen(o.HeaderName == "", "header name must be provided")
+	catcher.NewWhen(o.Issuer == "", "issuer must be provided")
+	catcher.NewWhen(o.KeysetURL == "", "keyset URL must be provided")
+
+	return catcher.Resolve()
+}
+
 // Validate ensures that the UserMiddlewareConfiguration is correct
 // and internally consistent.
 func (umc *UserMiddlewareConfiguration) Validate() error {
@@ -60,6 +69,8 @@ func (umc *UserMiddlewareConfiguration) Validate() error {
 		catcher.NewWhen(umc.HeaderUserName == "", "must specify a header user name when header auth is enabled")
 		catcher.NewWhen(umc.HeaderKeyName == "", "must specify a header key name when header auth is enabled")
 	}
+
+	catcher.AddWhen(umc.OIDC != nil, umc.OIDC.validate())
 
 	return catcher.Resolve()
 }
