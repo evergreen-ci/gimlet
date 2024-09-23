@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/go-oidc"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
@@ -19,10 +20,24 @@ type UserMiddlewareConfiguration struct {
 	SkipHeaderCheck bool
 	HeaderUserName  string
 	HeaderKeyName   string
+	OIDC            *OIDCConfig
 	CookieName      string
 	CookiePath      string
 	CookieTTL       time.Duration
 	CookieDomain    string
+}
+
+// OIDCConfig configures the validation of JWTs provided as a header on requests.
+type OIDCConfig struct {
+	// HeaderName is the name of the header expected to contain the JWT.
+	HeaderName string
+	// Issuer is the expected issuer of the JWT.
+	Issuer string
+	// KeysetURL is a URL to download a remote keyset from to use for validating the JWT.
+	KeysetURL string
+	// DisplayNameFromID parses a display name from the subject in the JWT. If not provided the
+	// display name will default to the token's subject.
+	DisplayNameFromID func(string) string
 }
 
 // Validate ensures that the UserMiddlewareConfiguration is correct
@@ -101,18 +116,29 @@ func GetUser(ctx context.Context) User {
 }
 
 type userMiddleware struct {
-	conf    UserMiddlewareConfiguration
-	manager UserManager
+	conf         UserMiddlewareConfiguration
+	manager      UserManager
+	oidcVerifier *oidc.IDTokenVerifier
 }
 
 // UserMiddleware produces a middleware that parses requests and uses
 // the UserManager attached to the request to find and attach a user
 // to the request.
-func UserMiddleware(um UserManager, conf UserMiddlewareConfiguration) Middleware {
-	return &userMiddleware{
+func UserMiddleware(ctx context.Context, um UserManager, conf UserMiddlewareConfiguration) (Middleware, error) {
+	middleware := &userMiddleware{
 		conf:    conf,
 		manager: um,
 	}
+
+	if conf.OIDC != nil {
+		middleware.oidcVerifier = oidc.NewVerifier(
+			conf.OIDC.Issuer,
+			oidc.NewRemoteKeySet(ctx, conf.OIDC.KeysetURL),
+			&oidc.Config{SkipClientIDCheck: true},
+		)
+	}
+
+	return middleware, nil
 }
 
 var ErrNeedsReauthentication = errors.New("user session has expired so they must be reauthenticated")
@@ -195,5 +221,48 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 	}
 
+	if u.oidcVerifier != nil {
+		if jwt, ok := r.Header[u.conf.OIDC.HeaderName]; ok && len(jwt) > 0 {
+			usr, err := u.getUserForOIDCHeader(ctx, jwt[0])
+			logger.DebugWhen(err != nil, message.WrapError(err, message.Fields{
+				"message": "getting user for OIDC header",
+				"request": reqID,
+			}))
+			if err == nil && usr != nil {
+				r = setUserForRequest(r, usr)
+			}
+		}
+	}
+
 	next(rw, r)
+}
+
+func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string) (User, error) {
+	token, err := u.oidcVerifier.Verify(ctx, header)
+	if err != nil {
+		return nil, errors.Wrap(err, "got invalid jwt")
+	}
+
+	claims := struct {
+		Email string `json:"email"`
+	}{}
+	if err := token.Claims(&claims); err != nil {
+		return nil, errors.Wrap(err, "parsing token claims")
+	}
+
+	displayName := token.Subject
+	if u.conf.OIDC.DisplayNameFromID != nil {
+		displayName = u.conf.OIDC.DisplayNameFromID(token.Subject)
+	}
+
+	usr, err := u.manager.GetOrCreateUser(NewBasicUser(BasicUserOptions{
+		id:    token.Subject,
+		name:  displayName,
+		email: claims.Email,
+	}))
+	if err != nil {
+		return nil, errors.Wrapf(err, "creating user '%s'", usr.Username())
+	}
+
+	return usr, nil
 }
