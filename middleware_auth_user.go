@@ -41,6 +41,10 @@ type OIDCConfig struct {
 }
 
 func (o *OIDCConfig) validate() error {
+	if o == nil {
+		return nil
+	}
+
 	catcher := grip.NewBasicCatcher()
 	catcher.NewWhen(o.HeaderName == "", "header name must be provided")
 	catcher.NewWhen(o.Issuer == "", "issuer must be provided")

@@ -181,6 +181,11 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 		CookieName:     "c",
 		CookieTTL:      time.Hour,
 		CookiePath:     "/p",
+		OIDC: &OIDCConfig{
+			HeaderName: "internal_header",
+			KeysetURL:  "www.example.com",
+			Issuer:     "www.google.com",
+		},
 	}
 	require.NoError(t, conf.Validate())
 
@@ -206,6 +211,17 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 		assert.Len(t, rw.Header(), 1)
 		conf.ClearCookie(rw)
 		assert.Len(t, rw.Header(), 1)
+	})
+
+	t.Run("NilOIDC", func(t *testing.T) {
+		conf := UserMiddlewareConfiguration{
+			HeaderUserName: "u",
+			HeaderKeyName:  "k",
+			CookieName:     "c",
+			CookieTTL:      time.Hour,
+			CookiePath:     "/p",
+		}
+		assert.NoError(t, conf.Validate())
 	})
 
 	t.Run("InvalidConfigurations", func(t *testing.T) {
@@ -248,6 +264,27 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 					return conf
 				},
 			},
+			{
+				name: "MissingOIDCHeaderName",
+				op: func(conf UserMiddlewareConfiguration) UserMiddlewareConfiguration {
+					conf.OIDC.HeaderName = ""
+					return conf
+				},
+			},
+			{
+				name: "MissingOIDCKeysetURL",
+				op: func(conf UserMiddlewareConfiguration) UserMiddlewareConfiguration {
+					conf.OIDC.KeysetURL = ""
+					return conf
+				},
+			},
+			{
+				name: "MissingOIDCIssuer",
+				op: func(conf UserMiddlewareConfiguration) UserMiddlewareConfiguration {
+					conf.OIDC.Issuer = ""
+					return conf
+				},
+			},
 		} {
 			t.Run(test.name, func(t *testing.T) {
 				conf := UserMiddlewareConfiguration{
@@ -256,6 +293,11 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 					CookieName:     "c",
 					CookieTTL:      time.Hour,
 					CookiePath:     "/p",
+					OIDC: &OIDCConfig{
+						HeaderName: "internal_header",
+						KeysetURL:  "www.example.com",
+						Issuer:     "www.google.com",
+					},
 				}
 				require.NoError(t, conf.Validate())
 				conf = test.op(conf)
