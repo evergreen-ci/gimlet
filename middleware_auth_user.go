@@ -237,8 +237,8 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 	}
 
 	if u.oidcVerifier != nil {
-		if jwt, ok := r.Header[u.conf.OIDC.HeaderName]; ok && len(jwt) > 0 {
-			usr, err := u.getUserForOIDCHeader(ctx, jwt[0])
+		if jwt := r.Header.Get(u.conf.OIDC.HeaderName); len(jwt) > 0 {
+			usr, err := u.getUserForOIDCHeader(ctx, jwt)
 			logger.DebugWhen(err != nil, message.WrapError(err, message.Fields{
 				"message": "getting user for OIDC header",
 				"request": reqID,

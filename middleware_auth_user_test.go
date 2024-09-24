@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coreos/go-oidc"
 	"github.com/evergreen-ci/negroni"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -203,6 +205,81 @@ func TestUserMiddleware(t *testing.T) {
 
 	// test that if get-or-create fails that the op does
 
+}
+
+type mockKeyset struct {
+	validSignature bool
+	payload        string
+}
+
+func (k *mockKeyset) VerifySignature(ctx context.Context, jwt string) (payload []byte, err error) {
+	if !k.validSignature {
+		return nil, errors.New("invalid signature")
+	}
+	return []byte(k.payload), nil
+}
+
+func TestOIDCValidation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	user := &MockUser{ID: "i-am-sam"}
+	um := &MockUserManager{Users: []*MockUser{user}}
+	headerName := "internal_header"
+	conf := UserMiddlewareConfiguration{
+		SkipHeaderCheck: true,
+		SkipCookie:      true,
+		OIDC: &OIDCConfig{
+			HeaderName: headerName,
+			Issuer:     "www.mongodb.com",
+		},
+	}
+
+	payload := `{"sub":"i-am-sam","iat":1727208337,"iss":"www.mongodb.com"}`
+	m := UserMiddleware(ctx, um, conf).(*userMiddleware)
+	m.oidcVerifier = oidc.NewVerifier(
+		conf.OIDC.Issuer,
+		&mockKeyset{validSignature: true, payload: payload},
+		&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
+	)
+
+	t.Run("ValidJWT", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "http://localhost/bar", nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, req)
+		req.Header.Add(headerName, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJpLWFtLXNhbSIsImlhdCI6MTcyNzIwODMzNywiaXNzIjoid3d3Lm1vbmdvZGIuY29tIn0.RpKLMhvXe6IISKzmwLbVT6trddAy37_7A4Dmq_SSeh0")
+		rw := httptest.NewRecorder()
+		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+			rusr := GetUser(r.Context())
+			assert.Equal(t, user.Username(), rusr.Username())
+		})
+		assert.Equal(t, http.StatusOK, rw.Code)
+	})
+
+	t.Run("HeaderMissing", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "http://localhost/bar", nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, req)
+		rw := httptest.NewRecorder()
+		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+			rusr := GetUser(r.Context())
+			assert.Nil(t, rusr)
+		})
+		assert.Equal(t, http.StatusOK, rw.Code)
+	})
+
+	t.Run("InvalidJWT", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "http://localhost/bar", nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, req)
+		req.Header.Add(headerName, "not_a_valid_jwt")
+		rw := httptest.NewRecorder()
+		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+			rusr := GetUser(r.Context())
+			assert.Nil(t, rusr)
+		})
+		assert.Equal(t, http.StatusOK, rw.Code)
+	})
 }
 
 func TestUserMiddlewareConfiguration(t *testing.T) {
