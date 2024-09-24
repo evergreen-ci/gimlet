@@ -1,7 +1,6 @@
 package gimlet
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -17,161 +16,193 @@ func TestUserMiddleware(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	assert := assert.New(t)
-
-	// set up test fixtures
-	buf := []byte{}
-	body := bytes.NewBuffer(buf)
-	counter := 0
-	next := func(rw http.ResponseWriter, r *http.Request) {
-		counter++
-		rw.WriteHeader(http.StatusOK)
-	}
 	user := &MockUser{
-		ID:     "test-user",
-		APIKey: "better",
+		ID:     "sam-i-am",
+		APIKey: "DEADBEEF",
+		Token:  "42",
 	}
-	usermanager := &MockUserManager{Users: []*MockUser{user}}
-	conf := UserMiddlewareConfiguration{}
+	um := &MockUserManager{Users: []*MockUser{user}}
 
-	// make sure the constructor works right
-	m := UserMiddleware(ctx, usermanager, conf)
-	assert.NotNil(m)
-	assert.Implements((*Middleware)(nil), m)
-	assert.Implements((*negroni.Handler)(nil), m)
-	assert.Equal(m.(*userMiddleware).conf, conf)
-	assert.Equal(m.(*userMiddleware).manager, usermanager)
+	for name, testCase := range map[string]func(*testing.T){
+		"Constructor": func(t *testing.T) {
+			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{})
+			assert.NotNil(t, m)
+			assert.Implements(t, (*Middleware)(nil), m)
+			assert.Implements(t, (*negroni.Handler)(nil), m)
+			assert.Equal(t, m.(*userMiddleware).conf, UserMiddlewareConfiguration{})
+			assert.Equal(t, m.(*userMiddleware).manager, um)
+		},
+		"NothingEnabled": func(t *testing.T) {
+			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true})
+			assert.NotNil(t, m)
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			rw := httptest.NewRecorder()
 
-	// first test: make sure that if nothing is enabled, we pass
-	conf = UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true}
-	m = UserMiddleware(ctx, usermanager, conf)
-	assert.NotNil(m)
-	req := httptest.NewRequest("GET", "http://localhost/bar", body)
-	rw := httptest.NewRecorder()
-	m.ServeHTTP(rw, req, next)
-	assert.Equal(1, counter)
-	assert.Equal(http.StatusOK, rw.Code)
-	rusr := GetUser(req.Context())
-	assert.Nil(rusr)
+			next := func(rw http.ResponseWriter, r *http.Request) {
+				rw.WriteHeader(http.StatusOK)
+			}
 
-	// now check if we enable one or the other or both and its not configured, there is no user attached:
-	for _, conf := range []UserMiddlewareConfiguration{
-		{SkipHeaderCheck: true, SkipCookie: false},
-		{SkipHeaderCheck: false, SkipCookie: true},
-		{SkipHeaderCheck: false, SkipCookie: false},
+			m.ServeHTTP(rw, req, next)
+			assert.Equal(t, http.StatusOK, rw.Code)
+			rusr := GetUser(req.Context())
+			assert.Nil(t, rusr)
+		},
+		"EnabledNotConfigured": func(t *testing.T) {
+			for _, conf := range []UserMiddlewareConfiguration{
+				{SkipHeaderCheck: true, SkipCookie: false},
+				{SkipHeaderCheck: false, SkipCookie: true},
+				{SkipHeaderCheck: false, SkipCookie: false},
+			} {
+				m := UserMiddleware(ctx, um, conf)
+				assert.NotNil(t, m)
+				req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+				rw := httptest.NewRecorder()
+				next := func(rw http.ResponseWriter, r *http.Request) {
+					rw.WriteHeader(http.StatusOK)
+				}
+
+				m.ServeHTTP(rw, req, next)
+				assert.Equal(t, http.StatusOK, rw.Code)
+
+				rusr := GetUser(req.Context())
+				assert.Nil(t, rusr)
+			}
+		},
+		"HeaderCheck": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck: false,
+				SkipCookie:      true,
+				HeaderUserName:  "api-user",
+				HeaderKeyName:   "api-key",
+			}
+			m := UserMiddleware(ctx, um, conf)
+			assert.NotNil(t, m)
+
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			req.Header[conf.HeaderUserName] = []string{user.ID}
+			req.Header[conf.HeaderKeyName] = []string{user.APIKey}
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Equal(t, user, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
+		"WrongHeaderKey": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck: false,
+				SkipCookie:      true,
+				HeaderUserName:  "api-user",
+				HeaderKeyName:   "api-key",
+			}
+			m := UserMiddleware(ctx, um, conf)
+			assert.NotNil(t, m)
+
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			req.Header[conf.HeaderUserName] = []string{user.ID}
+			req.Header[conf.HeaderKeyName] = []string{"DECAFBAD"}
+			rw := httptest.NewRecorder()
+
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Nil(t, rusr)
+			})
+			assert.Equal(t, http.StatusUnauthorized, rw.Code)
+		},
+		"CookieCheck": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck: true,
+				SkipCookie:      false,
+				CookieName:      "gimlet-token",
+			}
+			m := UserMiddleware(ctx, um, conf)
+
+			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
+			assert.NoError(t, err)
+			assert.NotNil(t, req)
+			req.AddCookie(&http.Cookie{
+				Name:  conf.CookieName,
+				Value: user.Token,
+			})
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Equal(t, user, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
+		"WrongCookieName": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck: true,
+				SkipCookie:      false,
+				CookieName:      "gimlet-token",
+			}
+			m := UserMiddleware(ctx, um, conf)
+
+			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
+			assert.NoError(t, err)
+			req.AddCookie(&http.Cookie{
+				Name:  "foo",
+				Value: "DEADBEEF",
+			})
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Nil(t, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
+		"WrongCookieValue": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck: true,
+				SkipCookie:      false,
+				CookieName:      "gimlet-token",
+			}
+			m := UserMiddleware(ctx, um, conf)
+
+			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
+			assert.NoError(t, err)
+			assert.NotNil(t, req)
+			req.AddCookie(&http.Cookie{
+				Name:  "gimlet-token",
+				Value: "DEADC0DE",
+			})
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Nil(t, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
+		"GetOrCreateFails": func(t *testing.T) {
+			um := &MockUserManager{Users: []*MockUser{user}, FailGetOrCreateUser: true}
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck: true,
+				SkipCookie:      false,
+				CookieName:      "gimlet-token",
+			}
+			m := UserMiddleware(ctx, um, conf)
+
+			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
+			assert.NoError(t, err)
+			assert.NotNil(t, req)
+			req.AddCookie(&http.Cookie{
+				Name:  conf.CookieName,
+				Value: user.Token,
+			})
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Nil(t, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
 	} {
-		m = UserMiddleware(ctx, usermanager, conf)
-		assert.NotNil(m)
-		req = httptest.NewRequest("GET", "http://localhost/bar", body)
-		rw = httptest.NewRecorder()
-		m.ServeHTTP(rw, req, next)
-		assert.Equal(http.StatusOK, rw.Code)
-
-		rusr = GetUser(req.Context())
-		assert.Nil(rusr)
+		t.Run(name, testCase)
 	}
-	counter = 0
-
-	// Check that the header check works
-	conf = UserMiddlewareConfiguration{
-		SkipHeaderCheck: false,
-		SkipCookie:      true,
-		HeaderUserName:  "api-user",
-		HeaderKeyName:   "api-key",
-	}
-	m = UserMiddleware(ctx, usermanager, conf)
-	assert.NotNil(m)
-
-	req = httptest.NewRequest("GET", "http://localhost/bar", body)
-	req.Header[conf.HeaderUserName] = []string{user.ID}
-	req.Header[conf.HeaderKeyName] = []string{user.APIKey}
-	rw = httptest.NewRecorder()
-	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-		rusr := GetUser(r.Context())
-		assert.Equal(user, rusr)
-	})
-	assert.Equal(http.StatusOK, rw.Code)
-
-	// double check with a bad user
-	req = httptest.NewRequest("GET", "http://localhost/bar", body)
-	req.Header[conf.HeaderUserName] = []string{user.ID}
-	req.Header[conf.HeaderKeyName] = []string{"worse"}
-	rw = httptest.NewRecorder()
-	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-		rusr := GetUser(r.Context())
-		assert.Nil(rusr)
-	})
-	assert.Equal(http.StatusUnauthorized, rw.Code)
-
-	// check reading the cookie
-	conf = UserMiddlewareConfiguration{
-		SkipHeaderCheck: true,
-		SkipCookie:      false,
-		CookieName:      "gimlet-token",
-	}
-	m = UserMiddleware(ctx, usermanager, conf)
-	var err error
-	// begin with the wrong cookie value
-	req, err = http.NewRequest("GET", "http://localhost/bar", body)
-	assert.NoError(err)
-	req.AddCookie(&http.Cookie{
-		Name:  "foo",
-		Value: "better",
-	})
-	rw = httptest.NewRecorder()
-	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-		rusr := GetUser(r.Context())
-		assert.Nil(rusr)
-	})
-	assert.Equal(http.StatusOK, rw.Code)
-
-	// try with the right token but wrong value
-	req, err = http.NewRequest("GET", "http://localhost/bar", body)
-	assert.NoError(err)
-	assert.NotNil(req)
-	req.AddCookie(&http.Cookie{
-		Name:  "gimlet-token",
-		Value: "false",
-	})
-	rw = httptest.NewRecorder()
-	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-		rusr := GetUser(r.Context())
-		assert.Nil(rusr)
-	})
-	assert.Equal(http.StatusOK, rw.Code)
-
-	// try with something that should work
-	user.Token = "42"
-	req, err = http.NewRequest("GET", "http://localhost/bar", body)
-	assert.NoError(err)
-	assert.NotNil(req)
-	req.AddCookie(&http.Cookie{
-		Name:  "gimlet-token",
-		Value: "42",
-	})
-	rw = httptest.NewRecorder()
-	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-		rusr := GetUser(r.Context())
-		assert.Equal(user, rusr)
-	})
-	assert.Equal(http.StatusOK, rw.Code)
 
 	// test that if get-or-create fails that the op does
-	usermanager.FailGetOrCreateUser = true
-	req, err = http.NewRequest("GET", "http://localhost/bar", body)
-	assert.NoError(err)
-	assert.NotNil(req)
-	req.AddCookie(&http.Cookie{
-		Name:  "gimlet-token",
-		Value: "42",
-	})
-	rw = httptest.NewRecorder()
-	counter = 0
-	m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-		rusr := GetUser(r.Context())
-		assert.Nil(rusr)
-	})
-	assert.Equal(http.StatusOK, rw.Code)
+
 }
 
 func TestUserMiddlewareConfiguration(t *testing.T) {
