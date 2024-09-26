@@ -3,6 +3,7 @@ module github.com/evergreen-ci/gimlet
 go 1.20
 
 require (
+	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/evergreen-ci/negroni v1.0.1-0.20211028183800-67b6d7c2c035
 	github.com/evergreen-ci/utility v0.0.0-20230616220713-1332f9621270
 	github.com/go-ldap/ldap/v3 v3.4.4
@@ -64,6 +65,7 @@ require (
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
+	github.com/pquerna/cachecontrol v0.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/shirou/gopsutil/v3 v3.23.5 // indirect
@@ -91,5 +93,6 @@ require (
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
+	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
