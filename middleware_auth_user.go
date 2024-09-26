@@ -255,7 +255,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string) (User, error) {
 	token, err := u.oidcVerifier.Verify(ctx, header)
 	if err != nil {
-		return nil, errors.Wrap(err, "got invalid jwt")
+		return nil, errors.Wrap(err, "verifying jwt")
 	}
 
 	claims := struct {

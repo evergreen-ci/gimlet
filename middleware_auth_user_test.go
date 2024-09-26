@@ -28,7 +28,7 @@ func TestUserMiddleware(t *testing.T) {
 	for name, testCase := range map[string]func(*testing.T){
 		"Constructor": func(t *testing.T) {
 			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{})
-			assert.NotNil(t, m)
+			require.NotNil(t, m)
 			assert.Implements(t, (*Middleware)(nil), m)
 			assert.Implements(t, (*negroni.Handler)(nil), m)
 			assert.Equal(t, m.(*userMiddleware).conf, UserMiddlewareConfiguration{})
@@ -36,7 +36,7 @@ func TestUserMiddleware(t *testing.T) {
 		},
 		"NothingEnabled": func(t *testing.T) {
 			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true})
-			assert.NotNil(t, m)
+			require.NotNil(t, m)
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			rw := httptest.NewRecorder()
 
@@ -56,7 +56,7 @@ func TestUserMiddleware(t *testing.T) {
 				{SkipHeaderCheck: false, SkipCookie: false},
 			} {
 				m := UserMiddleware(ctx, um, conf)
-				assert.NotNil(t, m)
+				require.NotNil(t, m)
 				req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 				rw := httptest.NewRecorder()
 				next := func(rw http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func TestUserMiddleware(t *testing.T) {
 				HeaderKeyName:   "api-key",
 			}
 			m := UserMiddleware(ctx, um, conf)
-			assert.NotNil(t, m)
+			require.NotNil(t, m)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			req.Header[conf.HeaderUserName] = []string{user.ID}
@@ -98,7 +98,7 @@ func TestUserMiddleware(t *testing.T) {
 				HeaderKeyName:   "api-key",
 			}
 			m := UserMiddleware(ctx, um, conf)
-			assert.NotNil(t, m)
+			require.NotNil(t, m)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			req.Header[conf.HeaderUserName] = []string{user.ID}
@@ -119,9 +119,8 @@ func TestUserMiddleware(t *testing.T) {
 			}
 			m := UserMiddleware(ctx, um, conf)
 
-			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
-			assert.NoError(t, err)
-			assert.NotNil(t, req)
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			require.NotNil(t, req)
 			req.AddCookie(&http.Cookie{
 				Name:  conf.CookieName,
 				Value: user.Token,
@@ -141,8 +140,7 @@ func TestUserMiddleware(t *testing.T) {
 			}
 			m := UserMiddleware(ctx, um, conf)
 
-			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
-			assert.NoError(t, err)
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			req.AddCookie(&http.Cookie{
 				Name:  "foo",
 				Value: "DEADBEEF",
@@ -162,9 +160,8 @@ func TestUserMiddleware(t *testing.T) {
 			}
 			m := UserMiddleware(ctx, um, conf)
 
-			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
-			assert.NoError(t, err)
-			assert.NotNil(t, req)
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			require.NotNil(t, req)
 			req.AddCookie(&http.Cookie{
 				Name:  "gimlet-token",
 				Value: "DEADC0DE",
@@ -185,9 +182,8 @@ func TestUserMiddleware(t *testing.T) {
 			}
 			m := UserMiddleware(ctx, um, conf)
 
-			req, err := http.NewRequest("GET", "http://localhost/bar", nil)
-			assert.NoError(t, err)
-			assert.NotNil(t, req)
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			require.NotNil(t, req)
 			req.AddCookie(&http.Cookie{
 				Name:  conf.CookieName,
 				Value: user.Token,
@@ -244,9 +240,8 @@ func TestOIDCValidation(t *testing.T) {
 	)
 
 	t.Run("ValidJWT", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "http://localhost/bar", nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, req)
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		require.NotNil(t, req)
 		req.Header.Add(headerName, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJpLWFtLXNhbSIsImlhdCI6MTcyNzIwODMzNywiaXNzIjoid3d3Lm1vbmdvZGIuY29tIn0.RpKLMhvXe6IISKzmwLbVT6trddAy37_7A4Dmq_SSeh0")
 		rw := httptest.NewRecorder()
 		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
@@ -257,9 +252,8 @@ func TestOIDCValidation(t *testing.T) {
 	})
 
 	t.Run("HeaderMissing", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "http://localhost/bar", nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, req)
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		require.NotNil(t, req)
 		rw := httptest.NewRecorder()
 		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
 			rusr := GetUser(r.Context())
@@ -269,9 +263,8 @@ func TestOIDCValidation(t *testing.T) {
 	})
 
 	t.Run("InvalidJWT", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "http://localhost/bar", nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, req)
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		require.NotNil(t, req)
 		req.Header.Add(headerName, "not_a_valid_jwt")
 		rw := httptest.NewRecorder()
 		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
