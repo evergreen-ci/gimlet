@@ -9,7 +9,8 @@ import (
 // StaticAuth is a middleware handler that serves static files in the given
 // directory/filesystem if the user associated with the request is authenticated.
 // If the file does not exist on the filesystem, it  passes along to the next
-// middleware in the chain.
+// middleware in the chain. It is copied directly from negroni's StaticAuth, 
+// except for the last part that involves authenticating users.
 type StaticAuth struct {
 	// Dir is the directory to serve static files from
 	Dir http.FileSystem
