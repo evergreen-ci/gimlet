@@ -10,11 +10,10 @@ import (
 	"github.com/evergreen-ci/gimlet"
 	"github.com/mongodb/grip"
 	"github.com/pkg/errors"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/x/mongo/driver"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/x/mongo/driver"
 )
 
 type mongoBackedRoleManager struct {
@@ -86,7 +85,7 @@ func (m *mongoBackedRoleManager) UpdateRole(role gimlet.Role) error {
 	ctx := context.Background()
 	coll := m.client.Database(m.db).Collection(m.roleColl)
 	upsert := true
-	result := coll.FindOneAndReplace(ctx, bson.M{"_id": role.ID}, role, &options.FindOneAndReplaceOptions{Upsert: &upsert})
+	result := coll.FindOneAndReplace(ctx, bson.M{"_id": role.ID}, role, options.FindOneAndReplace().SetUpsert(upsert))
 	if result == nil {
 		return errors.New("did not receive a response from MongoDB")
 	}
@@ -196,8 +195,9 @@ func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
 		}
 	}
 
-	updateFunc := func(ctx mongo.SessionContext) error {
-		err := ctx.StartTransaction()
+	updateFunc := func(ctx context.Context) error {
+		sess := mongo.SessionFromContext(ctx)
+		err := sess.StartTransaction()
 		if err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
 				return err
 			}
 		}
-		return ctx.CommitTransaction(ctx)
+		return sess.CommitTransaction(ctx)
 	}
 	return m.retryTransaction(updateFunc)
 }
@@ -238,8 +238,9 @@ func (m *mongoBackedRoleManager) DeleteScope(scope gimlet.Scope) error {
 		return err
 	}
 
-	updateFunc := func(ctx mongo.SessionContext) error {
-		err := ctx.StartTransaction()
+	updateFunc := func(ctx context.Context) error {
+		sess := mongo.SessionFromContext(ctx)
+		err := sess.StartTransaction()
 		if err != nil {
 			return err
 		}
@@ -266,7 +267,7 @@ func (m *mongoBackedRoleManager) DeleteScope(scope gimlet.Scope) error {
 				return err
 			}
 		}
-		return ctx.CommitTransaction(ctx)
+		return sess.CommitTransaction(ctx)
 	}
 	return m.retryTransaction(updateFunc)
 }
@@ -484,7 +485,7 @@ func (m *mongoBackedRoleManager) findParentsOfScope(scopeId string) ([]string, e
 	return scopeIds, nil
 }
 
-func (m *mongoBackedRoleManager) retryTransaction(f func(mongo.SessionContext) error) error {
+func (m *mongoBackedRoleManager) retryTransaction(f func(context.Context) error) error {
 	const retryCount = 5
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
@@ -902,7 +903,7 @@ func MakeRoleWithPermissions(rm gimlet.RoleManager, resourceType string, resourc
 	}
 	if scope == nil {
 		scope = &gimlet.Scope{
-			ID:        primitive.NewObjectID().Hex(),
+			ID:        bson.NewObjectID().Hex(),
 			Type:      resourceType,
 			Resources: resources,
 		}
@@ -912,7 +913,7 @@ func MakeRoleWithPermissions(rm gimlet.RoleManager, resourceType string, resourc
 		}
 	}
 	newRole := gimlet.Role{
-		ID:          primitive.NewObjectID().Hex(),
+		ID:          bson.NewObjectID().Hex(),
 		Scope:       scope.ID,
 		Permissions: permissions,
 	}

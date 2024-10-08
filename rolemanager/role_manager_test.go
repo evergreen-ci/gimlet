@@ -10,16 +10,15 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func TestRoleManager(t *testing.T) {
 	dbName := "gimlet"
 	roleCollection := "roles"
 	scopeCollection := "scopes"
-	client, err := mongo.NewClient()
+	client, err := mongo.Connect()
 	require.NoError(t, err)
-	require.NoError(t, client.Connect(context.Background()))
 
 	dbManager := NewMongoBackedRoleManager(MongoBackedRoleManagerOpts{
 		Client:          client,
