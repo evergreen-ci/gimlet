@@ -1,6 +1,6 @@
 module github.com/evergreen-ci/gimlet
 
-go 1.20
+go 1.24
 
 require (
 	github.com/coreos/go-oidc v2.2.1+incompatible
