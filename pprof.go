@@ -51,7 +51,7 @@ func GetPProfApp() *APIApp {
 // The package initialization registers it as /debug/pprof/cmdline.
 func pprofCmdline(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = fmt.Fprintf(w, strings.Join(os.Args, "\x00"))
+	_, _ = fmt.Fprintf(w, "%s", strings.Join(os.Args, "\x00"))
 }
 
 func pprofSleep(ctx context.Context, d time.Duration) {
