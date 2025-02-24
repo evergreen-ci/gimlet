@@ -5,10 +5,10 @@ go 1.24
 require (
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/evergreen-ci/negroni v1.0.1-0.20211028183800-67b6d7c2c035
-	github.com/evergreen-ci/utility v0.0.0-20230616220713-1332f9621270
+	github.com/evergreen-ci/utility v0.0.0-20250224222128-c2a9c8dfbc87
 	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/gorilla/mux v1.8.0
-	github.com/mongodb/grip v0.0.0-20240213223901-f906268d82b9
+	github.com/mongodb/grip v0.0.0-20250224221724-fc8adcb1fe8e
 	github.com/okta/okta-jwt-verifier-golang v1.3.1
 	github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029
 	github.com/pkg/errors v0.9.1
@@ -62,6 +62,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-xmpp v0.0.0-20210723025538-3871461df959 // indirect
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627 // indirect
+	github.com/peterhellberg/link v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/pquerna/cachecontrol v0.2.0 // indirect
