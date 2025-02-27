@@ -26,7 +26,7 @@ func newResponder(data interface{}, code int, of OutputFormat) Responder {
 		default:
 			eresp = ErrorResponse{
 				StatusCode: code,
-				Message:    err.Error(),
+				Message:    in.Error(),
 			}
 		}
 
