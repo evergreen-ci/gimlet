@@ -10,10 +10,11 @@ import (
 	"github.com/evergreen-ci/gimlet"
 	"github.com/mongodb/grip"
 	"github.com/pkg/errors"
-	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
-	"go.mongodb.org/mongo-driver/v2/x/mongo/driver"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/x/mongo/driver"
 )
 
 type mongoBackedRoleManager struct {
@@ -195,14 +196,13 @@ func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
 		}
 	}
 
-	updateFunc := func(ctx context.Context) error {
-		sess := mongo.SessionFromContext(ctx)
-		err := sess.StartTransaction()
+	updateFunc := func(sessCtx mongo.SessionContext) error {
+		err := sessCtx.StartTransaction()
 		if err != nil {
 			return err
 		}
 		scopeCollection := m.client.Database(m.db).Collection(m.scopeColl)
-		_, err = scopeCollection.InsertOne(ctx, scope)
+		_, err = scopeCollection.InsertOne(sessCtx, scope)
 		if err != nil {
 			return err
 		}
@@ -219,12 +219,12 @@ func (m *mongoBackedRoleManager) AddScope(scope gimlet.Scope) error {
 					},
 				},
 			}
-			_, err = scopeCollection.UpdateMany(ctx, filter, update)
+			_, err = scopeCollection.UpdateMany(sessCtx, filter, update)
 			if err != nil {
 				return err
 			}
 		}
-		return sess.CommitTransaction(ctx)
+		return sessCtx.CommitTransaction(sessCtx)
 	}
 	return m.retryTransaction(updateFunc)
 }
@@ -238,14 +238,13 @@ func (m *mongoBackedRoleManager) DeleteScope(scope gimlet.Scope) error {
 		return err
 	}
 
-	updateFunc := func(ctx context.Context) error {
-		sess := mongo.SessionFromContext(ctx)
-		err := sess.StartTransaction()
+	updateFunc := func(sessCtx mongo.SessionContext) error {
+		err := sessCtx.StartTransaction()
 		if err != nil {
 			return err
 		}
 		scopeCollection := m.client.Database(m.db).Collection(m.scopeColl)
-		_, err = scopeCollection.DeleteOne(ctx, bson.M{"_id": scope.ID})
+		_, err = scopeCollection.DeleteOne(sessCtx, bson.M{"_id": scope.ID})
 		if err != nil {
 			return err
 		}
@@ -262,12 +261,12 @@ func (m *mongoBackedRoleManager) DeleteScope(scope gimlet.Scope) error {
 					},
 				},
 			}
-			_, err = scopeCollection.UpdateMany(ctx, filter, update)
+			_, err = scopeCollection.UpdateMany(sessCtx, filter, update)
 			if err != nil {
 				return err
 			}
 		}
-		return sess.CommitTransaction(ctx)
+		return sessCtx.CommitTransaction(sessCtx)
 	}
 	return m.retryTransaction(updateFunc)
 }
@@ -485,7 +484,7 @@ func (m *mongoBackedRoleManager) findParentsOfScope(scopeId string) ([]string, e
 	return scopeIds, nil
 }
 
-func (m *mongoBackedRoleManager) retryTransaction(f func(context.Context) error) error {
+func (m *mongoBackedRoleManager) retryTransaction(f func(mongo.SessionContext) error) error {
 	const retryCount = 5
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
@@ -903,7 +902,7 @@ func MakeRoleWithPermissions(rm gimlet.RoleManager, resourceType string, resourc
 	}
 	if scope == nil {
 		scope = &gimlet.Scope{
-			ID:        bson.NewObjectID().Hex(),
+			ID:        primitive.NewObjectID().Hex(),
 			Type:      resourceType,
 			Resources: resources,
 		}
@@ -913,7 +912,7 @@ func MakeRoleWithPermissions(rm gimlet.RoleManager, resourceType string, resourc
 		}
 	}
 	newRole := gimlet.Role{
-		ID:          bson.NewObjectID().Hex(),
+		ID:          primitive.NewObjectID().Hex(),
 		Scope:       scope.ID,
 		Permissions: permissions,
 	}
