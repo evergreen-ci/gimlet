@@ -14,7 +14,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.8.3
 	github.com/stretchr/testify v1.8.3
-	go.mongodb.org/mongo-driver/v2 v2.0.0
+	go.mongodb.org/mongo-driver v1.17.3
 	go.opentelemetry.io/otel v1.16.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -61,6 +61,7 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-xmpp v0.0.0-20210723025538-3871461df959 // indirect
+	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627 // indirect
 	github.com/peterhellberg/link v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
