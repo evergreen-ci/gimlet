@@ -272,7 +272,7 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string
 	if strings.HasPrefix(token.Subject, spiffeRoute) {
 		// Istio-Ingressgateway-Public-Service-Account
 		if strings.Contains(token.Subject, unauthorizedSpifeServiceUser) {
-			return nil, errors.New("unauthorized user")
+			return nil, nil
 		}
 	}
 
