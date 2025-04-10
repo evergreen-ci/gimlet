@@ -252,6 +252,9 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 	next(rw, r)
 }
 
+const unauthorizedSpifeServiceUser = "Istio-Ingressgateway-Public-Service-Account"
+const spiffeRoute = "spiffe://cluster.local/ns/routing"
+
 func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string) (User, error) {
 	token, err := u.oidcVerifier.Verify(ctx, header)
 	if err != nil {
@@ -263,6 +266,13 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string
 	}{}
 	if err := token.Claims(&claims); err != nil {
 		return nil, errors.Wrap(err, "parsing token claims")
+	}
+	// if the subject starts with the spiffe route, then
+	// ignore it if it's the unauthorized user.
+	if strings.HasPrefix(token.Subject, spiffeRoute) {
+		if strings.HasSuffix(token.Subject, unauthorizedSpifeServiceUser) {
+			return nil, nil
+		}
 	}
 
 	displayName := token.Subject
