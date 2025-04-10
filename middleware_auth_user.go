@@ -270,8 +270,7 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string
 	// if the subject starts with the spiffe route, then
 	// ignore it if it's the unauthorized user.
 	if strings.HasPrefix(token.Subject, spiffeRoute) {
-		// Istio-Ingressgateway-Public-Service-Account
-		if strings.Contains(token.Subject, unauthorizedSpifeServiceUser) {
+		if strings.HasSuffix(token.Subject, unauthorizedSpifeServiceUser) {
 			return nil, nil
 		}
 	}
