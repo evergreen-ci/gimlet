@@ -237,6 +237,16 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 	}
 
 	if u.oidcVerifier != nil {
+		if kanopyToken := r.Header.Get("X-Kanopy-Authorization"); len(kanopyToken) > 0 {
+			usr, err = u.getUserForOIDCHeader(ctx, kanopyToken)
+			logger.DebugWhen(err != nil, message.WrapError(err, message.Fields{
+				"message": "chaya getting user for kanopy token",
+				"request": reqID,
+			}))
+			if err == nil && usr != nil {
+				r = setUserForRequest(r, usr)
+			}
+		}
 		if jwt := r.Header.Get(u.conf.OIDC.HeaderName); len(jwt) > 0 {
 			usr, err := u.getUserForOIDCHeader(ctx, jwt)
 			logger.DebugWhen(err != nil, message.WrapError(err, message.Fields{
