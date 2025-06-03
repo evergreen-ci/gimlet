@@ -17,6 +17,7 @@ import (
 const (
 	remoteAddrHeaderName = "X-Forwarded-For"
 	requestIDAttribute   = "gimlet.request.id"
+	userIDAttribute      = "gimlet.user.id"
 )
 
 // appLogging provides a Negroni-compatible middleware to send all
@@ -39,13 +40,13 @@ func setServiceLogger(r *http.Request, logger grip.Journaler) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), loggerKey, logger))
 }
 
-type loggingAnnotations map[string]interface{}
+type loggingAnnotations map[string]any
 
 // AddLoggingAnnotation adds a key-value pair to be added to logging
 // messages used by the application logging information, overwriting
 // any previous value for the key.
 // This will noop if the logger hasn't already been set up.
-func AddLoggingAnnotation(r *http.Request, key string, value interface{}) {
+func AddLoggingAnnotation(r *http.Request, key string, value any) {
 	annotations := getLoggingAnnotations(r.Context())
 	if annotations == nil {
 		return

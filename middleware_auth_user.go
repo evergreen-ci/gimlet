@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc"
+	"github.com/evergreen-ci/utility"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // UserMiddlewareConfiguration is an keyed-arguments struct used to
@@ -104,8 +106,14 @@ func (umc UserMiddlewareConfiguration) ClearCookie(rw http.ResponseWriter) {
 }
 
 func setUserForRequest(r *http.Request, u User) *http.Request {
-	AddLoggingAnnotation(r, "user", u.Username())
-	return r.WithContext(AttachUser(r.Context(), u))
+	userID := u.Username()
+	AddLoggingAnnotation(r, "user", userID)
+	ctx := r.Context()
+	ctx = utility.ContextWithAttributes(ctx, []attribute.KeyValue{
+		attribute.String(userIDAttribute, userID),
+	})
+	ctx = AttachUser(ctx, u)
+	return r.WithContext(ctx)
 }
 
 // AttachUser adds a user to a context. This function is public to
