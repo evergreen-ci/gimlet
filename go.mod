@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/evergreen-ci/negroni v1.0.1-0.20211028183800-67b6d7c2c035
-	github.com/evergreen-ci/utility v0.0.0-20250224222128-c2a9c8dfbc87
+	github.com/evergreen-ci/utility v0.0.0-20250604173729-c1b32de37d48
 	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/gorilla/mux v1.8.0
 	github.com/mongodb/grip v0.0.0-20250224221724-fc8adcb1fe8e

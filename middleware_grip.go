@@ -118,7 +118,7 @@ func setupLogger(logger grip.Journaler, r *http.Request) *http.Request {
 
 	id := getNumber()
 	r = setRequestID(r, id)
-	r = r.WithContext(utility.ContextWithAttributes(r.Context(), []attribute.KeyValue{attribute.Int(requestIDAttribute, id)}))
+	r = r.WithContext(utility.ContextWithAppendedAttributes(r.Context(), []attribute.KeyValue{attribute.Int(requestIDAttribute, id)}))
 
 	startAt := time.Now()
 	r = setStartAtTime(r, startAt)
