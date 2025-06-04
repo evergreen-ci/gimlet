@@ -109,7 +109,7 @@ func setUserForRequest(r *http.Request, u User) *http.Request {
 	userID := u.Username()
 	AddLoggingAnnotation(r, "user", userID)
 	ctx := r.Context()
-	ctx = utility.ContextWithAttributes(ctx, []attribute.KeyValue{
+	ctx = utility.ContextWithAppendedAttributes(ctx, []attribute.KeyValue{
 		attribute.String(userIDAttribute, userID),
 	})
 	ctx = AttachUser(ctx, u)
