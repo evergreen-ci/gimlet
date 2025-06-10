@@ -294,7 +294,7 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string
 		email: claims.Email,
 	}))
 	if err != nil {
-		return nil, errors.Wrapf(err, "creating user '%s'", usr.Username())
+		return nil, errors.Wrapf(err, "getting or creating user '%s'", displayName)
 	}
 
 	return usr, nil
