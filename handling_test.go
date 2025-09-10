@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -104,6 +105,16 @@ func TestResponsesWritingHelpers(t *testing.T) {
 	}
 }
 
+type testCloser struct {
+	io.Reader
+	closed bool
+}
+
+func (tc *testCloser) Close() error {
+	tc.closed = true
+	return nil
+}
+
 func TestBytesConverter(t *testing.T) {
 	assert := assert.New(t)
 
@@ -114,6 +125,8 @@ func TestBytesConverter(t *testing.T) {
 		{"gimlet", []byte("gimlet")},
 		{"GET", get},
 		{"gimlet", bytes.NewBufferString("gimlet")},
+		{"gimlet\ngimlet", []string{"gimlet", "gimlet"}},
+		{"other gimlet", &testCloser{Reader: bytes.NewBufferString("other gimlet")}},
 	}
 
 	for _, c := range cases {
@@ -128,12 +141,11 @@ func TestBytesConverter(t *testing.T) {
 		_, err := writePayload(buf, in)
 		assert.NoError(err)
 		assert.Equal([]byte(out), buf.Bytes())
-	}
 
-	buf := &bytes.Buffer{}
-	_, err := writePayload(buf, []string{"gimlet", "gimlet"})
-	assert.NoError(err)
-	assert.Equal([]byte("gimlet\ngimlet"), buf.Bytes())
+		if tc, ok := in.(*testCloser); ok {
+			assert.True(tc.closed)
+		}
+	}
 }
 
 type mangledResponseWriter struct{ *httptest.ResponseRecorder }
