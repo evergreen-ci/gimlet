@@ -43,6 +43,10 @@ func writePayload(w io.Writer, data interface{}) (int, error) {
 		return w.Write(data.Bytes())
 	case fmt.Stringer:
 		return w.Write([]byte(data.String()))
+	case io.ReadCloser:
+		defer data.Close()
+		size, err := io.Copy(w, data)
+		return int(size), errors.WithStack(err)
 	case io.Reader:
 		size, err := io.Copy(w, data)
 		return int(size), errors.WithStack(err)
