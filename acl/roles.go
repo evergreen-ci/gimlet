@@ -2,55 +2,10 @@ package acl
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/evergreen-ci/gimlet"
 )
-
-type updateRoleHandler struct {
-	manager gimlet.RoleManager
-	role    *gimlet.Role
-}
-
-func NewUpdateRoleHandler(m gimlet.RoleManager) gimlet.RouteHandler {
-	return &updateRoleHandler{
-		manager: m,
-	}
-}
-
-func (h *updateRoleHandler) Factory() gimlet.RouteHandler {
-	return &updateRoleHandler{
-		manager: h.manager,
-	}
-}
-
-func (h *updateRoleHandler) Parse(ctx context.Context, r *http.Request) error {
-	h.role = &gimlet.Role{}
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(data, h.role)
-	if err != nil {
-		return err
-	}
-	if h.role.ID == "" {
-		return errors.New("must specify a role id")
-	}
-	return nil
-}
-
-func (h *updateRoleHandler) Run(ctx context.Context) gimlet.Responder {
-	err := h.manager.UpdateRole(*h.role)
-	if err != nil {
-		return gimlet.NewJSONErrorResponse(err)
-	}
-
-	return gimlet.NewJSONResponse(h.role)
-}
 
 type getAllRolesHandler struct {
 	manager gimlet.RoleManager
