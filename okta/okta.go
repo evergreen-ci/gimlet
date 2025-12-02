@@ -15,7 +15,7 @@ import (
 	"github.com/evergreen-ci/gimlet/util"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
-	jwtverifier "github.com/okta/okta-jwt-verifier-golang"
+	jwtverifier "github.com/okta/okta-jwt-verifier-golang/v2"
 	"github.com/pkg/errors"
 )
 
@@ -621,7 +621,11 @@ func (m *userManager) validateIDToken(token, nonce string) (*jwtverifier.Jwt, er
 			"nonce": nonce,
 		},
 	}
-	return verifier.New().VerifyIdToken(token)
+	v, err := verifier.New()
+	if err != nil {
+		return nil, errors.Wrap(err, "creating Okta JWT verifier")
+	}
+	return v.VerifyIdToken(token)
 }
 
 // validateAccessToken verifies that the access token is valid.
