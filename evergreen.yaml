@@ -131,9 +131,6 @@ tasks:
     name: lint-gimlet
   - <<: *run-build
     tags: ["report"]
-    name: lint-ldap
-  - <<: *run-build
-    tags: ["report"]
     name: lint-okta
   - <<: *run-build
     tags: ["report"]
@@ -162,9 +159,6 @@ tasks:
   - <<: *run-build
     tags: ["test"]
     name: test-gimlet
-  - <<: *run-build
-    tags: ["test"]
-    name: test-ldap
   - <<: *run-build
     tags: ["test"]
     name: test-okta
