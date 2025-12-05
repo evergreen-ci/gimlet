@@ -16,7 +16,7 @@ import (
 	"github.com/evergreen-ci/gimlet/testutil"
 	"github.com/evergreen-ci/gimlet/usercache"
 	"github.com/mongodb/grip"
-	jwtverifier "github.com/okta/okta-jwt-verifier-golang"
+	jwtverifier "github.com/okta/okta-jwt-verifier-golang/v2"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
