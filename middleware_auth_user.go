@@ -27,6 +27,10 @@ type UserMiddlewareConfiguration struct {
 	CookiePath      string
 	CookieTTL       time.Duration
 	CookieDomain    string
+
+	// StaticKeysDisabledForHumanUsers disables static API keys for users
+	// that are not service users.
+	StaticKeysDisabledForHumanUsers bool
 }
 
 // OIDCConfig configures the validation of JWTs provided as a header on requests.
@@ -235,6 +239,10 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 
 			// only loggable if the err is non-nil
 			if err == nil && usr != nil {
+				if u.conf.StaticKeysDisabledForHumanUsers && !usr.IsAPIOnly() {
+					WriteTextResponse(rw, http.StatusUnauthorized, "static API keys are disabled for human users")
+					return
+				}
 				if usr.GetAPIKey() != authDataAPIKey {
 					WriteTextResponse(rw, http.StatusUnauthorized, "invalid API key")
 					return

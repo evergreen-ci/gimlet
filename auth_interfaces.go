@@ -21,6 +21,7 @@ type User interface {
 	GetAccessToken() string
 	GetRefreshToken() string
 	Roles() []string
+	IsAPIOnly() bool
 	HasPermission(PermissionOpts) bool
 }
 
