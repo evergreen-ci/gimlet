@@ -1,7 +1,6 @@
 package gimlet
 
 import (
-	"context"
 	"crypto/tls"
 	"testing"
 	"time"
@@ -41,9 +40,6 @@ func TestServer(t *testing.T) {
 		require.Contains(t, err.Error(), "must specify a handler")
 	})
 	t.Run("ServerIntegration", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
 		app := NewApp()
 		h, err := app.Handler()
 		require.NoError(t, err)
@@ -51,7 +47,7 @@ func TestServer(t *testing.T) {
 		require.NotNil(t, srv)
 		require.NoError(t, err)
 		assert.NotNil(t, srv.GetServer())
-		wait, err := srv.Run(ctx)
+		wait, err := srv.Run(t.Context())
 		require.NoError(t, err)
 		require.NotNil(t, wait)
 	})

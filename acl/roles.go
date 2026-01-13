@@ -28,7 +28,7 @@ func (h *getAllRolesHandler) Parse(ctx context.Context, r *http.Request) error {
 }
 
 func (h *getAllRolesHandler) Run(ctx context.Context) gimlet.Responder {
-	roles, err := h.manager.GetAllRoles()
+	roles, err := h.manager.GetAllRoles(ctx)
 	if err != nil {
 		return gimlet.MakeJSONInternalErrorResponder(err)
 	}

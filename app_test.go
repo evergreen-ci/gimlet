@@ -194,7 +194,7 @@ func (s *AppSuite) TestHandlerGetter() {
 
 func (s *AppSuite) TestAppRun() {
 	s.Len(s.app.routes, 0)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(s.T().Context(), time.Second)
 	defer cancel()
 	s.NoError(s.app.Resolve())
 	s.NoError(s.app.Run(ctx))
@@ -202,7 +202,7 @@ func (s *AppSuite) TestAppRun() {
 
 func (s *AppSuite) TestAppRunWithError() {
 	s.Len(s.app.routes, 0)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(s.T().Context(), time.Second)
 	defer cancel()
 	s.app.port = -10
 	s.app.address = ":;;;:::::"

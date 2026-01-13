@@ -1,7 +1,6 @@
 package gimlet
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -137,7 +136,7 @@ func TestDefaultGripMiddlwareSetters(t *testing.T) {
 	r := &http.Request{
 		URL: &url.URL{Path: "foo"},
 	}
-	r = r.WithContext(context.Background())
+	r = r.WithContext(t.Context())
 	ctx := r.Context()
 
 	var l grip.Journaler

@@ -100,7 +100,7 @@ type userManager struct {
 	// Injected functions for validating tokens. Should only be set for mocking
 	// purposes.
 	doValidateIDToken     func(string, string) (*jwtverifier.Jwt, error)
-	doValidateAccessToken func(string) error
+	doValidateAccessToken func(context.Context, string) error
 
 	cookiePath   string
 	cookieDomain string
@@ -158,7 +158,7 @@ func NewUserManager(opts CreationOptions) (gimlet.UserManager, error) {
 }
 
 func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
-	user, valid, err := m.cache.Get(token)
+	user, valid, err := m.cache.Get(ctx, token)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting cached user")
 	}
@@ -167,7 +167,7 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 	}
 	if !valid {
 		if m.allowReauthorization {
-			if err := m.ReauthorizeUser(user); err != nil {
+			if err := m.ReauthorizeUser(ctx, user); err != nil {
 				return user, gimlet.ErrNeedsReauthentication
 			}
 			return user, nil
@@ -178,15 +178,15 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 }
 
 // reauthorizeGroup attempts to reauthorize the user based on their groups.
-func (m *userManager) reauthorizeGroup(accessToken, refreshToken string) error {
+func (m *userManager) reauthorizeGroup(ctx context.Context, accessToken, refreshToken string) error {
 	catcher := grip.NewBasicCatcher()
-	err := m.doValidateAccessToken(accessToken)
+	err := m.doValidateAccessToken(ctx, accessToken)
 	catcher.Wrap(err, "invalid access token")
 	if err == nil {
-		user, err := m.generateUserFromInfo(accessToken, refreshToken)
+		user, err := m.generateUserFromInfo(ctx, accessToken, refreshToken)
 		catcher.Wrap(err, "generating user from Okta user info")
 		if err == nil {
-			_, err = m.cache.Put(user)
+			_, err = m.cache.Put(ctx, user)
 			catcher.Wrap(err, "updating reauthorized user in cache")
 			if err == nil {
 				return nil
@@ -199,7 +199,7 @@ func (m *userManager) reauthorizeGroup(accessToken, refreshToken string) error {
 // reauthorizeID attempts to reauthorize the user based on their ID token.
 // Reauthorization succeeds if the username derived from their ID token matches
 // the given username.
-func (m *userManager) reauthorizeID(username string, tokens *tokenResponse) error {
+func (m *userManager) reauthorizeID(ctx context.Context, username string, tokens *tokenResponse) error {
 	idToken, err := m.doValidateIDToken(tokens.IDToken, "")
 	if err != nil {
 		return errors.Wrap(err, "invalid ID token")
@@ -217,7 +217,7 @@ func (m *userManager) reauthorizeID(username string, tokens *tokenResponse) erro
 	user, err := makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
 	catcher.Wrap(err, "generating user from Okta ID token")
 	if err == nil {
-		_, err = m.cache.Put(user)
+		_, err = m.cache.Put(ctx, user)
 		catcher.Wrapf(err, "updating reauthorized user in cache")
 		if err == nil {
 			return nil
@@ -234,7 +234,7 @@ func (m *userManager) reauthorizeID(username string, tokens *tokenResponse) erro
 // If reauthorization fails or the user manager is configured to always refresh
 // the user's tokens that fails, it refreshes the tokens and attempts to
 // reauthorize them again.
-func (m *userManager) ReauthorizeUser(user gimlet.User) error {
+func (m *userManager) ReauthorizeUser(ctx context.Context, user gimlet.User) error {
 	refreshToken := user.GetRefreshToken()
 	catcher := grip.NewBasicCatcher()
 
@@ -247,7 +247,7 @@ func (m *userManager) ReauthorizeUser(user gimlet.User) error {
 		if accessToken == "" {
 			return errors.Errorf("user '%s' cannot reauthorize because user is missing access token", user.Username())
 		}
-		err := m.reauthorizeGroup(accessToken, refreshToken)
+		err := m.reauthorizeGroup(ctx, accessToken, refreshToken)
 		catcher.Wrap(err, "reauthorizing user groups using current access token")
 		if err == nil {
 			return nil
@@ -258,17 +258,17 @@ func (m *userManager) ReauthorizeUser(user gimlet.User) error {
 	if refreshToken == "" {
 		return errors.Errorf("user '%s' cannot refresh tokens because refresh token is missing", user.Username())
 	}
-	tokens, err := m.refreshTokens(context.Background(), refreshToken)
+	tokens, err := m.refreshTokens(ctx, refreshToken)
 	catcher.Wrap(err, "refreshing authorization tokens")
 	if err == nil {
 		if m.validateGroups {
-			err = m.reauthorizeGroup(tokens.AccessToken, tokens.RefreshToken)
+			err = m.reauthorizeGroup(ctx, tokens.AccessToken, tokens.RefreshToken)
 			catcher.Wrap(err, "reauthorizing user groups user after refreshing tokens")
 			if err == nil {
 				return nil
 			}
 		} else {
-			err = m.reauthorizeID(user.Username(), tokens)
+			err = m.reauthorizeID(ctx, user.Username(), tokens)
 			catcher.Wrap(err, "reauthorizing user ID token after refreshing tokens")
 			if err == nil {
 				return nil
@@ -290,7 +290,7 @@ func (m *userManager) validateGroup(groups []string) error {
 	return errors.New("user is not in a valid group")
 }
 
-func (m *userManager) CreateUserToken(user string, password string) (string, error) {
+func (m *userManager) CreateUserToken(ctx context.Context, user string, password string) (string, error) {
 	return "", errors.New("creating user tokens is not supported for Okta")
 }
 
@@ -345,7 +345,7 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 					"request": gimlet.GetRequestID(r.Context()),
 					"context": "Okta",
 				}))
-				user, err = m.GetUserByToken(context.Background(), loginToken)
+				user, err = m.GetUserByToken(r.Context(), loginToken)
 				if (err == nil || errors.Cause(err) == gimlet.ErrNeedsReauthentication) && user != nil {
 					canSilentReauth = true
 					break
@@ -456,7 +456,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			return
 		}
 
-		tokens, idToken, err := m.getUserTokens(r.URL.Query().Get("code"), nonce)
+		tokens, idToken, err := m.getUserTokens(r.Context(), r.URL.Query().Get("code"), nonce)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -464,7 +464,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 
 		var user gimlet.User
 		if m.validateGroups {
-			user, err = m.generateUserFromInfo(tokens.AccessToken, tokens.RefreshToken)
+			user, err = m.generateUserFromInfo(r.Context(), tokens.AccessToken, tokens.RefreshToken)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
@@ -479,7 +479,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			}
 		}
 
-		user, err = m.GetOrCreateUser(user)
+		user, err = m.GetOrCreateUser(r.Context(), user)
 		if err != nil {
 			err = errors.Wrap(err, "getting existing user or creating new user")
 			grip.Error(err)
@@ -487,7 +487,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			return
 		}
 
-		loginToken, err := m.cache.Put(user)
+		loginToken, err := m.cache.Put(r.Context(), user)
 		if err != nil {
 			err = errors.Wrapf(err, "caching user '%s'", user.Username())
 			grip.Error(err)
@@ -506,8 +506,8 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 
 // getUserTokens redeems the authorization code for tokens and validates the
 // received tokens.
-func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtverifier.Jwt, error) {
-	tokens, err := m.exchangeCodeForTokens(context.Background(), code)
+func (m *userManager) getUserTokens(ctx context.Context, code, nonce string) (*tokenResponse, *jwtverifier.Jwt, error) {
+	tokens, err := m.exchangeCodeForTokens(ctx, code)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "redeeming authorization code for tokens")
 	}
@@ -518,7 +518,7 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 	if !m.validateGroups {
 		return tokens, idToken, nil
 	}
-	if err := m.doValidateAccessToken(tokens.AccessToken); err != nil {
+	if err := m.doValidateAccessToken(ctx, tokens.AccessToken); err != nil {
 		return tokens, idToken, errors.Wrap(err, "invalid access token from Okta")
 	}
 	return tokens, idToken, nil
@@ -526,8 +526,8 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 
 // generateUserFromInfo creates a user based on information from the userinfo
 // endpoint.
-func (m *userManager) generateUserFromInfo(accessToken, refreshToken string) (gimlet.User, error) {
-	userInfo, err := m.getUserInfo(context.Background(), accessToken)
+func (m *userManager) generateUserFromInfo(ctx context.Context, accessToken, refreshToken string) (gimlet.User, error) {
+	userInfo, err := m.getUserInfo(ctx, accessToken)
 	if err != nil {
 		return nil, errors.Wrap(err, "retrieving user info from Okta")
 	}
@@ -576,8 +576,8 @@ func getCookies(r *http.Request) (nonce, state, requestURI string, err error) {
 
 func (m *userManager) IsRedirect() bool { return true }
 
-func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
-	user, valid, err := m.cache.Find(id)
+func (m *userManager) GetUserByID(ctx context.Context, id string) (gimlet.User, error) {
+	user, valid, err := m.cache.Find(ctx, id)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting user by ID")
 	}
@@ -586,7 +586,7 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 	}
 	if !valid {
 		if m.allowReauthorization {
-			if err := m.ReauthorizeUser(user); err != nil {
+			if err := m.ReauthorizeUser(ctx, user); err != nil {
 				return user, gimlet.ErrNeedsReauthentication
 			}
 			return user, nil
@@ -596,12 +596,12 @@ func (m *userManager) GetUserByID(id string) (gimlet.User, error) {
 	return user, nil
 }
 
-func (m *userManager) GetOrCreateUser(user gimlet.User) (gimlet.User, error) {
-	return m.cache.GetOrCreate(user)
+func (m *userManager) GetOrCreateUser(ctx context.Context, user gimlet.User) (gimlet.User, error) {
+	return m.cache.GetOrCreate(ctx, user)
 }
 
-func (m *userManager) ClearUser(user gimlet.User, all bool) error {
-	return m.cache.Clear(user, all)
+func (m *userManager) ClearUser(ctx context.Context, user gimlet.User, all bool) error {
+	return m.cache.Clear(ctx, user, all)
 }
 
 func (m *userManager) GetGroupsForUser(user string) ([]string, error) {
@@ -629,8 +629,8 @@ func (m *userManager) validateIDToken(token, nonce string) (*jwtverifier.Jwt, er
 }
 
 // validateAccessToken verifies that the access token is valid.
-func (m *userManager) validateAccessToken(token string) error {
-	info, err := m.getTokenInfo(context.Background(), token, "access_token")
+func (m *userManager) validateAccessToken(ctx context.Context, token string) error {
+	info, err := m.getTokenInfo(ctx, token, "access_token")
 	if err != nil {
 		return errors.Wrap(err, "checking if token is valid")
 	}

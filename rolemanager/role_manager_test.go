@@ -1,7 +1,6 @@
 package rolemanager
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,8 +25,8 @@ func TestRoleManager(t *testing.T) {
 		RoleCollection:  roleCollection,
 		ScopeCollection: scopeCollection,
 	})
-	require.NoError(t, client.Database(dbName).Collection(roleCollection).Drop(context.Background()))
-	require.NoError(t, client.Database(dbName).Collection(scopeCollection).Drop(context.Background()))
+	require.NoError(t, client.Database(dbName).Collection(roleCollection).Drop(t.Context()))
+	require.NoError(t, client.Database(dbName).Collection(scopeCollection).Drop(t.Context()))
 	memManager := NewInMemoryRoleManager()
 
 	toTest := map[string]gimlet.RoleManager{
@@ -60,46 +59,46 @@ func (s *RoleManagerSuite) SetupSuite() {
 }
 
 func (s *RoleManagerSuite) SetupTest() {
-	s.Require().NoError(s.m.Clear())
+	s.Require().NoError(s.m.Clear(s.T().Context()))
 	root := gimlet.Scope{
 		ID:        "root",
 		Type:      "project",
 		Resources: []string{},
 	}
-	s.Require().NoError(s.m.AddScope(root))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), root))
 	scope3 := gimlet.Scope{
 		ID:          "3",
 		ParentScope: "root",
 		Type:        "project",
 		Resources:   []string{},
 	}
-	s.Require().NoError(s.m.AddScope(scope3))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope3))
 	scope1 := gimlet.Scope{
 		ID:          "1",
 		Resources:   []string{"resource1", "resource2"},
 		ParentScope: "3",
 		Type:        "project",
 	}
-	s.Require().NoError(s.m.AddScope(scope1))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope1))
 	scope2 := gimlet.Scope{
 		ID:          "2",
 		Resources:   []string{"resource3"},
 		ParentScope: "3",
 		Type:        "project",
 	}
-	s.Require().NoError(s.m.AddScope(scope2))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope2))
 	scope4 := gimlet.Scope{
 		ID:          "4",
 		Resources:   []string{"resource4"},
 		ParentScope: "root",
 		Type:        "project",
 	}
-	s.Require().NoError(s.m.AddScope(scope4))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope4))
 	wrongType := gimlet.Scope{
 		ID:   "wrongType",
 		Type: "foo",
 	}
-	s.Require().NoError(s.m.AddScope(wrongType))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), wrongType))
 }
 
 func (s *RoleManagerSuite) TestGetAndUpdate() {
@@ -111,8 +110,8 @@ func (s *RoleManagerSuite) TestGetAndUpdate() {
 		},
 		Owners: []string{"me"},
 	}
-	s.NoError(s.m.UpdateRole(role1))
-	dbRoles, err := s.m.GetRoles([]string{role1.ID})
+	s.NoError(s.m.UpdateRole(s.T().Context(), role1))
+	dbRoles, err := s.m.GetRoles(s.T().Context(), []string{role1.ID})
 	s.NoError(err)
 	s.Equal(role1.Name, dbRoles[0].Name)
 	s.Equal(role1.Permissions, dbRoles[0].Permissions)
@@ -124,44 +123,44 @@ func (s *RoleManagerSuite) TestFilterForResource() {
 		ID:    "r1",
 		Scope: "1",
 	}
-	s.NoError(s.m.UpdateRole(role1))
+	s.NoError(s.m.UpdateRole(s.T().Context(), role1))
 	role2 := gimlet.Role{
 		ID:    "r2",
 		Scope: "2",
 	}
-	s.NoError(s.m.UpdateRole(role2))
+	s.NoError(s.m.UpdateRole(s.T().Context(), role2))
 	role3 := gimlet.Role{
 		ID:    "r3",
 		Scope: "3",
 	}
-	s.NoError(s.m.UpdateRole(role3))
+	s.NoError(s.m.UpdateRole(s.T().Context(), role3))
 	role4 := gimlet.Role{
 		ID:    "r4",
 		Scope: "4",
 	}
-	s.NoError(s.m.UpdateRole(role4))
+	s.NoError(s.m.UpdateRole(s.T().Context(), role4))
 	roleRoot := gimlet.Role{
 		ID:    "rRoot",
 		Scope: "root",
 	}
-	s.NoError(s.m.UpdateRole(roleRoot))
+	s.NoError(s.m.UpdateRole(s.T().Context(), roleRoot))
 	wrongType := gimlet.Role{
 		ID:    "wrong",
 		Scope: "wrongType",
 	}
-	s.NoError(s.m.UpdateRole(wrongType))
+	s.NoError(s.m.UpdateRole(s.T().Context(), wrongType))
 	allRoles := []gimlet.Role{role1, role2, role3, role4, roleRoot, wrongType}
 
-	filtered, err := s.m.FilterForResource(allRoles, "resource1", "project")
+	filtered, err := s.m.FilterForResource(s.T().Context(), allRoles, "resource1", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role1, role3, roleRoot}, filtered)
-	filtered, err = s.m.FilterForResource(allRoles, "resource2", "project")
+	filtered, err = s.m.FilterForResource(s.T().Context(), allRoles, "resource2", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role1, role3, roleRoot}, filtered)
-	filtered, err = s.m.FilterForResource(allRoles, "resource3", "project")
+	filtered, err = s.m.FilterForResource(s.T().Context(), allRoles, "resource3", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role2, role3, roleRoot}, filtered)
-	filtered, err = s.m.FilterForResource(allRoles, "resource4", "project")
+	filtered, err = s.m.FilterForResource(s.T().Context(), allRoles, "resource4", "project")
 	s.NoError(err)
 	s.Equal([]gimlet.Role{role4, roleRoot}, filtered)
 }
@@ -178,41 +177,41 @@ func (s *RoleManagerSuite) TestFilterScopesByResourceType() {
 		Type: correctType,
 	}
 	typeMap[correctType]["s1"] = true
-	s.Require().NoError(s.m.AddScope(scope1))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope1))
 	scope2 := gimlet.Scope{
 		ID:   "s2",
 		Type: correctType,
 	}
 	typeMap[correctType]["s2"] = true
-	s.Require().NoError(s.m.AddScope(scope2))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope2))
 	scope3 := gimlet.Scope{
 		ID:   "s3",
 		Type: wrongType,
 	}
 	typeMap[wrongType]["s3"] = true
-	s.Require().NoError(s.m.AddScope(scope3))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope3))
 	scope4 := gimlet.Scope{
 		ID:   "s4",
 		Type: correctType,
 	}
 	typeMap[correctType]["s4"] = true
-	s.Require().NoError(s.m.AddScope(scope4))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope4))
 	scope5 := gimlet.Scope{
 		ID:   "s5",
 		Type: wrongType,
 	}
 	typeMap[wrongType]["s5"] = true
-	s.Require().NoError(s.m.AddScope(scope5))
+	s.Require().NoError(s.m.AddScope(s.T().Context(), scope5))
 	allIds := []string{"s1", "s2", "s3", "s4", "s5"}
 
-	filtered, err := s.m.FilterScopesByResourceType(allIds, correctType)
+	filtered, err := s.m.FilterScopesByResourceType(s.T().Context(), allIds, correctType)
 	s.Require().NoError(err)
 	s.Require().Len(filtered, len(typeMap[correctType]))
 	for _, scope := range filtered {
 		s.True(typeMap[correctType][scope.ID])
 	}
 
-	filtered, err = s.m.FilterScopesByResourceType(allIds, wrongType)
+	filtered, err = s.m.FilterScopesByResourceType(s.T().Context(), allIds, wrongType)
 	s.Require().NoError(err)
 	s.Require().Len(filtered, len(typeMap[wrongType]))
 	for _, scope := range filtered {
@@ -232,7 +231,7 @@ func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
 		Scope:       "1",
 		Permissions: map[string]int{"edit": 1},
 	}
-	s.NoError(s.m.UpdateRole(role1))
+	s.NoError(s.m.UpdateRole(s.T().Context(), role1))
 	resourceLevels := []string{"resource_id"}
 	opts := gimlet.RequiresPermissionMiddlewareOpts{
 		RM:             s.m,
@@ -273,7 +272,7 @@ func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
 	userOpts, err = gimlet.NewBasicUserOptions("user")
 	s.Require().NoError(err)
 	user = gimlet.NewBasicUser(userOpts.Name("name").Email("email").Password("password").Key("key").AccessToken("access_token").RefreshToken("refresh_token").Roles(role1.ID).RoleManager(s.m))
-	_, err = um.GetOrCreateUser(user)
+	_, err = um.GetOrCreateUser(req.Context(), user)
 	s.NoError(err)
 	ctx = gimlet.AttachUser(req.Context(), user)
 	req = req.WithContext(ctx)
@@ -306,7 +305,7 @@ func (s *RoleManagerSuite) TestHighestPermissionsForRoles() {
 			"read": 20,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r1))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r1))
 	r2 := gimlet.Role{
 		ID:    "r2",
 		Scope: "1",
@@ -314,7 +313,7 @@ func (s *RoleManagerSuite) TestHighestPermissionsForRoles() {
 			"edit": 50,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r2))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r2))
 	r3 := gimlet.Role{
 		ID:    "r3",
 		Scope: "2",
@@ -322,13 +321,13 @@ func (s *RoleManagerSuite) TestHighestPermissionsForRoles() {
 			"read": 40,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r3))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r3))
 
 	opts := gimlet.PermissionOpts{
 		Resource:     "resource1",
 		ResourceType: "project",
 	}
-	permissions, err := HighestPermissionsForRoles([]string{"r1", "r2", "r3"}, s.m, opts)
+	permissions, err := HighestPermissionsForRoles(s.T().Context(), []string{"r1", "r2", "r3"}, s.m, opts)
 	s.NoError(err)
 	s.Len(permissions, 2)
 	s.EqualValues(map[string]int{"edit": 50, "read": 20}, permissions)
@@ -343,7 +342,7 @@ func (s *RoleManagerSuite) TestFindRoleWithPermissions() {
 			"read": 20,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r1))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r1))
 	r2 := gimlet.Role{
 		ID:    "r2",
 		Scope: "1",
@@ -351,7 +350,7 @@ func (s *RoleManagerSuite) TestFindRoleWithPermissions() {
 			"edit": 50,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r2))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r2))
 	r3 := gimlet.Role{
 		ID:    "r3",
 		Scope: "2",
@@ -360,55 +359,55 @@ func (s *RoleManagerSuite) TestFindRoleWithPermissions() {
 			"read": 20,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r3))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r3))
 
 	// test that we can find the role with the correct criteria
-	r, err := s.m.FindRoleWithPermissions("project", []string{"resource1", "resource2"}, gimlet.Permissions{"read": 20, "edit": 20})
+	r, err := s.m.FindRoleWithPermissions(s.T().Context(), "project", []string{"resource1", "resource2"}, gimlet.Permissions{"read": 20, "edit": 20})
 	s.NoError(err)
 	s.Equal("r1", r.ID)
 	// make sure that order does not matter
-	r, err = s.m.FindRoleWithPermissions("project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 20, "read": 20})
+	r, err = s.m.FindRoleWithPermissions(s.T().Context(), "project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 20, "read": 20})
 	s.NoError(err)
 	s.Equal("r1", r.ID)
 	// making such a role should not return anything
-	r, err = MakeRoleWithPermissions(s.m, "project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 20, "read": 20})
+	r, err = MakeRoleWithPermissions(s.T().Context(), s.m, "project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 20, "read": 20})
 	s.NoError(err)
 	s.Equal("r1", r.ID)
-	allRoles, err := s.m.GetAllRoles()
+	allRoles, err := s.m.GetAllRoles(s.T().Context())
 	s.NoError(err)
 	s.Len(allRoles, 3)
 	// non-matching permissions should find nothing
-	r, err = s.m.FindRoleWithPermissions("project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 10, "read": 20})
+	r, err = s.m.FindRoleWithPermissions(s.T().Context(), "project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 10, "read": 20})
 	s.NoError(err)
 	s.Nil(r)
 	// making such a role should create a new role with the existing scope
-	r, err = MakeRoleWithPermissions(s.m, "project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 10, "read": 20})
+	r, err = MakeRoleWithPermissions(s.T().Context(), s.m, "project", []string{"resource2", "resource1"}, gimlet.Permissions{"edit": 10, "read": 20})
 	s.NoError(err)
 	s.Len(r.ID, 24)
 	s.Equal("1", r.Scope)
-	allRoles, err = s.m.GetAllRoles()
+	allRoles, err = s.m.GetAllRoles(s.T().Context())
 	s.NoError(err)
 	s.Len(allRoles, 4)
 	// wrong resources should find nothing
-	r, err = s.m.FindRoleWithPermissions("project", []string{"resource2"}, gimlet.Permissions{"edit": 20, "read": 20})
+	r, err = s.m.FindRoleWithPermissions(s.T().Context(), "project", []string{"resource2"}, gimlet.Permissions{"edit": 20, "read": 20})
 	s.NoError(err)
 	s.Nil(r)
-	r, err = s.m.FindRoleWithPermissions("project", []string{"resource2", "resource3"}, gimlet.Permissions{"edit": 20, "read": 20})
+	r, err = s.m.FindRoleWithPermissions(s.T().Context(), "project", []string{"resource2", "resource3"}, gimlet.Permissions{"edit": 20, "read": 20})
 	s.NoError(err)
 	s.Nil(r)
-	r, err = s.m.FindRoleWithPermissions("project", []string{"resource2", "resource3"}, gimlet.Permissions{})
+	r, err = s.m.FindRoleWithPermissions(s.T().Context(), "project", []string{"resource2", "resource3"}, gimlet.Permissions{})
 	s.NoError(err)
 	s.Nil(r)
 	// wrong type should find nothing
-	r, err = s.m.FindRoleWithPermissions("distro", []string{"resource1", "resource2"}, gimlet.Permissions{"read": 20, "edit": 20})
+	r, err = s.m.FindRoleWithPermissions(s.T().Context(), "distro", []string{"resource1", "resource2"}, gimlet.Permissions{"read": 20, "edit": 20})
 	s.NoError(err)
 	s.Nil(r)
 	// making such a role should create a new role and scope
-	r, err = MakeRoleWithPermissions(s.m, "distro", []string{"resource1", "resource2"}, gimlet.Permissions{"read": 20, "edit": 20})
+	r, err = MakeRoleWithPermissions(s.T().Context(), s.m, "distro", []string{"resource1", "resource2"}, gimlet.Permissions{"read": 20, "edit": 20})
 	s.NoError(err)
 	s.Len(r.ID, 24)
 	s.Len(r.Scope, 24)
-	allRoles, err = s.m.GetAllRoles()
+	allRoles, err = s.m.GetAllRoles(s.T().Context())
 	s.NoError(err)
 	s.Len(allRoles, 5)
 }
@@ -422,7 +421,7 @@ func (s *RoleManagerSuite) TestHighestPermissionsForRolesAndResourceType() {
 			"read": 20,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r1))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r1))
 	r2 := gimlet.Role{
 		ID:    "r2",
 		Scope: "1",
@@ -430,7 +429,7 @@ func (s *RoleManagerSuite) TestHighestPermissionsForRolesAndResourceType() {
 			"edit": 50,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r2))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r2))
 	r3 := gimlet.Role{
 		ID:    "r3",
 		Scope: "2",
@@ -438,61 +437,61 @@ func (s *RoleManagerSuite) TestHighestPermissionsForRolesAndResourceType() {
 			"read": 40,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r3))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r3))
 
 	expectedMap := map[string]gimlet.Permissions{}
 	expectedMap["resource1"] = map[string]int{"edit": 50, "read": 20}
 	expectedMap["resource2"] = map[string]int{"edit": 50, "read": 20}
 	expectedMap["resource3"] = map[string]int{"read": 40}
 
-	highestPermissions, err := HighestPermissionsForRolesAndResourceType([]string{"r1", "r2", "r3"}, "project", s.m)
+	highestPermissions, err := HighestPermissionsForRolesAndResourceType(s.T().Context(), []string{"r1", "r2", "r3"}, "project", s.m)
 	s.NoError(err)
 	s.Equal(expectedMap, highestPermissions)
 }
 
 func (s *RoleManagerSuite) TestFindScopeForResources() {
 	// normal scenario where scope exists
-	scope, err := s.m.FindScopeForResources("project", "resource1", "resource2")
+	scope, err := s.m.FindScopeForResources(s.T().Context(), "project", "resource1", "resource2")
 	s.NoError(err)
 	s.Equal(scope.ID, "1")
 	s.Equal(scope.Type, "project")
 	// order should not matter
-	scope, err = s.m.FindScopeForResources("project", "resource2", "resource1")
+	scope, err = s.m.FindScopeForResources(s.T().Context(), "project", "resource2", "resource1")
 	s.NoError(err)
 	s.Equal(scope.ID, "1")
 	// not exact match should find nothing
-	scope, err = s.m.FindScopeForResources("project", "resource2", "resource3")
+	scope, err = s.m.FindScopeForResources(s.T().Context(), "project", "resource2", "resource3")
 	s.NoError(err)
 	s.Nil(scope)
-	scope, err = s.m.FindScopeForResources("project", "foo")
+	scope, err = s.m.FindScopeForResources(s.T().Context(), "project", "foo")
 	s.NoError(err)
 	s.Nil(scope)
 	// wrong type
-	scope, err = s.m.FindScopeForResources("distro", "resource1", "resource2")
+	scope, err = s.m.FindScopeForResources(s.T().Context(), "distro", "resource1", "resource2")
 	s.NoError(err)
 	s.Nil(scope)
 }
 
 func (s *RoleManagerSuite) TestAddAndRemoveResources() {
-	s.NoError(s.m.AddResourceToScope("1", "somethingelse"))
-	foundScope, err := s.m.FindScopeForResources("project", "resource1", "resource2", "somethingelse")
+	s.NoError(s.m.AddResourceToScope(s.T().Context(), "1", "somethingelse"))
+	foundScope, err := s.m.FindScopeForResources(s.T().Context(), "project", "resource1", "resource2", "somethingelse")
 	s.NoError(err)
 	s.Equal(foundScope.ID, "1")
-	foundScope, err = s.m.FindScopeForResources("project", "resource1", "resource2", "resource3", "somethingelse")
+	foundScope, err = s.m.FindScopeForResources(s.T().Context(), "project", "resource1", "resource2", "resource3", "somethingelse")
 	s.NoError(err)
 	s.Equal(foundScope.ID, "3")
-	foundScope, err = s.m.FindScopeForResources("project", "resource1", "resource2", "resource3", "resource4", "somethingelse")
+	foundScope, err = s.m.FindScopeForResources(s.T().Context(), "project", "resource1", "resource2", "resource3", "resource4", "somethingelse")
 	s.NoError(err)
 	s.Equal(foundScope.ID, "root")
 
-	s.NoError(s.m.RemoveResourceFromScope("1", "resource1"))
-	foundScope, err = s.m.FindScopeForResources("project", "resource2", "somethingelse")
+	s.NoError(s.m.RemoveResourceFromScope(s.T().Context(), "1", "resource1"))
+	foundScope, err = s.m.FindScopeForResources(s.T().Context(), "project", "resource2", "somethingelse")
 	s.NoError(err)
 	s.Equal(foundScope.ID, "1")
-	foundScope, err = s.m.FindScopeForResources("project", "resource2", "resource3", "somethingelse")
+	foundScope, err = s.m.FindScopeForResources(s.T().Context(), "project", "resource2", "resource3", "somethingelse")
 	s.NoError(err)
 	s.Equal(foundScope.ID, "3")
-	foundScope, err = s.m.FindScopeForResources("project", "resource2", "resource3", "resource4", "somethingelse")
+	foundScope, err = s.m.FindScopeForResources(s.T().Context(), "project", "resource2", "resource3", "resource4", "somethingelse")
 	s.NoError(err)
 	s.Equal(foundScope.ID, "root")
 }
@@ -502,27 +501,27 @@ func (s *RoleManagerSuite) TestFindRolesWithResources() {
 		ID:    "r1",
 		Scope: "1",
 	}
-	s.NoError(s.m.UpdateRole(r1))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r1))
 	r2 := gimlet.Role{
 		ID:    "r2",
 		Scope: "2",
 	}
-	s.NoError(s.m.UpdateRole(r2))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r2))
 	r3 := gimlet.Role{
 		ID:    "r3",
 		Scope: "1",
 	}
-	s.NoError(s.m.UpdateRole(r3))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r3))
 
-	roles, err := s.m.FindRolesWithResources("project", []string{"resource1", "resource2"})
+	roles, err := s.m.FindRolesWithResources(s.T().Context(), "project", []string{"resource1", "resource2"})
 	s.NoError(err)
 	s.Len(roles, 2)
 
-	roles, err = s.m.FindRolesWithResources("project", []string{"resource1"})
+	roles, err = s.m.FindRolesWithResources(s.T().Context(), "project", []string{"resource1"})
 	s.NoError(err)
 	s.Len(roles, 0)
 
-	roles, err = s.m.FindRolesWithResources("project", []string{"resource4"})
+	roles, err = s.m.FindRolesWithResources(s.T().Context(), "project", []string{"resource4"})
 	s.NoError(err)
 	s.Len(roles, 0)
 }
@@ -548,7 +547,7 @@ func (s *RoleManagerSuite) TestPermissionSummaryForRoles() {
 			"edit": 20,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r1))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r1))
 	r2 := gimlet.Role{
 		ID:    "r2",
 		Scope: "2",
@@ -556,7 +555,7 @@ func (s *RoleManagerSuite) TestPermissionSummaryForRoles() {
 			"read": 50,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r2))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r2))
 	r3 := gimlet.Role{
 		ID:    "r3",
 		Scope: "3",
@@ -565,9 +564,9 @@ func (s *RoleManagerSuite) TestPermissionSummaryForRoles() {
 			"read": 30,
 		},
 	}
-	s.NoError(s.m.UpdateRole(r3))
+	s.NoError(s.m.UpdateRole(s.T().Context(), r3))
 
-	summary, err := PermissionSummaryForRoles(context.Background(), []string{"r1", "r2", "r3"}, s.m)
+	summary, err := PermissionSummaryForRoles(s.T().Context(), []string{"r1", "r2", "r3"}, s.m)
 	s.NoError(err)
 	s.Len(summary[0].Permissions, 3)
 	s.Equal("project", summary[0].Type)
@@ -593,7 +592,7 @@ func (s *RoleManagerSuite) TestHasPermission() {
 			"edit": 10,
 		},
 	}
-	s.NoError(s.m.UpdateRole(hasPermission))
+	s.NoError(s.m.UpdateRole(s.T().Context(), hasPermission))
 	noPermission := gimlet.Role{
 		ID:    "1",
 		Scope: "1",
@@ -601,9 +600,9 @@ func (s *RoleManagerSuite) TestHasPermission() {
 			"edit": 0,
 		},
 	}
-	s.NoError(s.m.UpdateRole(noPermission))
-	s.False(gimlet.HasPermission(s.m, opts, []gimlet.Role{noPermission}))
-	s.True(gimlet.HasPermission(s.m, opts, []gimlet.Role{hasPermission}))
+	s.NoError(s.m.UpdateRole(s.T().Context(), noPermission))
+	s.False(gimlet.HasPermission(s.T().Context(), s.m, opts, []gimlet.Role{noPermission}))
+	s.True(gimlet.HasPermission(s.T().Context(), s.m, opts, []gimlet.Role{hasPermission}))
 }
 
 func (s *RoleManagerSuite) TestFindAllowedResources() {
@@ -613,17 +612,16 @@ func (s *RoleManagerSuite) TestFindAllowedResources() {
 		{ID: "no_permissions", Scope: "root", Permissions: gimlet.Permissions{}},
 	}
 	for _, role := range roles {
-		s.NoError(s.m.UpdateRole(role))
+		s.NoError(s.m.UpdateRole(s.T().Context(), role))
 	}
-	ctx := context.Background()
 
-	resources, err := FindAllowedResources(ctx, s.m, []string{"1"}, "project", "read", 10)
+	resources, err := FindAllowedResources(s.T().Context(), s.m, []string{"1"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 2)
 	s.Contains(resources, "resource1")
 	s.Contains(resources, "resource2")
 
-	resources, err = FindAllowedResources(ctx, s.m, []string{"1", "all"}, "project", "read", 10)
+	resources, err = FindAllowedResources(s.T().Context(), s.m, []string{"1", "all"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 4)
 	s.Contains(resources, "resource1")
@@ -631,11 +629,11 @@ func (s *RoleManagerSuite) TestFindAllowedResources() {
 	s.Contains(resources, "resource3")
 	s.Contains(resources, "resource4")
 
-	resources, err = FindAllowedResources(ctx, s.m, []string{"no_permissions"}, "project", "read", 10)
+	resources, err = FindAllowedResources(s.T().Context(), s.m, []string{"no_permissions"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 0)
 
-	resources, err = FindAllowedResources(ctx, s.m, []string{}, "project", "read", 10)
+	resources, err = FindAllowedResources(s.T().Context(), s.m, []string{}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 0)
 }

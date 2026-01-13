@@ -39,11 +39,11 @@ func (um *multiUserManager) GetUserByToken(ctx context.Context, token string) (U
 	return u, nil
 }
 
-func (um *multiUserManager) CreateUserToken(username, password string) (string, error) {
+func (um *multiUserManager) CreateUserToken(ctx context.Context, username, password string) (string, error) {
 	var token string
 	var err error
 	if err = um.tryReadWriteManagers(func(m UserManager) (bool, error) {
-		token, err = m.CreateUserToken(username, password)
+		token, err = m.CreateUserToken(ctx, username, password)
 		return err == nil, err
 	}); err != nil {
 		return "", errors.Wrap(err, "creating user token")
@@ -78,10 +78,10 @@ func (um *multiUserManager) IsRedirect() bool {
 	return isRedirect
 }
 
-func (um *multiUserManager) ReauthorizeUser(u User) error {
+func (um *multiUserManager) ReauthorizeUser(ctx context.Context, u User) error {
 	var err error
 	if err = um.tryReadWriteManagers(func(m UserManager) (bool, error) {
-		err = m.ReauthorizeUser(u)
+		err = m.ReauthorizeUser(ctx, u)
 		return err == nil, err
 	}); err != nil {
 		return errors.Wrap(err, "reauthorizing user")
@@ -89,11 +89,11 @@ func (um *multiUserManager) ReauthorizeUser(u User) error {
 	return nil
 }
 
-func (um *multiUserManager) GetUserByID(id string) (User, error) {
+func (um *multiUserManager) GetUserByID(ctx context.Context, id string) (User, error) {
 	var u User
 	var err error
 	if err = um.tryAllManagers(func(m UserManager) (bool, error) {
-		u, err = m.GetUserByID(id)
+		u, err = m.GetUserByID(ctx, id)
 		return err == nil, err
 	}); err != nil {
 		return nil, errors.Wrap(err, "getting user by ID")
@@ -101,11 +101,11 @@ func (um *multiUserManager) GetUserByID(id string) (User, error) {
 	return u, nil
 }
 
-func (um *multiUserManager) GetOrCreateUser(u User) (User, error) {
+func (um *multiUserManager) GetOrCreateUser(ctx context.Context, u User) (User, error) {
 	var newUser User
 	var err error
 	if err = um.tryReadWriteManagers(func(m UserManager) (bool, error) {
-		newUser, err = m.GetOrCreateUser(u)
+		newUser, err = m.GetOrCreateUser(ctx, u)
 		return err == nil, err
 	}); err != nil {
 		return nil, errors.Wrap(err, "getting existing user or creating new user")
@@ -113,10 +113,10 @@ func (um *multiUserManager) GetOrCreateUser(u User) (User, error) {
 	return newUser, nil
 }
 
-func (um *multiUserManager) ClearUser(u User, all bool) error {
+func (um *multiUserManager) ClearUser(ctx context.Context, u User, all bool) error {
 	var err error
 	if err = um.tryReadWriteManagers(func(m UserManager) (bool, error) {
-		err = m.ClearUser(u, all)
+		err = m.ClearUser(ctx, u, all)
 		return err == nil, err
 	}); err != nil {
 		return errors.Wrap(err, "clearing user")

@@ -22,8 +22,8 @@ func NewUserManager(cache usercache.Cache) (gimlet.UserManager, error) {
 	return &cachedUserManager{cache: cache}, nil
 }
 
-func (um *cachedUserManager) GetUserByToken(_ context.Context, token string) (gimlet.User, error) {
-	user, _, err := um.cache.Get(token)
+func (um *cachedUserManager) GetUserByToken(ctx context.Context, token string) (gimlet.User, error) {
+	user, _, err := um.cache.Get(ctx, token)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting cached user with token")
 	}
@@ -33,24 +33,24 @@ func (um *cachedUserManager) GetUserByToken(_ context.Context, token string) (gi
 	return user, nil
 }
 
-func (um *cachedUserManager) ReauthorizeUser(user gimlet.User) error {
+func (um *cachedUserManager) ReauthorizeUser(ctx context.Context, user gimlet.User) error {
 	return errors.New("cannot reauthorize users for cached user manager")
 }
 
-func (um *cachedUserManager) CreateUserToken(username, password string) (string, error) {
+func (um *cachedUserManager) CreateUserToken(ctx context.Context, username, password string) (string, error) {
 	return "", errors.New("cannot create user tokens for cached user manager")
 }
 
-func (um *cachedUserManager) GetOrCreateUser(user gimlet.User) (gimlet.User, error) {
-	return um.cache.GetOrCreate(user)
+func (um *cachedUserManager) GetOrCreateUser(ctx context.Context, user gimlet.User) (gimlet.User, error) {
+	return um.cache.GetOrCreate(ctx, user)
 }
 
 func (*cachedUserManager) GetLoginHandler(string) http.HandlerFunc   { return nil }
 func (*cachedUserManager) GetLoginCallbackHandler() http.HandlerFunc { return nil }
 func (*cachedUserManager) IsRedirect() bool                          { return false }
 
-func (um *cachedUserManager) GetUserByID(id string) (gimlet.User, error) {
-	user, valid, err := um.cache.Find(id)
+func (um *cachedUserManager) GetUserByID(ctx context.Context, id string) (gimlet.User, error) {
+	user, valid, err := um.cache.Find(ctx, id)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting cached user with ID")
 	}
@@ -63,8 +63,8 @@ func (um *cachedUserManager) GetUserByID(id string) (gimlet.User, error) {
 	return user, nil
 }
 
-func (um *cachedUserManager) ClearUser(user gimlet.User, all bool) error {
-	return um.cache.Clear(user, all)
+func (um *cachedUserManager) ClearUser(ctx context.Context, user gimlet.User, all bool) error {
+	return um.cache.Clear(ctx, user, all)
 }
 
 func (um *cachedUserManager) GetGroupsForUser(id string) ([]string, error) {

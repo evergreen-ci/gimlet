@@ -277,7 +277,7 @@ func (rp *requiresPermissionHandler) checkPermissions(rw http.ResponseWriter, ct
 		for _, item := range resources {
 			opts.Resource = item
 			if rp.opts.DefaultRoles != nil {
-				if !HasPermission(rp.opts.RM, opts, rp.opts.DefaultRoles) {
+				if !HasPermission(ctx, rp.opts.RM, opts, rp.opts.DefaultRoles) {
 					http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
 					return false
 				}
@@ -300,7 +300,7 @@ func (rp *requiresPermissionHandler) checkPermissions(rw http.ResponseWriter, ct
 	}
 	for _, item := range resources {
 		opts.Resource = item
-		if !user.HasPermission(opts) {
+		if !user.HasPermission(ctx, opts) {
 			http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
 			return false
 		}

@@ -13,9 +13,6 @@ import (
 )
 
 func TestCache(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	type implCases struct {
 		name string
 		test func(*testing.T, Cache)
@@ -32,7 +29,7 @@ func TestCache(t *testing.T) {
 		{
 			name: "InMemory",
 			factory: func() (Cache, error) {
-				return NewInMemory(ctx, 100*time.Millisecond), nil
+				return NewInMemory(t.Context(), 100*time.Millisecond), nil
 			},
 			cases: []implCases{
 				{
@@ -112,7 +109,7 @@ func TestCache(t *testing.T) {
 							created: time.Now().Add(time.Hour),
 						}
 						c.mu.Unlock()
-						_, _, err := cache.Find("foo")
+						_, _, err := cache.Find(t.Context(), "foo")
 						assert.Error(t, err)
 					},
 				},
@@ -126,7 +123,7 @@ func TestCache(t *testing.T) {
 							created: time.Now().Add(-time.Hour),
 						}
 						c.mu.Unlock()
-						u, exists, err := cache.Get("foo")
+						u, exists, err := cache.Get(t.Context(), "foo")
 						assert.NoError(t, err)
 						assert.False(t, exists)
 						assert.NotNil(t, u)
@@ -140,7 +137,7 @@ func TestCache(t *testing.T) {
 				users := make(map[string]gimlet.User)
 				cache := make(map[string]gimlet.User)
 				return NewExternal(ExternalOptions{
-					PutUserGetToken: func(u gimlet.User) (string, error) {
+					PutUserGetToken: func(ctx context.Context, u gimlet.User) (string, error) {
 						token, err := util.RandomString()
 						if err != nil {
 							return "", errors.WithStack(err)
@@ -148,22 +145,22 @@ func TestCache(t *testing.T) {
 						cache[token] = u
 						return token, nil
 					},
-					GetUserByToken: func(token string) (gimlet.User, bool, error) {
+					GetUserByToken: func(ctx context.Context, token string) (gimlet.User, bool, error) {
 						u, ok := cache[token]
 						return u, ok, nil
 					},
-					GetUserByID: func(id string) (gimlet.User, bool, error) {
+					GetUserByID: func(ctx context.Context, id string) (gimlet.User, bool, error) {
 						u, ok := users[id]
 						if !ok {
 							return nil, false, errors.New("not found")
 						}
 						return u, true, nil
 					},
-					GetOrCreateUser: func(u gimlet.User) (gimlet.User, error) {
+					GetOrCreateUser: func(ctx context.Context, u gimlet.User) (gimlet.User, error) {
 						users[u.Username()] = u
 						return u, nil
 					},
-					ClearUserToken: func(u gimlet.User, all bool) error {
+					ClearUserToken: func(ctx context.Context, u gimlet.User, all bool) error {
 						if all {
 							users = make(map[string]gimlet.User)
 							cache = make(map[string]gimlet.User)
@@ -188,7 +185,7 @@ func TestCache(t *testing.T) {
 		{
 			name: "InMemory",
 			factory: func() (Cache, error) {
-				return NewInMemory(ctx, time.Millisecond), nil
+				return NewInMemory(t.Context(), time.Millisecond), nil
 			},
 		},
 	} {
@@ -210,8 +207,8 @@ func TestCache(t *testing.T) {
 				opts, err := gimlet.NewBasicUserOptions(id)
 				require.NoError(t, err)
 				u := gimlet.NewBasicUser(opts)
-				assert.NoError(t, cache.Add(u))
-				cu, _, err := cache.Find(id)
+				assert.NoError(t, cache.Add(t.Context(), u))
+				cu, _, err := cache.Find(t.Context(), id)
 				assert.NoError(t, err)
 				assert.Equal(t, u, cu)
 			})
@@ -222,11 +219,11 @@ func TestCache(t *testing.T) {
 				opts, err := gimlet.NewBasicUserOptions(id)
 				require.NoError(t, err)
 				u := gimlet.NewBasicUser(opts)
-				token, err := cache.Put(u)
+				token, err := cache.Put(t.Context(), u)
 				assert.NoError(t, err)
 				assert.NotZero(t, token)
 
-				cu, exists, err := cache.Get(token)
+				cu, exists, err := cache.Get(t.Context(), token)
 				assert.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, u, cu)
@@ -234,14 +231,14 @@ func TestCache(t *testing.T) {
 			t.Run("FindErrorsForNotFound", func(t *testing.T) {
 				cache, err := impl.factory()
 				require.NoError(t, err)
-				cu, _, err := cache.Find("foo")
+				cu, _, err := cache.Find(t.Context(), "foo")
 				assert.Error(t, err)
 				assert.Nil(t, cu)
 			})
 			t.Run("GetCacheMiss", func(t *testing.T) {
 				cache, err := impl.factory()
 				require.NoError(t, err)
-				cu, exists, err := cache.Get("nope")
+				cu, exists, err := cache.Get(t.Context(), "nope")
 				assert.NoError(t, err)
 				assert.False(t, exists)
 				assert.Nil(t, cu)
@@ -249,34 +246,34 @@ func TestCache(t *testing.T) {
 			t.Run("GetOrCreateNewUser", func(t *testing.T) {
 				cache, err := impl.factory()
 				require.NoError(t, err)
-				_, _, err = cache.Find("usr")
+				_, _, err = cache.Find(t.Context(), "usr")
 				assert.Error(t, err)
 
 				opts, err := gimlet.NewBasicUserOptions("usr")
 				require.NoError(t, err)
 				u := gimlet.NewBasicUser(opts)
 
-				cu, err := cache.GetOrCreate(u)
+				cu, err := cache.GetOrCreate(t.Context(), u)
 				require.NoError(t, err)
 				assert.Equal(t, u, cu)
 
-				_, _, err = cache.Find("usr")
+				_, _, err = cache.Find(t.Context(), "usr")
 				assert.NoError(t, err)
 			})
 			t.Run("GetOrCreateNewUser", func(t *testing.T) {
 				cache, err := impl.factory()
 				require.NoError(t, err)
-				_, _, err = cache.Find("usr")
+				_, _, err = cache.Find(t.Context(), "usr")
 				assert.Error(t, err)
 
 				opts, err := gimlet.NewBasicUserOptions("usr")
 				require.NoError(t, err)
 				u := gimlet.NewBasicUser(opts)
 
-				_, err = cache.Put(u)
+				_, err = cache.Put(t.Context(), u)
 				require.NoError(t, err)
 
-				cu, err := cache.GetOrCreate(u)
+				cu, err := cache.GetOrCreate(t.Context(), u)
 				require.NoError(t, err)
 				assert.Equal(t, u, cu)
 			})
@@ -286,29 +283,29 @@ func TestCache(t *testing.T) {
 				opts, err := gimlet.NewBasicUserOptions("usr")
 				require.NoError(t, err)
 				u := gimlet.NewBasicUser(opts)
-				cachedUser, err := cache.GetOrCreate(u)
+				cachedUser, err := cache.GetOrCreate(t.Context(), u)
 				require.NoError(t, err)
 				require.NotNil(t, cachedUser)
-				token, err := cache.Put(cachedUser)
+				token, err := cache.Put(t.Context(), cachedUser)
 				require.NoError(t, err)
 
 				// Clear just this user
-				err = cache.Clear(u, false)
+				err = cache.Clear(t.Context(), u, false)
 				assert.NoError(t, err)
 
-				noUser, isValidToken, err := cache.Get(token)
+				noUser, isValidToken, err := cache.Get(t.Context(), token)
 				assert.Nil(t, noUser)
 				assert.False(t, isValidToken)
 				assert.NoError(t, err)
 
-				token, err = cache.Put(u)
+				token, err = cache.Put(t.Context(), u)
 				require.NoError(t, err)
 
 				// Clear all users
-				err = cache.Clear(nil, true)
+				err = cache.Clear(t.Context(), nil, true)
 				assert.NoError(t, err)
 
-				cachedUser, isValidToken, err = cache.Get(token)
+				cachedUser, isValidToken, err = cache.Get(t.Context(), token)
 				assert.Nil(t, cachedUser)
 				assert.False(t, isValidToken)
 				assert.NoError(t, err)

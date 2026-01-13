@@ -21,8 +21,8 @@ type User interface {
 	GetAccessToken() string
 	GetRefreshToken() string
 	Roles() []string
+	HasPermission(context.Context, PermissionOpts) bool
 	IsAPIOnly() bool
-	HasPermission(PermissionOpts) bool
 }
 
 // PermissionOpts is the required data to be provided when asking if a user has permission for a resource
@@ -50,7 +50,7 @@ type Authenticator interface {
 type UserManager interface {
 	// The first 5 methods are borrowed directly from evergreen without modification
 	GetUserByToken(context.Context, string) (User, error)
-	CreateUserToken(string, string) (string, error)
+	CreateUserToken(context.Context, string, string) (string, error)
 	// GetLoginHandler returns the function that starts the login process for auth mechanisms
 	// that redirect to a thirdparty site for authentication
 	GetLoginHandler(url string) http.HandlerFunc
@@ -64,16 +64,16 @@ type UserManager interface {
 	IsRedirect() bool
 
 	// ReauthorizeUser reauthorizes a user that is already logged in.
-	ReauthorizeUser(User) error
+	ReauthorizeUser(context.Context, User) error
 
 	// These methods are simple wrappers around the user
 	// persistence layer. May consider moving them to the
 	// authenticator.
-	GetUserByID(string) (User, error)
-	GetOrCreateUser(User) (User, error)
+	GetUserByID(context.Context, string) (User, error)
+	GetOrCreateUser(context.Context, User) (User, error)
 
 	// Log out user or all users
-	ClearUser(user User, all bool) error
+	ClearUser(context.Context, User, bool) error
 
 	// Returns the groups or roles to which a user belongs
 	GetGroupsForUser(string) ([]string, error)
@@ -83,62 +83,62 @@ type UserManager interface {
 // along with Users to check permissions
 type RoleManager interface {
 	// GetAllRoles returns all roles known by the manager
-	GetAllRoles() ([]Role, error)
+	GetAllRoles(context.Context) ([]Role, error)
 
 	// GetAllRoles returns roles matching the specified IDs
-	GetRoles([]string) ([]Role, error)
+	GetRoles(context.Context, []string) ([]Role, error)
 
 	// DeleteRole deletes a single role
-	DeleteRole(string) error
+	DeleteRole(context.Context, string) error
 
 	// UpdateRole adds the given role to the manager if it does not exist, or updates the role
 	// with the same ID
-	UpdateRole(Role) error
+	UpdateRole(context.Context, Role) error
 
 	// FilterForResource takes a list of roles and returns the subset of those applicable for a certain resource
-	FilterForResource([]Role, string, string) ([]Role, error)
+	FilterForResource(context.Context, []Role, string, string) ([]Role, error)
 
 	// FilterScopesByResourceType takes a list of scope IDs and a resource
 	// type and returns a list of scopes filtered by the resource type.
-	FilterScopesByResourceType([]string, string) ([]Scope, error)
+	FilterScopesByResourceType(context.Context, []string, string) ([]Scope, error)
 
 	// FindScopeForResources returns a scope that exactly matches a given set of resources
-	FindScopeForResources(string, ...string) (*Scope, error)
+	FindScopeForResources(context.Context, string, ...string) (*Scope, error)
 
 	// AddScope adds a scope to the manager
-	AddScope(Scope) error
+	AddScope(context.Context, Scope) error
 
 	// DeleteScope removes a scope from the manager
-	DeleteScope(Scope) error
+	DeleteScope(context.Context, Scope) error
 
 	// GetScope returns the given scope
 	GetScope(context.Context, string) (*Scope, error)
 
 	// AddResourceToScope adds the specified resource to the given scope, updating parents
-	AddResourceToScope(string, string) error
+	AddResourceToScope(context.Context, string, string) error
 
 	// RemoveResourceFromScope deletes the specified resource from the given scope, updating parents
-	RemoveResourceFromScope(string, string) error
+	RemoveResourceFromScope(context.Context, string, string) error
 
 	// RegisterPermissions adds a list of strings to the role manager as valid permission keys. Returns an
 	// error if the same permission is registered more than once
 	RegisterPermissions([]string) error
 
 	// FindRoleWithResources returns all roles that apply to exactly the given resources
-	FindRolesWithResources(string, []string) ([]Role, error)
+	FindRolesWithResources(context.Context, string, []string) ([]Role, error)
 
 	// FindRolesWithPermissions returns a role that exactly matches the given resources and permissions
-	FindRoleWithPermissions(string, []string, Permissions) (*Role, error)
+	FindRoleWithPermissions(context.Context, string, []string, Permissions) (*Role, error)
 
 	// Clear deletes all roles and scopes. This should only be used in tests
-	Clear() error
+	Clear(context.Context) error
 
 	// IsValidPermissions checks if the passed permissions are registered
 	IsValidPermissions(Permissions) error
 }
 
-func HasPermission(rm RoleManager, opts PermissionOpts, roles []Role) bool {
-	roles, err := rm.FilterForResource(roles, opts.Resource, opts.ResourceType)
+func HasPermission(ctx context.Context, rm RoleManager, opts PermissionOpts, roles []Role) bool {
+	roles, err := rm.FilterForResource(ctx, roles, opts.Resource, opts.ResourceType)
 	if err != nil {
 		grip.Error(message.WrapError(err, message.Fields{
 			"message":       "error filtering for resource",

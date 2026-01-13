@@ -41,7 +41,7 @@ func (um *BasicUserManager) GetUserByToken(_ context.Context, token string) (Use
 // list of users and creates a token that is a combination of the index of the
 // list the user is at, the email address and a hash of the username and
 // password and returns that token.
-func (um *BasicUserManager) CreateUserToken(username, password string) (string, error) {
+func (um *BasicUserManager) CreateUserToken(_ context.Context, username, password string) (string, error) {
 	for i, user := range um.users {
 		if user.ID == username && user.Password == password {
 			return makeToken(user, i), nil
@@ -53,7 +53,7 @@ func (um *BasicUserManager) CreateUserToken(username, password string) (string, 
 func (*BasicUserManager) GetLoginHandler(string) http.HandlerFunc   { return nil }
 func (*BasicUserManager) GetLoginCallbackHandler() http.HandlerFunc { return nil }
 func (*BasicUserManager) IsRedirect() bool                          { return false }
-func (um *BasicUserManager) ReauthorizeUser(user User) error {
+func (um *BasicUserManager) ReauthorizeUser(_ context.Context, user User) error {
 	for _, u := range um.users {
 		if user.Username() == u.Username() {
 			return nil
@@ -81,7 +81,7 @@ func (um *BasicUserManager) setInvalid(username string, invalid bool) {
 	}
 }
 
-func (um *BasicUserManager) GetUserByID(id string) (User, error) {
+func (um *BasicUserManager) GetUserByID(_ context.Context, id string) (User, error) {
 	for _, user := range um.users {
 		if user.ID == id {
 			if user.invalid {
@@ -93,8 +93,8 @@ func (um *BasicUserManager) GetUserByID(id string) (User, error) {
 	return nil, errors.Errorf("user '%s' not found", id)
 }
 
-func (um *BasicUserManager) GetOrCreateUser(u User) (User, error) {
-	existingUser, err := um.GetUserByID(u.Username())
+func (um *BasicUserManager) GetOrCreateUser(ctx context.Context, u User) (User, error) {
+	existingUser, err := um.GetUserByID(ctx, u.Username())
 	if err == nil {
 		return existingUser, nil
 	}
@@ -109,7 +109,7 @@ func (um *BasicUserManager) GetOrCreateUser(u User) (User, error) {
 	return newUser, nil
 }
 
-func (b *BasicUserManager) ClearUser(u User, all bool) error {
+func (b *BasicUserManager) ClearUser(_ context.Context, u User, all bool) error {
 	return errors.New("Naive Authentication does not support Clear User")
 }
 

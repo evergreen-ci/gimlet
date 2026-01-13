@@ -287,9 +287,6 @@ func (k *mockKeyset) VerifySignature(ctx context.Context, jwt string) (payload [
 }
 
 func TestOIDCValidation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	user := &MockUser{ID: "i-am-sam"}
 	um := &MockUserManager{Users: []*MockUser{user}}
 	headerName := "internal_header"
@@ -303,7 +300,7 @@ func TestOIDCValidation(t *testing.T) {
 	}
 
 	payload := `{"sub":"i-am-sam","iat":1727208337,"iss":"www.mongodb.com"}`
-	m := UserMiddleware(ctx, um, conf).(*userMiddleware)
+	m := UserMiddleware(t.Context(), um, conf).(*userMiddleware)
 	m.oidcVerifier = oidc.NewVerifier(
 		conf.OIDC.Issuer,
 		&mockKeyset{validSignature: true, payload: payload},

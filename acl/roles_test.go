@@ -1,7 +1,6 @@
 package acl
 
 import (
-	"context"
 	"testing"
 
 	"github.com/evergreen-ci/gimlet"
@@ -16,15 +15,15 @@ func TestRoleRouteHandlers(t *testing.T) {
 		ID:          "myRole",
 		Permissions: map[string]int{"p1": 1},
 	}
-	assert.NoError(t, m.UpdateRole(role))
+	assert.NoError(t, m.UpdateRole(t.Context(), role))
 	t.Run("TestRoleRead", testRoleRead(t, m))
 }
 
 func testRoleRead(t *testing.T, m gimlet.RoleManager) func(t *testing.T) {
 	return func(t *testing.T) {
 		handler := NewGetAllRolesHandler(m)
-		assert.NoError(t, handler.Parse(context.Background(), nil))
-		resp := handler.Run(context.Background())
+		assert.NoError(t, handler.Parse(t.Context(), nil))
+		resp := handler.Run(t.Context())
 		roles, valid := resp.Data().([]gimlet.Role)
 		assert.True(t, valid)
 		assert.Equal(t, "myRole", roles[0].ID)
