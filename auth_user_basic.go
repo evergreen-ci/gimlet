@@ -1,6 +1,8 @@
 package gimlet
 
 import (
+	"context"
+
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 )
@@ -108,18 +110,18 @@ func (u *BasicUser) Roles() []string {
 	copy(out, u.AccessRoles)
 	return out
 }
-func (u *BasicUser) HasPermission(opts PermissionOpts) bool {
+func (u *BasicUser) HasPermission(ctx context.Context, opts PermissionOpts) bool {
 	if u.roleManager == nil {
 		return false
 	}
-	roles, err := u.roleManager.GetRoles(u.Roles())
+	roles, err := u.roleManager.GetRoles(ctx, u.Roles())
 	if err != nil {
 		grip.Error(message.WrapError(err, message.Fields{
 			"message": "error getting roles",
 		}))
 		return false
 	}
-	return HasPermission(u.roleManager, opts, roles)
+	return HasPermission(ctx, u.roleManager, opts, roles)
 }
 
 // userHasRole determines if the user has the defined role.

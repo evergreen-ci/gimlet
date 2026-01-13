@@ -15,7 +15,7 @@ func TestRoleRouteHandlers(t *testing.T) {
 		ID:          "myRole",
 		Permissions: map[string]int{"p1": 1},
 	}
-	assert.NoError(t, m.UpdateRole(role))
+	assert.NoError(t, m.UpdateRole(t.Context(), role))
 	t.Run("TestRoleRead", testRoleRead(t, m))
 }
 
