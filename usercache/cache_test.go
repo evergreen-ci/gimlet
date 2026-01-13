@@ -13,9 +13,6 @@ import (
 )
 
 func TestCache(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	type implCases struct {
 		name string
 		test func(*testing.T, Cache)
@@ -32,7 +29,7 @@ func TestCache(t *testing.T) {
 		{
 			name: "InMemory",
 			factory: func() (Cache, error) {
-				return NewInMemory(ctx, 100*time.Millisecond), nil
+				return NewInMemory(t.Context(), 100*time.Millisecond), nil
 			},
 			cases: []implCases{
 				{
@@ -188,7 +185,7 @@ func TestCache(t *testing.T) {
 		{
 			name: "InMemory",
 			factory: func() (Cache, error) {
-				return NewInMemory(ctx, time.Millisecond), nil
+				return NewInMemory(t.Context(), time.Millisecond), nil
 			},
 		},
 	} {

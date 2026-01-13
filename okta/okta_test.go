@@ -33,7 +33,7 @@ func TestUserManagerCreation(t *testing.T) {
 		},
 		"AllOptionsSetWithExternalCache": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				return mockCreationOptionsWithExternalCache()
+				return mockCreationOptionsWithExternalCache(t)
 			},
 			shouldPass: true,
 		},
@@ -106,7 +106,7 @@ func TestUserManagerCreation(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptions()))
+			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptions(t)))
 			if testCase.shouldPass {
 				assert.NoError(t, err)
 				assert.NotNil(t, um)
@@ -405,12 +405,12 @@ func TestRequestHelpers(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			s := &mockAuthorizationServer{}
 			port, err := s.startMockServer(ctx)
 			require.NoError(t, err)
-			opts := mockCreationOptions()
+			opts := mockCreationOptions(t)
 			opts.Issuer = fmt.Sprintf("http://localhost:%d/v1", port)
 			um, err := NewUserManager(opts)
 			require.NoError(t, err)
@@ -421,7 +421,7 @@ func TestRequestHelpers(t *testing.T) {
 	}
 }
 
-func mockCreationOptions() CreationOptions {
+func mockCreationOptions(t *testing.T) CreationOptions {
 	return CreationOptions{
 		ClientID:             "client_id",
 		ClientSecret:         "client_secret",
@@ -433,7 +433,7 @@ func mockCreationOptions() CreationOptions {
 		CookieDomain:         "example.com",
 		LoginCookieName:      "login_cookie",
 		LoginCookieTTL:       time.Hour,
-		UserCache:            usercache.NewInMemory(context.Background(), time.Minute),
+		UserCache:            usercache.NewInMemory(t.Context(), time.Minute),
 		GetHTTPClient:        func() *http.Client { return &http.Client{} },
 		PutHTTPClient:        func(*http.Client) {},
 		AllowReauthorization: false,
@@ -441,8 +441,8 @@ func mockCreationOptions() CreationOptions {
 	}
 }
 
-func mockCreationOptionsWithExternalCache() CreationOptions {
-	opts := mockCreationOptions()
+func mockCreationOptionsWithExternalCache(t *testing.T) CreationOptions {
+	opts := mockCreationOptions(t)
 	opts.UserCache = nil
 	opts.ExternalCache = mockExternalCacheOptions()
 	return opts
@@ -597,7 +597,7 @@ func TestMakeUserFromIDToken(t *testing.T) {
 }
 
 func TestCreateUserToken(t *testing.T) {
-	um, err := NewUserManager(mockCreationOptions())
+	um, err := NewUserManager(mockCreationOptions(t))
 	require.NoError(t, err)
 	token, err := um.CreateUserToken(t.Context(), "username", "password")
 	assert.Error(t, err)
@@ -647,9 +647,9 @@ func TestGetUserByID(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			opts := mockCreationOptions()
+			opts := mockCreationOptions(t)
 			opts.UserCache = nil
-			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache()))
+			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache(t)))
 			require.NoError(t, err)
 			user, err := um.GetUserByID(t.Context(), expectedUser.Username())
 			if testCase.shouldPass {
@@ -693,9 +693,9 @@ func TestGetOrCreateUser(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			opts := mockCreationOptions()
+			opts := mockCreationOptions(t)
 			opts.UserCache = nil
-			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache()))
+			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache(t)))
 			require.NoError(t, err)
 			user, err := um.GetOrCreateUser(t.Context(), expectedUser)
 			if testCase.shouldPass {
@@ -738,9 +738,9 @@ func TestClearUser(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			opts := mockCreationOptions()
+			opts := mockCreationOptions(t)
 			opts.UserCache = nil
-			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache()))
+			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache(t)))
 			require.NoError(t, err)
 			err = um.ClearUser(t.Context(), expectedUser, false)
 			if testCase.shouldPass {
@@ -798,7 +798,7 @@ func TestLoginHandler(t *testing.T) {
 				"redirect_uri":  {"redirect_uri"},
 			})
 			scope := q.Get("scope")
-			for _, requestedScope := range mockCreationOptions().Scopes {
+			for _, requestedScope := range mockCreationOptions(t).Scopes {
 				assert.Contains(t, scope, requestedScope)
 			}
 		},
@@ -834,18 +834,18 @@ func TestLoginHandler(t *testing.T) {
 				"redirect_uri":  {"redirect_uri"},
 			})
 			scope := q.Get("scope")
-			for _, requestedScope := range mockCreationOptions().Scopes {
+			for _, requestedScope := range mockCreationOptions(t).Scopes {
 				assert.Contains(t, scope, requestedScope)
 			}
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			s := &mockAuthorizationServer{}
 			port, err := s.startMockServer(ctx)
 			require.NoError(t, err)
-			opts := mockCreationOptions()
+			opts := mockCreationOptions(t)
 			opts.Issuer = fmt.Sprintf("http://localhost:%d/v1", port)
 			um, err := NewUserManager(opts)
 			require.NoError(t, err)
@@ -884,7 +884,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 					},
 				}, nil
 			}
-			um.doValidateAccessToken = func(string) error { return nil }
+			um.doValidateAccessToken = func(context.Context, string) error { return nil }
 
 			s.TokenResponse = &tokenResponse{
 				AccessToken: "access_token",
@@ -957,7 +957,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 					},
 				}, nil
 			}
-			um.doValidateAccessToken = func(string) error { return nil }
+			um.doValidateAccessToken = func(context.Context, string) error { return nil }
 
 			s.TokenResponse = &tokenResponse{
 				AccessToken: "access_token",
@@ -1032,7 +1032,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 					},
 				}, nil
 			}
-			um.doValidateAccessToken = func(string) error { return nil }
+			um.doValidateAccessToken = func(context.Context, string) error { return nil }
 
 			s.UserInfoResponse = &userInfoResponse{
 				Name:   name,
@@ -1085,12 +1085,12 @@ func TestLoginHandlerCallback(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			s := &mockAuthorizationServer{}
 			port, err := s.startMockServer(ctx)
 			require.NoError(t, err)
-			opts := mockCreationOptions()
+			opts := mockCreationOptions(t)
 			opts.Issuer = fmt.Sprintf("http://localhost:%d/v1", port)
 			opts.ReconciliateID = func(id string) string { return id }
 			// opts.SkipGroupPopulation = false
@@ -1317,12 +1317,10 @@ func TestReauthorization(t *testing.T) {
 		},
 	} {
 		t.Run(testName, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			s := &mockAuthorizationServer{}
-			port, err := s.startMockServer(ctx)
+			port, err := s.startMockServer(t.Context())
 			require.NoError(t, err)
-			opts := mockCreationOptions()
+			opts := mockCreationOptions(t)
 			opts.Issuer = fmt.Sprintf("http://localhost:%d/v1", port)
 			opts.AllowReauthorization = true
 			um, err := NewUserManager(opts)

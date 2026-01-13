@@ -1,7 +1,6 @@
 package gimlet
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,13 +18,13 @@ func TestBasicUserManager(t *testing.T) {
 			EmailAddress: "baz",
 		},
 	}}
-	user, err := u.GetUserByToken(context.Background(), expectedToken)
+	user, err := u.GetUserByToken(t.Context(), expectedToken)
 	assert.NoError(err)
 	assert.NotNil(user)
 	assert.Equal("foo", user.Username())
 	assert.Equal("baz", user.Email())
 
-	user, err = u.GetUserByToken(context.Background(), "")
+	user, err = u.GetUserByToken(t.Context(), "")
 	assert.Error(err)
 	assert.Nil(user)
 

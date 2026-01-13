@@ -12,27 +12,26 @@ import (
 
 func TestMiddlewareValueAccessors(t *testing.T) {
 	assert := assert.New(t)
-	ctx := context.Background()
 
-	a := GetAuthenticator(ctx)
+	a := GetAuthenticator(t.Context())
 	assert.Nil(a)
 
-	userm := GetUserManager(ctx)
+	userm := GetUserManager(t.Context())
 	assert.Nil(userm)
 
-	usr := GetUser(ctx)
+	usr := GetUser(t.Context())
 	assert.Nil(usr)
 
 	var idone, idtwo int
 	idone = getNumber()
 	assert.Equal(0, idtwo)
 	assert.True(idone > 0)
-	assert.NotPanics(func() { idtwo = GetRequestID(ctx) })
+	assert.NotPanics(func() { idtwo = GetRequestID(t.Context()) })
 	assert.True(idone > idtwo)
 	assert.Equal(-1, idtwo)
 
 	// some gross checks to make sure that we're safe if the authenticator is the wrong type
-	ctx = context.WithValue(ctx, authHandlerKey, true)
+	ctx := context.WithValue(t.Context(), authHandlerKey, true)
 	ctx = context.WithValue(ctx, userManagerKey, true)
 	ctx = context.WithValue(ctx, userKey, true)
 

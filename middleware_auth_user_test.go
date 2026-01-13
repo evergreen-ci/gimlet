@@ -15,9 +15,6 @@ import (
 )
 
 func TestUserMiddleware(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	user := &MockUser{
 		ID:     "sam-i-am",
 		APIKey: "DEADBEEF",
@@ -27,7 +24,7 @@ func TestUserMiddleware(t *testing.T) {
 
 	for name, testCase := range map[string]func(*testing.T){
 		"Constructor": func(t *testing.T) {
-			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{})
+			m := UserMiddleware(t.Context(), um, UserMiddlewareConfiguration{})
 			require.NotNil(t, m)
 			assert.Implements(t, (*Middleware)(nil), m)
 			assert.Implements(t, (*negroni.Handler)(nil), m)
@@ -35,7 +32,7 @@ func TestUserMiddleware(t *testing.T) {
 			assert.Equal(t, m.(*userMiddleware).manager, um)
 		},
 		"NothingEnabled": func(t *testing.T) {
-			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true})
+			m := UserMiddleware(t.Context(), um, UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true})
 			require.NotNil(t, m)
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			rw := httptest.NewRecorder()
@@ -55,7 +52,7 @@ func TestUserMiddleware(t *testing.T) {
 				{SkipHeaderCheck: false, SkipCookie: true},
 				{SkipHeaderCheck: false, SkipCookie: false},
 			} {
-				m := UserMiddleware(ctx, um, conf)
+				m := UserMiddleware(t.Context(), um, conf)
 				require.NotNil(t, m)
 				req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 				rw := httptest.NewRecorder()
@@ -77,7 +74,7 @@ func TestUserMiddleware(t *testing.T) {
 				HeaderUserName:  "api-user",
 				HeaderKeyName:   "api-key",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 			require.NotNil(t, m)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
@@ -97,7 +94,7 @@ func TestUserMiddleware(t *testing.T) {
 				HeaderUserName:  "api-user",
 				HeaderKeyName:   "api-key",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 			require.NotNil(t, m)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
@@ -117,7 +114,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			require.NotNil(t, req)
@@ -138,7 +135,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			req.AddCookie(&http.Cookie{
@@ -158,7 +155,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			require.NotNil(t, req)
@@ -180,7 +177,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			require.NotNil(t, req)
@@ -216,9 +213,6 @@ func (k *mockKeyset) VerifySignature(ctx context.Context, jwt string) (payload [
 }
 
 func TestOIDCValidation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	user := &MockUser{ID: "i-am-sam"}
 	um := &MockUserManager{Users: []*MockUser{user}}
 	headerName := "internal_header"
@@ -232,7 +226,7 @@ func TestOIDCValidation(t *testing.T) {
 	}
 
 	payload := `{"sub":"i-am-sam","iat":1727208337,"iss":"www.mongodb.com"}`
-	m := UserMiddleware(ctx, um, conf).(*userMiddleware)
+	m := UserMiddleware(t.Context(), um, conf).(*userMiddleware)
 	m.oidcVerifier = oidc.NewVerifier(
 		conf.OIDC.Issuer,
 		&mockKeyset{validSignature: true, payload: payload},

@@ -100,7 +100,7 @@ type userManager struct {
 	// Injected functions for validating tokens. Should only be set for mocking
 	// purposes.
 	doValidateIDToken     func(string, string) (*jwtverifier.Jwt, error)
-	doValidateAccessToken func(string) error
+	doValidateAccessToken func(context.Context, string) error
 
 	cookiePath   string
 	cookieDomain string
@@ -180,10 +180,10 @@ func (m *userManager) GetUserByToken(ctx context.Context, token string) (gimlet.
 // reauthorizeGroup attempts to reauthorize the user based on their groups.
 func (m *userManager) reauthorizeGroup(ctx context.Context, accessToken, refreshToken string) error {
 	catcher := grip.NewBasicCatcher()
-	err := m.doValidateAccessToken(accessToken)
+	err := m.doValidateAccessToken(ctx, accessToken)
 	catcher.Wrap(err, "invalid access token")
 	if err == nil {
-		user, err := m.generateUserFromInfo(accessToken, refreshToken)
+		user, err := m.generateUserFromInfo(ctx, accessToken, refreshToken)
 		catcher.Wrap(err, "generating user from Okta user info")
 		if err == nil {
 			_, err = m.cache.Put(ctx, user)
@@ -345,7 +345,7 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 					"request": gimlet.GetRequestID(r.Context()),
 					"context": "Okta",
 				}))
-				user, err = m.GetUserByToken(context.Background(), loginToken)
+				user, err = m.GetUserByToken(r.Context(), loginToken)
 				if (err == nil || errors.Cause(err) == gimlet.ErrNeedsReauthentication) && user != nil {
 					canSilentReauth = true
 					break
@@ -456,7 +456,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			return
 		}
 
-		tokens, idToken, err := m.getUserTokens(r.URL.Query().Get("code"), nonce)
+		tokens, idToken, err := m.getUserTokens(r.Context(), r.URL.Query().Get("code"), nonce)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -464,7 +464,7 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 
 		var user gimlet.User
 		if m.validateGroups {
-			user, err = m.generateUserFromInfo(tokens.AccessToken, tokens.RefreshToken)
+			user, err = m.generateUserFromInfo(r.Context(), tokens.AccessToken, tokens.RefreshToken)
 			if err != nil {
 				grip.Error(err)
 				writeError(w, err)
@@ -506,8 +506,8 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 
 // getUserTokens redeems the authorization code for tokens and validates the
 // received tokens.
-func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtverifier.Jwt, error) {
-	tokens, err := m.exchangeCodeForTokens(context.Background(), code)
+func (m *userManager) getUserTokens(ctx context.Context, code, nonce string) (*tokenResponse, *jwtverifier.Jwt, error) {
+	tokens, err := m.exchangeCodeForTokens(ctx, code)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "redeeming authorization code for tokens")
 	}
@@ -518,7 +518,7 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 	if !m.validateGroups {
 		return tokens, idToken, nil
 	}
-	if err := m.doValidateAccessToken(tokens.AccessToken); err != nil {
+	if err := m.doValidateAccessToken(ctx, tokens.AccessToken); err != nil {
 		return tokens, idToken, errors.Wrap(err, "invalid access token from Okta")
 	}
 	return tokens, idToken, nil
@@ -526,8 +526,8 @@ func (m *userManager) getUserTokens(code, nonce string) (*tokenResponse, *jwtver
 
 // generateUserFromInfo creates a user based on information from the userinfo
 // endpoint.
-func (m *userManager) generateUserFromInfo(accessToken, refreshToken string) (gimlet.User, error) {
-	userInfo, err := m.getUserInfo(context.Background(), accessToken)
+func (m *userManager) generateUserFromInfo(ctx context.Context, accessToken, refreshToken string) (gimlet.User, error) {
+	userInfo, err := m.getUserInfo(ctx, accessToken)
 	if err != nil {
 		return nil, errors.Wrap(err, "retrieving user info from Okta")
 	}
@@ -629,8 +629,8 @@ func (m *userManager) validateIDToken(token, nonce string) (*jwtverifier.Jwt, er
 }
 
 // validateAccessToken verifies that the access token is valid.
-func (m *userManager) validateAccessToken(token string) error {
-	info, err := m.getTokenInfo(context.Background(), token, "access_token")
+func (m *userManager) validateAccessToken(ctx context.Context, token string) error {
+	info, err := m.getTokenInfo(ctx, token, "access_token")
 	if err != nil {
 		return errors.Wrap(err, "checking if token is valid")
 	}

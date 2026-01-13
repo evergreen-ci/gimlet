@@ -1,7 +1,6 @@
 package rolemanager
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,8 +25,8 @@ func TestRoleManager(t *testing.T) {
 		RoleCollection:  roleCollection,
 		ScopeCollection: scopeCollection,
 	})
-	require.NoError(t, client.Database(dbName).Collection(roleCollection).Drop(context.Background()))
-	require.NoError(t, client.Database(dbName).Collection(scopeCollection).Drop(context.Background()))
+	require.NoError(t, client.Database(dbName).Collection(roleCollection).Drop(t.Context()))
+	require.NoError(t, client.Database(dbName).Collection(scopeCollection).Drop(t.Context()))
 	memManager := NewInMemoryRoleManager()
 
 	toTest := map[string]gimlet.RoleManager{
@@ -567,7 +566,7 @@ func (s *RoleManagerSuite) TestPermissionSummaryForRoles() {
 	}
 	s.NoError(s.m.UpdateRole(r3))
 
-	summary, err := PermissionSummaryForRoles(context.Background(), []string{"r1", "r2", "r3"}, s.m)
+	summary, err := PermissionSummaryForRoles(s.T().Context(), []string{"r1", "r2", "r3"}, s.m)
 	s.NoError(err)
 	s.Len(summary[0].Permissions, 3)
 	s.Equal("project", summary[0].Type)
@@ -615,15 +614,14 @@ func (s *RoleManagerSuite) TestFindAllowedResources() {
 	for _, role := range roles {
 		s.NoError(s.m.UpdateRole(role))
 	}
-	ctx := context.Background()
 
-	resources, err := FindAllowedResources(ctx, s.m, []string{"1"}, "project", "read", 10)
+	resources, err := FindAllowedResources(s.T().Context(), s.m, []string{"1"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 2)
 	s.Contains(resources, "resource1")
 	s.Contains(resources, "resource2")
 
-	resources, err = FindAllowedResources(ctx, s.m, []string{"1", "all"}, "project", "read", 10)
+	resources, err = FindAllowedResources(s.T().Context(), s.m, []string{"1", "all"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 4)
 	s.Contains(resources, "resource1")
@@ -631,11 +629,11 @@ func (s *RoleManagerSuite) TestFindAllowedResources() {
 	s.Contains(resources, "resource3")
 	s.Contains(resources, "resource4")
 
-	resources, err = FindAllowedResources(ctx, s.m, []string{"no_permissions"}, "project", "read", 10)
+	resources, err = FindAllowedResources(s.T().Context(), s.m, []string{"no_permissions"}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 0)
 
-	resources, err = FindAllowedResources(ctx, s.m, []string{}, "project", "read", 10)
+	resources, err = FindAllowedResources(s.T().Context(), s.m, []string{}, "project", "read", 10)
 	s.NoError(err)
 	s.Len(resources, 0)
 }
