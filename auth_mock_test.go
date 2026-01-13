@@ -120,7 +120,7 @@ func mockUserToken(username, password string) string {
 	return strings.Join([]string{username, password}, ".")
 }
 
-func (m *MockUserManager) CreateUserToken(username, password string) (string, error) {
+func (m *MockUserManager) CreateUserToken(_ context.Context, username, password string) (string, error) {
 	if m.FailCreateUserToken {
 		return "", errors.New("mock fail")
 	}
@@ -130,7 +130,7 @@ func (m *MockUserManager) CreateUserToken(username, password string) (string, er
 func (m *MockUserManager) GetLoginHandler(url string) http.HandlerFunc { return m.LoginHandler }
 func (m *MockUserManager) GetLoginCallbackHandler() http.HandlerFunc   { return m.LoginCallbackHandler }
 func (m *MockUserManager) IsRedirect() bool                            { return m.Redirect }
-func (m *MockUserManager) ReauthorizeUser(user User) error {
+func (m *MockUserManager) ReauthorizeUser(_ context.Context, user User) error {
 	if m.FailReauthorizeUser {
 		return errors.New("mock fail")
 	}
@@ -142,7 +142,7 @@ func (m *MockUserManager) ReauthorizeUser(user User) error {
 	return errors.New("user not found")
 }
 
-func (m *MockUserManager) GetUserByID(id string) (User, error) {
+func (m *MockUserManager) GetUserByID(_ context.Context, id string) (User, error) {
 	if m.FailGetUserByID {
 		return nil, errors.New("mock fail")
 	}
@@ -154,7 +154,7 @@ func (m *MockUserManager) GetUserByID(id string) (User, error) {
 	return nil, errors.New("user does not exist")
 }
 
-func (m *MockUserManager) GetOrCreateUser(u User) (User, error) {
+func (m *MockUserManager) GetOrCreateUser(_ context.Context, u User) (User, error) {
 	if m.FailGetOrCreateUser {
 		return nil, errors.New("mock fail")
 	}
@@ -162,7 +162,7 @@ func (m *MockUserManager) GetOrCreateUser(u User) (User, error) {
 	return u, nil
 }
 
-func (m *MockUserManager) ClearUser(u User, all bool) error {
+func (m *MockUserManager) ClearUser(_ context.Context, u User, all bool) error {
 	if m.FailClearUser {
 		return errors.New("mock fail")
 	}

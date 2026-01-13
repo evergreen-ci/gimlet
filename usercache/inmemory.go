@@ -60,13 +60,13 @@ func (c *userCache) clean() {
 	}
 }
 
-func (c *userCache) Add(u gimlet.User) error {
-	_, err := c.Put(u)
+func (c *userCache) Add(ctx context.Context, u gimlet.User) error {
+	_, err := c.Put(ctx, u)
 
 	return errors.Wrap(err, "adding user")
 }
 
-func (c *userCache) Put(u gimlet.User) (string, error) {
+func (c *userCache) Put(_ context.Context, u gimlet.User) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -85,7 +85,7 @@ func (c *userCache) Put(u gimlet.User) (string, error) {
 	return token, nil
 }
 
-func (c *userCache) Get(token string) (gimlet.User, bool, error) {
+func (c *userCache) Get(_ context.Context, token string) (gimlet.User, bool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -101,7 +101,7 @@ func (c *userCache) Get(token string) (gimlet.User, bool, error) {
 	return u.user, true, nil
 }
 
-func (c *userCache) Clear(u gimlet.User, all bool) error {
+func (c *userCache) Clear(_ context.Context, u gimlet.User, all bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -122,7 +122,7 @@ func (c *userCache) Clear(u gimlet.User, all bool) error {
 	return nil
 }
 
-func (c *userCache) Find(id string) (gimlet.User, bool, error) {
+func (c *userCache) Find(ctx context.Context, id string) (gimlet.User, bool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -143,13 +143,13 @@ func (c *userCache) Find(id string) (gimlet.User, bool, error) {
 	return user.user, true, nil
 }
 
-func (c *userCache) GetOrCreate(u gimlet.User) (gimlet.User, error) {
-	usr, _, err := c.Find(u.Username())
+func (c *userCache) GetOrCreate(ctx context.Context, u gimlet.User) (gimlet.User, error) {
+	usr, _, err := c.Find(ctx, u.Username())
 	if err == nil {
 		return usr, nil
 	}
 
-	if err := c.Add(u); err != nil {
+	if err := c.Add(ctx, u); err != nil {
 		return nil, err
 	}
 

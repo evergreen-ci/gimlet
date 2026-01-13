@@ -449,11 +449,11 @@ func mockCreationOptionsWithExternalCache() CreationOptions {
 }
 func mockExternalCacheOptions() *usercache.ExternalOptions {
 	return &usercache.ExternalOptions{
-		GetUserByToken:  func(string) (gimlet.User, bool, error) { return nil, false, nil },
-		GetUserByID:     func(string) (gimlet.User, bool, error) { return nil, false, nil },
-		PutUserGetToken: func(gimlet.User) (string, error) { return "", nil },
-		ClearUserToken:  func(gimlet.User, bool) error { return nil },
-		GetOrCreateUser: func(gimlet.User) (gimlet.User, error) { return nil, nil },
+		GetUserByToken:  func(context.Context, string) (gimlet.User, bool, error) { return nil, false, nil },
+		GetUserByID:     func(context.Context, string) (gimlet.User, bool, error) { return nil, false, nil },
+		PutUserGetToken: func(context.Context, gimlet.User) (string, error) { return "", nil },
+		ClearUserToken:  func(context.Context, gimlet.User, bool) error { return nil },
+		GetOrCreateUser: func(context.Context, gimlet.User) (gimlet.User, error) { return nil, nil },
 	}
 }
 
@@ -599,7 +599,7 @@ func TestMakeUserFromIDToken(t *testing.T) {
 func TestCreateUserToken(t *testing.T) {
 	um, err := NewUserManager(mockCreationOptions())
 	require.NoError(t, err)
-	token, err := um.CreateUserToken("username", "password")
+	token, err := um.CreateUserToken(t.Context(), "username", "password")
 	assert.Error(t, err)
 	assert.Empty(t, token)
 }
@@ -615,7 +615,7 @@ func TestGetUserByID(t *testing.T) {
 	}{
 		"Succeeds": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return expectedUser, true, nil }
+				opts.ExternalCache.GetUserByID = func(context.Context, string) (gimlet.User, bool, error) { return expectedUser, true, nil }
 				return opts
 			},
 			shouldPass:       true,
@@ -623,7 +623,7 @@ func TestGetUserByID(t *testing.T) {
 		},
 		"Errors": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return nil, false, errors.New("fail") }
+				opts.ExternalCache.GetUserByID = func(context.Context, string) (gimlet.User, bool, error) { return nil, false, errors.New("fail") }
 				return opts
 			},
 			shouldPass:       false,
@@ -631,7 +631,7 @@ func TestGetUserByID(t *testing.T) {
 		},
 		"ErrorsForNilUser": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return nil, false, nil }
+				opts.ExternalCache.GetUserByID = func(context.Context, string) (gimlet.User, bool, error) { return nil, false, nil }
 				return opts
 			},
 			shouldPass:       false,
@@ -639,7 +639,7 @@ func TestGetUserByID(t *testing.T) {
 		},
 		"FailsDueToInvalidUser": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.GetUserByID = func(string) (gimlet.User, bool, error) { return expectedUser, false, nil }
+				opts.ExternalCache.GetUserByID = func(context.Context, string) (gimlet.User, bool, error) { return expectedUser, false, nil }
 				return opts
 			},
 			shouldPass:       false,
@@ -651,7 +651,7 @@ func TestGetUserByID(t *testing.T) {
 			opts.UserCache = nil
 			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache()))
 			require.NoError(t, err)
-			user, err := um.GetUserByID(expectedUser.Username())
+			user, err := um.GetUserByID(t.Context(), expectedUser.Username())
 			if testCase.shouldPass {
 				require.NoError(t, err)
 				require.NotNil(t, user)
@@ -679,14 +679,14 @@ func TestGetOrCreateUser(t *testing.T) {
 	}{
 		"Succeeds": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.GetOrCreateUser = func(gimlet.User) (gimlet.User, error) { return expectedUser, nil }
+				opts.ExternalCache.GetOrCreateUser = func(context.Context, gimlet.User) (gimlet.User, error) { return expectedUser, nil }
 				return opts
 			},
 			shouldPass: true,
 		},
 		"Errors": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.GetOrCreateUser = func(gimlet.User) (gimlet.User, error) { return nil, errors.New("fail") }
+				opts.ExternalCache.GetOrCreateUser = func(context.Context, gimlet.User) (gimlet.User, error) { return nil, errors.New("fail") }
 				return opts
 			},
 			shouldPass: false,
@@ -697,7 +697,7 @@ func TestGetOrCreateUser(t *testing.T) {
 			opts.UserCache = nil
 			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache()))
 			require.NoError(t, err)
-			user, err := um.GetOrCreateUser(expectedUser)
+			user, err := um.GetOrCreateUser(t.Context(), expectedUser)
 			if testCase.shouldPass {
 				require.NoError(t, err)
 				require.NotNil(t, user)
@@ -720,7 +720,7 @@ func TestClearUser(t *testing.T) {
 	}{
 		"Succeeds": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.ClearUserToken = func(gimlet.User, bool) error {
+				opts.ExternalCache.ClearUserToken = func(context.Context, gimlet.User, bool) error {
 					return nil
 				}
 				return opts
@@ -729,7 +729,7 @@ func TestClearUser(t *testing.T) {
 		},
 		"Errors": {
 			modifyOpts: func(opts CreationOptions) CreationOptions {
-				opts.ExternalCache.ClearUserToken = func(gimlet.User, bool) error {
+				opts.ExternalCache.ClearUserToken = func(context.Context, gimlet.User, bool) error {
 					return errors.New("fail")
 				}
 				return opts
@@ -742,7 +742,7 @@ func TestClearUser(t *testing.T) {
 			opts.UserCache = nil
 			um, err := NewUserManager(testCase.modifyOpts(mockCreationOptionsWithExternalCache()))
 			require.NoError(t, err)
-			err = um.ClearUser(expectedUser, false)
+			err = um.ClearUser(t.Context(), expectedUser, false)
 			if testCase.shouldPass {
 				assert.NoError(t, err)
 			} else {
@@ -932,7 +932,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 			assert.True(t, ok)
 			assert.NotEmpty(t, loginToken)
 
-			user, err := um.GetUserByID(email)
+			user, err := um.GetUserByID(t.Context(), email)
 			require.NoError(t, err)
 			require.NotNil(t, user)
 			assert.Equal(t, email, user.Email())
@@ -1010,7 +1010,7 @@ func TestLoginHandlerCallback(t *testing.T) {
 			assert.True(t, ok)
 			assert.NotEmpty(t, loginToken)
 
-			user, err := um.GetUserByID(email)
+			user, err := um.GetUserByID(t.Context(), email)
 			require.NoError(t, err)
 			require.NotNil(t, user)
 			assert.Equal(t, email, user.Email())
@@ -1112,7 +1112,7 @@ func TestReauthorization(t *testing.T) {
 			opts, err := gimlet.NewBasicUserOptions("foo")
 			require.NoError(t, err)
 			user := gimlet.NewBasicUser(opts.Name("foo").Email("foo@bar.com").Password("password").Key("key").AccessToken(accessToken))
-			_, err = um.cache.GetOrCreate(user)
+			_, err = um.cache.GetOrCreate(t.Context(), user)
 			require.NoError(t, err)
 
 			s.IntrospectResponse = &introspectResponse{
@@ -1121,7 +1121,7 @@ func TestReauthorization(t *testing.T) {
 			}
 			s.UserInfoResponse = &userInfoResponse{Name: "foo", Email: "foo@bar.com", Groups: []string{um.userGroup}}
 
-			require.NoError(t, um.ReauthorizeUser(user))
+			require.NoError(t, um.ReauthorizeUser(t.Context(), user))
 
 			mapContains(t, s.IntrospectParameters, map[string][]string{
 				"token":           {accessToken},
@@ -1138,7 +1138,7 @@ func TestReauthorization(t *testing.T) {
 			assert.Empty(t, s.TokenParameters, "reauthorization should succeed without requesting new tokens")
 			assert.Empty(t, s.TokenHeaders, "reauthorization should succeed without requesting new tokens")
 
-			cachedUser, _, err := um.cache.Find(user.Username())
+			cachedUser, _, err := um.cache.Find(t.Context(), user.Username())
 			require.NoError(t, err)
 			assert.Equal(t, user.GetAccessToken(), cachedUser.GetAccessToken())
 			assert.Equal(t, user.GetRefreshToken(), cachedUser.GetRefreshToken())
@@ -1148,7 +1148,7 @@ func TestReauthorization(t *testing.T) {
 			opts, err := gimlet.NewBasicUserOptions("foo")
 			require.NoError(t, err)
 			user := gimlet.NewBasicUser(opts.Name("foo").Email("foo@bar.com").Password("password").Key("key").RefreshToken(refreshToken))
-			_, err = um.cache.GetOrCreate(user)
+			_, err = um.cache.GetOrCreate(t.Context(), user)
 			require.NoError(t, err)
 
 			newAccessToken := "new_access_token"
@@ -1177,7 +1177,7 @@ func TestReauthorization(t *testing.T) {
 				Scope:        "scope",
 			}
 
-			require.NoError(t, um.ReauthorizeUser(user))
+			require.NoError(t, um.ReauthorizeUser(t.Context(), user))
 
 			mapContains(t, s.TokenParameters, map[string][]string{
 				"grant_type":    {"refresh_token"},
@@ -1192,7 +1192,7 @@ func TestReauthorization(t *testing.T) {
 			assert.Empty(t, s.IntrospectHeaders, "should not introspect access token if not validating groups")
 			assert.Empty(t, s.UserInfoHeaders, "should not get user info if not validating groups")
 
-			cachedUser, _, err := um.cache.Find(user.Username())
+			cachedUser, _, err := um.cache.Find(t.Context(), user.Username())
 			require.NoError(t, err)
 			assert.Equal(t, newAccessToken, cachedUser.GetAccessToken())
 			assert.Equal(t, newRefreshToken, cachedUser.GetRefreshToken())
@@ -1203,7 +1203,7 @@ func TestReauthorization(t *testing.T) {
 			require.NoError(t, err)
 			user := gimlet.NewBasicUser(opts.Name("foo").Email("foo@bar.com").Password("password").Key("key"))
 
-			require.Error(t, um.ReauthorizeUser(user))
+			require.Error(t, um.ReauthorizeUser(t.Context(), user))
 			assert.Empty(t, s.TokenHeaders, "should not refresh tokens if refresh token missing")
 			assert.Empty(t, s.TokenParameters, "should not refresh tokens if refresh token missing")
 			assert.Empty(t, s.IntrospectHeaders, "should not check access token if missing access and refresh tokens")
@@ -1215,7 +1215,7 @@ func TestReauthorization(t *testing.T) {
 			require.NoError(t, err)
 			user := gimlet.NewBasicUser(opts.Name("foo").Email("foo@bar.com").Password("password").Key("key").AccessToken("access_token"))
 
-			require.Error(t, um.ReauthorizeUser(user))
+			require.Error(t, um.ReauthorizeUser(t.Context(), user))
 			assert.Empty(t, s.TokenHeaders, "should not refresh tokens if refresh token missing")
 			assert.Empty(t, s.TokenParameters, "should not refresh tokens if refresh token missing")
 			assert.Empty(t, s.IntrospectHeaders, "should not check access token if not validating groups")
@@ -1231,7 +1231,7 @@ func TestReauthorization(t *testing.T) {
 			require.NoError(t, err)
 			user := gimlet.NewBasicUser(opts.Name("foo").Email("foo@bar.com").Password("password").Key("key").AccessToken(accessToken).RefreshToken(refreshToken))
 
-			_, err = um.cache.GetOrCreate(user)
+			_, err = um.cache.GetOrCreate(t.Context(), user)
 			require.NoError(t, err)
 
 			s.IntrospectResponse = &introspectResponse{
@@ -1245,7 +1245,7 @@ func TestReauthorization(t *testing.T) {
 				},
 			}
 
-			assert.Error(t, um.ReauthorizeUser(user))
+			assert.Error(t, um.ReauthorizeUser(t.Context(), user))
 
 			mapContains(t, s.IntrospectParameters, map[string][]string{
 				"token":           {accessToken},
@@ -1257,7 +1257,7 @@ func TestReauthorization(t *testing.T) {
 			})
 			assert.Empty(t, s.UserInfoHeaders)
 
-			cachedUser, _, err := um.cache.Find(user.Username())
+			cachedUser, _, err := um.cache.Find(t.Context(), user.Username())
 			require.NoError(t, err)
 			assert.Equal(t, user.GetAccessToken(), cachedUser.GetAccessToken())
 			assert.Equal(t, user.GetRefreshToken(), cachedUser.GetRefreshToken())
@@ -1283,10 +1283,10 @@ func TestReauthorization(t *testing.T) {
 			opts, err := gimlet.NewBasicUserOptions("id")
 			require.NoError(t, err)
 			user := gimlet.NewBasicUser(opts.Name("name").Email("email").Password("password").Key("key").AccessToken(accessToken).RefreshToken(refreshToken))
-			_, err = um.cache.GetOrCreate(user)
+			_, err = um.cache.GetOrCreate(t.Context(), user)
 			require.NoError(t, err)
 
-			assert.Error(t, um.ReauthorizeUser(user))
+			assert.Error(t, um.ReauthorizeUser(t.Context(), user))
 
 			mapContains(t, s.IntrospectParameters, map[string][]string{
 				"token":           {newAccessToken},
@@ -1310,7 +1310,7 @@ func TestReauthorization(t *testing.T) {
 				"Authorization": {"Bearer " + newAccessToken},
 			})
 
-			cachedUser, _, err := um.cache.Find(user.Username())
+			cachedUser, _, err := um.cache.Find(t.Context(), user.Username())
 			require.NoError(t, err)
 			assert.Equal(t, user.GetAccessToken(), cachedUser.GetAccessToken())
 			assert.Equal(t, user.GetRefreshToken(), cachedUser.GetRefreshToken())

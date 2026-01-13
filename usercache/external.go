@@ -1,6 +1,8 @@
 package usercache
 
 import (
+	"context"
+
 	"github.com/evergreen-ci/gimlet"
 	"github.com/mongodb/grip"
 	"github.com/pkg/errors"
@@ -38,13 +40,22 @@ type ExternalCache struct {
 	Opts ExternalOptions
 }
 
-func (c *ExternalCache) Add(u gimlet.User) error           { _, err := c.Opts.GetOrCreateUser(u); return err }
-func (c *ExternalCache) Put(u gimlet.User) (string, error) { return c.Opts.PutUserGetToken(u) }
-func (c *ExternalCache) Get(token string) (gimlet.User, bool, error) {
-	return c.Opts.GetUserByToken(token)
+func (c *ExternalCache) Add(ctx context.Context, u gimlet.User) error {
+	_, err := c.Opts.GetOrCreateUser(ctx, u)
+	return err
 }
-func (c *ExternalCache) Clear(u gimlet.User, all bool) error       { return c.Opts.ClearUserToken(u, all) }
-func (c *ExternalCache) Find(id string) (gimlet.User, bool, error) { return c.Opts.GetUserByID(id) }
-func (c *ExternalCache) GetOrCreate(u gimlet.User) (gimlet.User, error) {
-	return c.Opts.GetOrCreateUser(u)
+func (c *ExternalCache) Put(ctx context.Context, u gimlet.User) (string, error) {
+	return c.Opts.PutUserGetToken(ctx, u)
+}
+func (c *ExternalCache) Get(ctx context.Context, token string) (gimlet.User, bool, error) {
+	return c.Opts.GetUserByToken(ctx, token)
+}
+func (c *ExternalCache) Clear(ctx context.Context, u gimlet.User, all bool) error {
+	return c.Opts.ClearUserToken(ctx, u, all)
+}
+func (c *ExternalCache) Find(ctx context.Context, id string) (gimlet.User, bool, error) {
+	return c.Opts.GetUserByID(ctx, id)
+}
+func (c *ExternalCache) GetOrCreate(ctx context.Context, u gimlet.User) (gimlet.User, error) {
+	return c.Opts.GetOrCreateUser(ctx, u)
 }

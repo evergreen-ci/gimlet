@@ -190,7 +190,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 							"message": "problem getting user by token",
 						}))
 						if err == nil {
-							usr, err = u.manager.GetOrCreateUser(usr)
+							usr, err = u.manager.GetOrCreateUser(r.Context(), usr)
 							// Get the user's full details from the DB or create them if they don't exists
 							if err != nil {
 								logger.Debug(message.WrapError(err, message.Fields{
@@ -225,7 +225,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 
 		if len(authDataName) > 0 && len(authDataAPIKey) > 0 {
-			usr, err = u.manager.GetUserByID(authDataName)
+			usr, err = u.manager.GetUserByID(r.Context(), authDataName)
 			logger.Debug(message.WrapError(err, message.Fields{
 				"message":   "problem getting user by id",
 				"operation": "header check",
@@ -288,7 +288,7 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string
 		displayName = u.conf.OIDC.DisplayNameFromID(token.Subject)
 	}
 
-	usr, err := u.manager.GetOrCreateUser(NewBasicUser(BasicUserOptions{
+	usr, err := u.manager.GetOrCreateUser(ctx, NewBasicUser(BasicUserOptions{
 		id:    token.Subject,
 		name:  displayName,
 		email: claims.Email,

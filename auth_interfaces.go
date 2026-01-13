@@ -49,7 +49,7 @@ type Authenticator interface {
 type UserManager interface {
 	// The first 5 methods are borrowed directly from evergreen without modification
 	GetUserByToken(context.Context, string) (User, error)
-	CreateUserToken(string, string) (string, error)
+	CreateUserToken(context.Context, string, string) (string, error)
 	// GetLoginHandler returns the function that starts the login process for auth mechanisms
 	// that redirect to a thirdparty site for authentication
 	GetLoginHandler(url string) http.HandlerFunc
@@ -63,16 +63,16 @@ type UserManager interface {
 	IsRedirect() bool
 
 	// ReauthorizeUser reauthorizes a user that is already logged in.
-	ReauthorizeUser(User) error
+	ReauthorizeUser(context.Context, User) error
 
 	// These methods are simple wrappers around the user
 	// persistence layer. May consider moving them to the
 	// authenticator.
-	GetUserByID(string) (User, error)
-	GetOrCreateUser(User) (User, error)
+	GetUserByID(context.Context, string) (User, error)
+	GetOrCreateUser(context.Context, User) (User, error)
 
 	// Log out user or all users
-	ClearUser(user User, all bool) error
+	ClearUser(context.Context, User, bool) error
 
 	// Returns the groups or roles to which a user belongs
 	GetGroupsForUser(string) ([]string, error)

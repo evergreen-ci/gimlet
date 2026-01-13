@@ -29,35 +29,35 @@ func TestBasicUserManager(t *testing.T) {
 	assert.Error(err)
 	assert.Nil(user)
 
-	token, err := u.CreateUserToken("foo", "bar")
+	token, err := u.CreateUserToken(t.Context(), "foo", "bar")
 	assert.NoError(err)
 	assert.Equal(token, expectedToken)
 
 	assert.Nil(u.GetLoginHandler(""))
 	assert.Nil(u.GetLoginCallbackHandler())
 	assert.False(u.IsRedirect())
-	assert.Nil(u.ReauthorizeUser(&u.users[0]))
-	assert.NotNil(u.ReauthorizeUser(&BasicUser{ID: "bar"}))
+	assert.Nil(u.ReauthorizeUser(t.Context(), &u.users[0]))
+	assert.NotNil(u.ReauthorizeUser(t.Context(), &BasicUser{ID: "bar"}))
 
-	user, err = u.GetUserByID("bar")
+	user, err = u.GetUserByID(t.Context(), "bar")
 	assert.Error(err)
 	assert.Nil(user)
 
-	user, err = u.GetUserByID("foo")
+	user, err = u.GetUserByID(t.Context(), "foo")
 	assert.NoError(err)
 	assert.NotNil(user)
 	assert.Equal("foo", user.Username())
 	assert.Equal("baz", user.Email())
 
 	newUser := &BasicUser{ID: "foo"}
-	user, err = u.GetOrCreateUser(newUser)
+	user, err = u.GetOrCreateUser(t.Context(), newUser)
 	assert.NoError(err)
 	assert.NotNil(user)
 	assert.Equal("foo", user.Username())
 	assert.Equal("baz", user.Email())
 
 	newUser = &BasicUser{ID: "new_user", Password: "password", EmailAddress: "email@example.com"}
-	user, err = u.GetOrCreateUser(newUser)
+	user, err = u.GetOrCreateUser(t.Context(), newUser)
 	assert.NoError(err)
 	assert.NotNil(user)
 	assert.Equal("new_user", user.Username())
@@ -66,12 +66,12 @@ func TestBasicUserManager(t *testing.T) {
 	assert.False(u.isInvalid(user.Username()))
 	u.setInvalid(user.Username(), true)
 	assert.True(u.isInvalid(user.Username()))
-	returnedUser, err := u.GetUserByID(user.Username())
+	returnedUser, err := u.GetUserByID(t.Context(), user.Username())
 	assert.Nil(returnedUser)
 	assert.Error(err)
 	u.setInvalid(user.Username(), false)
 	assert.False(u.isInvalid(user.Username()))
 	assert.True(u.isInvalid("DNE"))
 
-	assert.Error(u.ClearUser(newUser, false))
+	assert.Error(u.ClearUser(t.Context(), newUser, false))
 }

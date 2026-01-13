@@ -273,7 +273,7 @@ func (s *RoleManagerSuite) TestRequiresPermissionMiddleware() {
 	userOpts, err = gimlet.NewBasicUserOptions("user")
 	s.Require().NoError(err)
 	user = gimlet.NewBasicUser(userOpts.Name("name").Email("email").Password("password").Key("key").AccessToken("access_token").RefreshToken("refresh_token").Roles(role1.ID).RoleManager(s.m))
-	_, err = um.GetOrCreateUser(user)
+	_, err = um.GetOrCreateUser(req.Context(), user)
 	s.NoError(err)
 	ctx = gimlet.AttachUser(req.Context(), user)
 	req = req.WithContext(ctx)
