@@ -114,6 +114,32 @@ func TestUserMiddleware(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, rw.Code)
 			assert.Equal(t, "static API keys are disabled for human users", rw.Body.String())
 		},
+		"HeaderCheck/StaticKeysDisabled/HumanUserMultipleAuth": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck:                 false,
+				HeaderUserName:                  "api-user",
+				HeaderKeyName:                   "api-key",
+				SkipCookie:                      false,
+				CookieName:                      "gimlet-token",
+				StaticKeysDisabledForHumanUsers: true,
+			}
+			m := UserMiddleware(t.Context(), um, conf)
+			require.NotNil(t, m)
+
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			req.Header[conf.HeaderUserName] = []string{user.ID}
+			req.Header[conf.HeaderKeyName] = []string{user.APIKey}
+			req.AddCookie(&http.Cookie{
+				Name:  conf.CookieName,
+				Value: user.Token,
+			})
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Equal(t, user, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
 		"HeaderCheck/StaticKeysDisabled/ServiceUser": func(t *testing.T) {
 			conf := UserMiddlewareConfiguration{
 				SkipHeaderCheck:                 false,
