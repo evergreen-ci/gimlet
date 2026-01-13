@@ -199,14 +199,13 @@ func TestAuthAttachWrapper(t *testing.T) {
 	assert.Equal(ah.(*authHandler).um, usermanager)
 	assert.Equal(ah.(*authHandler).auth, authenticator)
 
-	baseCtx := context.Background()
-	req = req.WithContext(baseCtx)
+	req = req.WithContext(t.Context())
 
-	assert.Exactly(req.Context(), baseCtx)
+	assert.Exactly(req.Context(), t.Context())
 
 	ah.ServeHTTP(rw, req, func(nrw http.ResponseWriter, r *http.Request) {
 		rctx := r.Context()
-		assert.NotEqual(rctx, baseCtx)
+		assert.NotEqual(rctx, t.Context())
 
 		um := GetUserManager(rctx)
 		assert.Equal(usermanager, um)

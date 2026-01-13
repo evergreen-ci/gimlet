@@ -219,7 +219,7 @@ func (m *mongoBackedRoleManager) AddScope(ctx context.Context, scope gimlet.Scop
 		}
 		return sessCtx.CommitTransaction(sessCtx)
 	}
-	return m.retryTransaction(updateFunc)
+	return m.retryTransaction(ctx, updateFunc)
 }
 
 // note this assumes that resources in parent scopes are not duplicated (SERVER-1014)
@@ -261,7 +261,7 @@ func (m *mongoBackedRoleManager) DeleteScope(ctx context.Context, scope gimlet.S
 		}
 		return sessCtx.CommitTransaction(sessCtx)
 	}
-	return m.retryTransaction(updateFunc)
+	return m.retryTransaction(ctx, updateFunc)
 }
 
 func (m *mongoBackedRoleManager) GetScope(ctx context.Context, id string) (*gimlet.Scope, error) {
@@ -473,9 +473,9 @@ func (m *mongoBackedRoleManager) findParentsOfScope(ctx context.Context, scopeId
 	return scopeIds, nil
 }
 
-func (m *mongoBackedRoleManager) retryTransaction(f func(mongo.SessionContext) error) error {
+func (m *mongoBackedRoleManager) retryTransaction(ctx context.Context, f func(mongo.SessionContext) error) error {
 	const retryCount = 5
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	for i := 0; i < retryCount; i++ {
 		err := m.client.UseSession(ctx, f)
