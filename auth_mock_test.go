@@ -34,6 +34,7 @@ type MockUser struct {
 	AccessToken  string
 	RefreshToken string
 	RoleNames    []string
+	APIOnly      bool
 	Groups       []string
 }
 
@@ -45,6 +46,7 @@ func (u *MockUser) GetAPIKey() string       { return u.APIKey }
 func (u *MockUser) GetAccessToken() string  { return u.AccessToken }
 func (u *MockUser) GetRefreshToken() string { return u.RefreshToken }
 func (u *MockUser) Roles() []string         { return u.RoleNames }
+func (u *MockUser) IsAPIOnly() bool         { return u.APIOnly }
 func (u *MockUser) HasPermission(PermissionOpts) bool {
 	return true
 }

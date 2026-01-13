@@ -15,19 +15,21 @@ import (
 )
 
 func TestUserMiddleware(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	user := &MockUser{
 		ID:     "sam-i-am",
 		APIKey: "DEADBEEF",
 		Token:  "42",
 	}
-	um := &MockUserManager{Users: []*MockUser{user}}
+	serviceUser := &MockUser{
+		ID:      "service-user",
+		APIKey:  "BEEFDEAD",
+		APIOnly: true,
+	}
+	um := &MockUserManager{Users: []*MockUser{user, serviceUser}}
 
 	for name, testCase := range map[string]func(*testing.T){
 		"Constructor": func(t *testing.T) {
-			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{})
+			m := UserMiddleware(t.Context(), um, UserMiddlewareConfiguration{})
 			require.NotNil(t, m)
 			assert.Implements(t, (*Middleware)(nil), m)
 			assert.Implements(t, (*negroni.Handler)(nil), m)
@@ -35,7 +37,7 @@ func TestUserMiddleware(t *testing.T) {
 			assert.Equal(t, m.(*userMiddleware).manager, um)
 		},
 		"NothingEnabled": func(t *testing.T) {
-			m := UserMiddleware(ctx, um, UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true})
+			m := UserMiddleware(t.Context(), um, UserMiddlewareConfiguration{SkipHeaderCheck: true, SkipCookie: true})
 			require.NotNil(t, m)
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			rw := httptest.NewRecorder()
@@ -55,7 +57,7 @@ func TestUserMiddleware(t *testing.T) {
 				{SkipHeaderCheck: false, SkipCookie: true},
 				{SkipHeaderCheck: false, SkipCookie: false},
 			} {
-				m := UserMiddleware(ctx, um, conf)
+				m := UserMiddleware(t.Context(), um, conf)
 				require.NotNil(t, m)
 				req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 				rw := httptest.NewRecorder()
@@ -77,7 +79,7 @@ func TestUserMiddleware(t *testing.T) {
 				HeaderUserName:  "api-user",
 				HeaderKeyName:   "api-key",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 			require.NotNil(t, m)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
@@ -90,6 +92,75 @@ func TestUserMiddleware(t *testing.T) {
 			})
 			assert.Equal(t, http.StatusOK, rw.Code)
 		},
+		"HeaderCheck/StaticKeysDisabled/HumanUser": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck:                 false,
+				SkipCookie:                      true,
+				HeaderUserName:                  "api-user",
+				HeaderKeyName:                   "api-key",
+				StaticKeysDisabledForHumanUsers: true,
+			}
+			m := UserMiddleware(t.Context(), um, conf)
+			require.NotNil(t, m)
+
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			req.Header[conf.HeaderUserName] = []string{user.ID}
+			req.Header[conf.HeaderKeyName] = []string{user.APIKey}
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Equal(t, user, rusr)
+			})
+			assert.Equal(t, http.StatusUnauthorized, rw.Code)
+			assert.Equal(t, "static API keys are disabled for human users", rw.Body.String())
+		},
+		"HeaderCheck/StaticKeysDisabled/HumanUserMultipleAuth": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck:                 false,
+				HeaderUserName:                  "api-user",
+				HeaderKeyName:                   "api-key",
+				SkipCookie:                      false,
+				CookieName:                      "gimlet-token",
+				StaticKeysDisabledForHumanUsers: true,
+			}
+			m := UserMiddleware(t.Context(), um, conf)
+			require.NotNil(t, m)
+
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			req.Header[conf.HeaderUserName] = []string{user.ID}
+			req.Header[conf.HeaderKeyName] = []string{user.APIKey}
+			req.AddCookie(&http.Cookie{
+				Name:  conf.CookieName,
+				Value: user.Token,
+			})
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Equal(t, user, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
+		"HeaderCheck/StaticKeysDisabled/ServiceUser": func(t *testing.T) {
+			conf := UserMiddlewareConfiguration{
+				SkipHeaderCheck:                 false,
+				SkipCookie:                      true,
+				HeaderUserName:                  "api-user",
+				HeaderKeyName:                   "api-key",
+				StaticKeysDisabledForHumanUsers: true,
+			}
+			m := UserMiddleware(t.Context(), um, conf)
+			require.NotNil(t, m)
+
+			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+			req.Header[conf.HeaderUserName] = []string{serviceUser.ID}
+			req.Header[conf.HeaderKeyName] = []string{serviceUser.APIKey}
+			rw := httptest.NewRecorder()
+			m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+				rusr := GetUser(r.Context())
+				assert.Equal(t, serviceUser, rusr)
+			})
+			assert.Equal(t, http.StatusOK, rw.Code)
+		},
 		"WrongHeaderKey": func(t *testing.T) {
 			conf := UserMiddlewareConfiguration{
 				SkipHeaderCheck: false,
@@ -97,7 +168,7 @@ func TestUserMiddleware(t *testing.T) {
 				HeaderUserName:  "api-user",
 				HeaderKeyName:   "api-key",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 			require.NotNil(t, m)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
@@ -117,7 +188,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			require.NotNil(t, req)
@@ -138,7 +209,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			req.AddCookie(&http.Cookie{
@@ -158,7 +229,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			require.NotNil(t, req)
@@ -180,7 +251,7 @@ func TestUserMiddleware(t *testing.T) {
 				SkipCookie:      false,
 				CookieName:      "gimlet-token",
 			}
-			m := UserMiddleware(ctx, um, conf)
+			m := UserMiddleware(t.Context(), um, conf)
 
 			req := httptest.NewRequest("GET", "http://localhost/bar", nil)
 			require.NotNil(t, req)
