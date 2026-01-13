@@ -16,6 +16,7 @@ type BasicUserOptions struct {
 	accessToken  string
 	refreshToken string
 	roles        []string
+	apiOnly      bool
 	roleManager  RoleManager
 }
 
@@ -65,6 +66,11 @@ func (opts BasicUserOptions) Roles(roles ...string) BasicUserOptions {
 	return opts
 }
 
+func (opts BasicUserOptions) APIOnly(apiOnly bool) BasicUserOptions {
+	opts.apiOnly = apiOnly
+	return opts
+}
+
 func (opts BasicUserOptions) RoleManager(rm RoleManager) BasicUserOptions {
 	opts.roleManager = rm
 	return opts
@@ -82,6 +88,7 @@ func NewBasicUser(opts BasicUserOptions) *BasicUser {
 		AccessToken:  opts.accessToken,
 		RefreshToken: opts.refreshToken,
 		AccessRoles:  opts.roles,
+		APIOnly:      opts.apiOnly,
 		roleManager:  opts.roleManager,
 	}
 }
@@ -95,6 +102,7 @@ type BasicUser struct {
 	AccessToken  string   `bson:"access_token" json:"access_token" yaml:"access_token"`
 	RefreshToken string   `bson:"refresh_token" json:"refresh_token" yaml:"refresh_token"`
 	AccessRoles  []string `bson:"roles" json:"roles" yaml:"roles"`
+	APIOnly      bool     `bson:"api_only" json:"api_only" yaml:"api_only"`
 	roleManager  RoleManager
 	invalid      bool
 }
@@ -110,6 +118,7 @@ func (u *BasicUser) Roles() []string {
 	copy(out, u.AccessRoles)
 	return out
 }
+func (u *BasicUser) IsAPIOnly() bool { return u.APIOnly }
 func (u *BasicUser) HasPermission(ctx context.Context, opts PermissionOpts) bool {
 	if u.roleManager == nil {
 		return false

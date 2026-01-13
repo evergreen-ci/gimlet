@@ -22,6 +22,7 @@ type User interface {
 	GetRefreshToken() string
 	Roles() []string
 	HasPermission(context.Context, PermissionOpts) bool
+	IsAPIOnly() bool
 }
 
 // PermissionOpts is the required data to be provided when asking if a user has permission for a resource
