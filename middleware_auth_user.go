@@ -206,6 +206,14 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 
 						if usr != nil && !needsReauth {
 							r = setUserForRequest(r, usr)
+							grip.Debug(message.Fields{
+								"message":        "zackary-message",
+								"second-message": "cookies",
+								"user":           usr.Username(),
+								"request":        reqID,
+								"roles":          usr.Roles(),
+								"api_key_empty":  usr.GetAPIKey() == "",
+							})
 							break
 						}
 					}
@@ -249,6 +257,15 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 						return
 					}
 					r = setUserForRequest(r, usr)
+
+					grip.Debug(message.Fields{
+						"message":        "zackary-message",
+						"second-message": "static headers",
+						"user":           usr.Username(),
+						"request":        reqID,
+						"roles":          usr.Roles(),
+						"api_key_empty":  usr.GetAPIKey() == "",
+					})
 				}
 			}
 		}
@@ -263,6 +280,14 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			}))
 			if err == nil && usr != nil {
 				r = setUserForRequest(r, usr)
+				grip.Debug(message.Fields{
+					"message":        "zackary-message",
+					"second-message": "oidc header",
+					"user":           usr.Username(),
+					"request":        reqID,
+					"roles":          usr.Roles(),
+					"api_key_empty":  usr.GetAPIKey() == "",
+				})
 			}
 		}
 	}
