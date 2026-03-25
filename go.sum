@@ -104,6 +104,8 @@ github.com/mattn/go-xmpp v0.0.0-20210723025538-3871461df959 h1:heUerLk4jOhweir4O
 github.com/mattn/go-xmpp v0.0.0-20210723025538-3871461df959/go.mod h1:Cs5mF0OsrRRmhkyOod//ldNPOwJsrBvJ+1WRspv0xoc=
 github.com/mongodb/grip v0.0.0-20251203205830-b5c5c666ab94 h1:kEIOld0OEhvbJSo26V3RrARWnV1gBpFW/6chCZJ1yx4=
 github.com/mongodb/grip v0.0.0-20251203205830-b5c5c666ab94/go.mod h1:nIxXGOFRWYjuwlgZlhj7BvCE6MjPuOFr3xbe9IcbKDo=
+github.com/mongodb/grip v0.0.0-20260325175240-dee15316ed15 h1:24uQdm0yD9ybTgkAyolNVjf6jf8UfLqPC3bfxnf1N0U=
+github.com/mongodb/grip v0.0.0-20260325175240-dee15316ed15/go.mod h1:nIxXGOFRWYjuwlgZlhj7BvCE6MjPuOFr3xbe9IcbKDo=
 github.com/montanaflynn/stats v0.7.1 h1:etflOAAHORrCC44V+aR6Ftzort912ZU+YLiSTuV8eaE=
 github.com/montanaflynn/stats v0.7.1/go.mod h1:etXPPgVO6n31NxCd9KQUMvCM+ve0ruNzt6R8Bnaayow=
 github.com/okta/okta-jwt-verifier-golang/v2 v2.1.1 h1:0Z/lJ5P9FGix5/MasMU0iB/2HR+JHRYY500JC/w3x74=
