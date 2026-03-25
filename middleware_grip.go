@@ -151,7 +151,7 @@ func finishLogger(logger grip.Journaler, r *http.Request, res negroni.ResponseWr
 		}
 	}
 
-	logger.Info(m)
+	logger.Info(ctx, m)
 }
 
 // This is largely duplicated from the above, but lets us optionally
@@ -186,7 +186,7 @@ func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, n
 			// (https://golang.org/pkg/net/http/#Handler)
 			// log at a lower level
 			if err == http.ErrAbortHandler {
-				l.Debug(message.Fields{
+				l.Debug(ctx, message.Fields{
 					"message":  "hit suppressed abort panic",
 					"action":   "aborted",
 					"request":  GetRequestID(ctx),
@@ -206,7 +206,7 @@ func (l *appRecoveryLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, n
 				})
 			}
 
-			WriteJSONInternalError(rw, ErrorResponse{
+			WriteJSONInternalError(ctx, rw, ErrorResponse{
 				StatusCode: http.StatusInternalServerError,
 				Message:    "request aborted",
 			})

@@ -70,7 +70,7 @@ func (opts *ProxyOptions) getPath(r *http.Request) string {
 		route := mux.CurrentRoute(r)
 		regexString, err := route.GetPathRegexp()
 		if err != nil {
-			grip.Error(message.Fields{
+			grip.Error(r.Context(), message.Fields{
 				"message": "can't get route regexp",
 				"route":   route,
 				"URL":     path,
@@ -79,7 +79,7 @@ func (opts *ProxyOptions) getPath(r *http.Request) string {
 		}
 		compiled, err := regexp.Compile(regexString)
 		if err != nil {
-			grip.Error(message.Fields{
+			grip.Error(r.Context(), message.Fields{
 				"message": "can't strip path",
 				"regex":   regexString,
 				"URL":     r.URL.Path,

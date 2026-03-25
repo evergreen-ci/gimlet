@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -21,7 +22,7 @@ type ResponsePages struct {
 }
 
 // GetLinks returns the strings for use in the links header
-func (r *ResponsePages) GetLinks(route string) string {
+func (r *ResponsePages) GetLinks(ctx context.Context, route string) string {
 	if strings.HasPrefix(route, "/") {
 		route = route[1:]
 	}
@@ -29,11 +30,11 @@ func (r *ResponsePages) GetLinks(route string) string {
 	links := []string{}
 
 	if r.Next != nil {
-		links = append(links, r.Next.GetLink(route))
+		links = append(links, r.Next.GetLink(ctx, route))
 	}
 
 	if r.Prev != nil {
-		links = append(links, r.Prev.GetLink(route))
+		links = append(links, r.Prev.GetLink(ctx, route))
 	}
 
 	return strings.Join(links, ",")
@@ -110,10 +111,10 @@ func (p *Page) Validate() error {
 // GetLink returns the pagination metadata for this page. It is called
 // by the GetLinks function. Your code need not use this call
 // directly in most cases, except for testing.
-func (p *Page) GetLink(route string) string {
+func (p *Page) GetLink(ctx context.Context, route string) string {
 	url, err := url.Parse(fmt.Sprintf("%s/%s", p.BaseURL, route))
 	if err != nil {
-		grip.Alert(message.WrapError(err, message.Fields{
+		grip.Alert(ctx, message.WrapError(err, message.Fields{
 			"message":  "failed to build page, falling back to base URL",
 			"base_url": p.BaseURL,
 		}))

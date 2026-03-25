@@ -44,7 +44,7 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 		defer cancel()
 
 		if err := handler.Parse(ctx, r); err != nil {
-			WriteResponse(w, newResponder(err, http.StatusBadRequest, JSON))
+			WriteResponse(ctx, w, newResponder(err, http.StatusBadRequest, JSON))
 			return
 		}
 
@@ -54,19 +54,19 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 				StatusCode: http.StatusInternalServerError,
 				Message:    "undefined response",
 			}
-			WriteJSONResponse(w, e.StatusCode, e)
+			WriteJSONResponse(ctx, w, e.StatusCode, e)
 			return
 		}
 
 		if err := resp.Validate(); err != nil {
-			WriteResponse(w, newResponder(err, http.StatusBadRequest, JSON))
+			WriteResponse(ctx, w, newResponder(err, http.StatusBadRequest, JSON))
 			return
 		}
 
 		// if this response is paginated, add the appropriate metadata.
 		if resp.Pages() != nil {
 			routeURL := url.URL{Path: r.URL.Path, RawQuery: r.URL.RawQuery}
-			w.Header().Set("Link", resp.Pages().GetLinks(routeURL.String()))
+			w.Header().Set("Link", resp.Pages().GetLinks(ctx, routeURL.String()))
 		}
 		if resp.Status() >= http.StatusInternalServerError {
 			m := message.Fields{
@@ -81,8 +81,8 @@ func handleHandler(h RouteHandler) http.HandlerFunc {
 			if len(r.URL.Query()) > 0 {
 				m["params"] = r.URL.Query()
 			}
-			grip.Debug(m)
+			grip.Debug(ctx, m)
 		}
-		WriteResponse(w, resp)
+		WriteResponse(ctx, w, resp)
 	}
 }

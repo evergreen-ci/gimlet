@@ -148,7 +148,7 @@ func (a *APIApp) BackgroundRun(ctx context.Context) (WaitFunc, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	grip.Noticef("starting %s on: %s:%d", a.prefix, a.address, a.port)
+	grip.Noticef(ctx, "starting %s on: %s:%d", a.prefix, a.address, a.port)
 
 	return srv.Run(ctx)
 }
@@ -156,11 +156,11 @@ func (a *APIApp) BackgroundRun(ctx context.Context) (WaitFunc, error) {
 // SetPort allows users to configure a default port for the API
 // service. Defaults to 3000, and return errors will refuse to set the
 // port to something unreasonable.
-func (a *APIApp) SetPort(port int) error {
+func (a *APIApp) SetPort(ctx context.Context, port int) error {
 	defaultPort := 3000
 
 	if port == a.port {
-		grip.Warningf("port is already set to %d", a.port)
+		grip.Warningf(ctx, "port is already set to %d", a.port)
 	} else if port <= 0 {
 		a.port = defaultPort
 		return fmt.Errorf("%d is not a valid port numbaer, using %d", port, defaultPort)

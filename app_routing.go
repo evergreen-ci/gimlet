@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -149,7 +150,7 @@ func (r *APIRoute) OverridePrefix() *APIRoute { r.overrideAppPrefix = true; retu
 // route. Version is chainable.
 func (r *APIRoute) Version(version int) *APIRoute {
 	if version < 0 {
-		grip.Warningf("%d is not a valid version", version)
+		grip.Warningf(context.Background(), "%d is not a valid version", version)
 	}
 
 	r.version = version
@@ -164,11 +165,12 @@ func (r *APIRoute) Version(version int) *APIRoute {
 // without relying on either global state *or* running into complex
 // typing issues.
 func (r *APIRoute) Handler(h http.HandlerFunc) *APIRoute {
+	ctx := context.Background()
 	if r.handler != nil {
-		grip.Warningf("called Handler more than once for route %s", r.route)
+		grip.Warningf(ctx, "called Handler more than once for route %s", r.route)
 	}
 	if h == nil {
-		grip.Alertf("adding nil route handler will probably result in runtime panics for '%s'", r.route)
+		grip.Alertf(ctx, "adding nil route handler will probably result in runtime panics for '%s'", r.route)
 	}
 
 	r.handler = h
@@ -179,12 +181,13 @@ func (r *APIRoute) Handler(h http.HandlerFunc) *APIRoute {
 // HandlerType is equivalent to Handler, but allows you to use a type
 // that implements http.Handler rather than a function object.
 func (r *APIRoute) HandlerType(h http.Handler) *APIRoute {
+	ctx := context.Background()
 	if r.handler != nil {
-		grip.Warningf("called Handler more than once for route %s", r.route)
+		grip.Warningf(ctx, "called Handler more than once for route %s", r.route)
 	}
 
 	if h == nil {
-		grip.Alertf("adding nil route handler will probably result in runtime panics for '%s'", r.route)
+		grip.Alertf(ctx, "adding nil route handler will probably result in runtime panics for '%s'", r.route)
 	}
 
 	r.handler = h.ServeHTTP
@@ -196,12 +199,13 @@ func (r *APIRoute) HandlerType(h http.Handler) *APIRoute {
 // handlers, to separate input parsing, business logic, and response
 // generation.
 func (r *APIRoute) RouteHandler(h RouteHandler) *APIRoute {
+	ctx := context.Background()
 	if r.handler != nil {
-		grip.Warningf("called Handler more than once for route %s", r.route)
+		grip.Warningf(ctx, "called Handler more than once for route %s", r.route)
 	}
 
 	if h == nil {
-		grip.Alertf("adding nil route handler will probably result in runtime panics for '%s'", r.route)
+		grip.Alertf(ctx, "adding nil route handler will probably result in runtime panics for '%s'", r.route)
 	}
 
 	r.handler = handleHandler(h)

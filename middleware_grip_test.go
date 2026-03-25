@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,12 +27,13 @@ func TestRequestLogger(t *testing.T) {
 	middleware.Journaler = logging.MakeGrip(sender)
 
 	next := func(w http.ResponseWriter, r *http.Request) {
-		middleware.Journaler.Info("hello")
+		middleware.Journaler.Info(r.Context(), "hello")
 	}
 	assert.False(sender.HasMessage())
 	req := &http.Request{
 		URL: &url.URL{},
 	}
+	req = req.WithContext(context.Background())
 	rw := negroni.NewResponseWriter(nil)
 
 	startAt := getNumber()
@@ -49,12 +51,13 @@ func TestRequestPanicLogger(t *testing.T) {
 	middleware := NewRecoveryLogger(logging.MakeGrip(sender)).(*appRecoveryLogger)
 
 	next := func(w http.ResponseWriter, r *http.Request) {
-		middleware.Journaler.Info("hello")
+		middleware.Journaler.Info(r.Context(), "hello")
 	}
 	assert.False(sender.HasMessage())
 	req := &http.Request{
 		URL: &url.URL{},
 	}
+	req = req.WithContext(context.Background())
 	rw := negroni.NewResponseWriter(nil)
 
 	startAt := getNumber()
@@ -80,6 +83,7 @@ func TestRequestPanicLoggerWithPanic(t *testing.T) {
 		URL:    &url.URL{},
 		Header: http.Header{},
 	}
+	req = req.WithContext(context.Background())
 	testrw := httptest.NewRecorder()
 	rw := negroni.NewResponseWriter(testrw)
 
@@ -112,6 +116,7 @@ func TestRequestPanicLoggerWithErrAbortHandler(t *testing.T) {
 		URL:    &url.URL{},
 		Header: http.Header{},
 	}
+	req = req.WithContext(context.Background())
 	testrw := httptest.NewRecorder()
 	rw := negroni.NewResponseWriter(testrw)
 
@@ -198,6 +203,7 @@ func TestLoggingAnnotation(t *testing.T) {
 		URL:    &url.URL{},
 		Header: http.Header{},
 	}
+	req = req.WithContext(context.Background())
 
 	testrw := httptest.NewRecorder()
 	rw := negroni.NewResponseWriter(testrw)

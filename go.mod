@@ -7,7 +7,7 @@ require (
 	github.com/evergreen-ci/negroni v1.0.1-0.20211028183800-67b6d7c2c035
 	github.com/evergreen-ci/utility v0.0.0-20251203163234-8a1c0ea8b717
 	github.com/gorilla/mux v1.8.0
-	github.com/mongodb/grip v0.0.0-20251203205830-b5c5c666ab94
+	github.com/mongodb/grip v0.0.0-20260325175240-dee15316ed15
 	github.com/okta/okta-jwt-verifier-golang/v2 v2.1.1
 	github.com/phyber/negroni-gzip v0.0.0-20180113114010-ef6356a5d029
 	github.com/pkg/errors v0.9.1

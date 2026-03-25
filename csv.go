@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"net/http"
@@ -70,7 +71,7 @@ func convertDataToCSVRecord(data interface{}) ([][]string, error) {
 
 // WriteToCSVResponse takes in an interface that is a slice or an array and converts the struct to csv for
 // fields that have the the csv struct tag.
-func WriteCSVResponse(w http.ResponseWriter, status int, data interface{}) {
+func WriteCSVResponse(_ context.Context, w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Add("Connection", "close")
 
 	csvRecords, err := convertDataToCSVRecord(data)
@@ -100,17 +101,17 @@ func WriteCSVResponse(w http.ResponseWriter, status int, data interface{}) {
 
 // WriteCSV is a helper function to write arrays of data in CSV
 // format to a response body. Use this to write the data with a
-func WriteCSV(w http.ResponseWriter, data interface{}) {
+func WriteCSV(ctx context.Context, w http.ResponseWriter, data interface{}) {
 	// 200
-	WriteCSVResponse(w, http.StatusOK, data)
+	WriteCSVResponse(ctx, w, http.StatusOK, data)
 }
 
-func WriteCSVError(w http.ResponseWriter, data interface{}) {
+func WriteCSVError(ctx context.Context, w http.ResponseWriter, data interface{}) {
 	// 400
-	WriteCSVResponse(w, http.StatusBadRequest, data)
+	WriteCSVResponse(ctx, w, http.StatusBadRequest, data)
 }
 
-func WriteCSVInternalError(w http.ResponseWriter, data interface{}) {
+func WriteCSVInternalError(ctx context.Context, w http.ResponseWriter, data interface{}) {
 	// 500
-	WriteCSVResponse(w, http.StatusInternalServerError, data)
+	WriteCSVResponse(ctx, w, http.StatusInternalServerError, data)
 }

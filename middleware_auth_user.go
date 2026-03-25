@@ -189,7 +189,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 						usr, err = u.manager.GetUserByToken(ctx, token)
 						needsReauth := errors.Cause(err) == ErrNeedsReauthentication
 
-						logger.DebugWhen(err != nil && !needsReauth, message.WrapError(err, message.Fields{
+						logger.DebugWhen(ctx, err != nil && !needsReauth, message.WrapError(err, message.Fields{
 							"request": reqID,
 							"message": "problem getting user by token",
 						}))
@@ -197,7 +197,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 							usr, err = u.manager.GetOrCreateUser(r.Context(), usr)
 							// Get the user's full details from the DB or create them if they don't exists
 							if err != nil {
-								logger.Debug(message.WrapError(err, message.Fields{
+								logger.Debug(ctx, message.WrapError(err, message.Fields{
 									"message": "error looking up user",
 									"request": reqID,
 								}))
@@ -232,7 +232,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 
 		if len(authDataName) > 0 && len(authDataAPIKey) > 0 {
 			usr, err = u.manager.GetUserByID(r.Context(), authDataName)
-			logger.Debug(message.WrapError(err, message.Fields{
+			logger.Debug(ctx, message.WrapError(err, message.Fields{
 				"message":   "problem getting user by id",
 				"operation": "header check",
 				"name":      authDataName,
@@ -245,7 +245,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 					blockStaticKey = true
 				} else {
 					if usr.GetAPIKey() != authDataAPIKey {
-						WriteTextResponse(rw, http.StatusUnauthorized, "invalid API key")
+						WriteTextResponse(ctx, rw, http.StatusUnauthorized, "invalid API key")
 						return
 					}
 					r = setUserForRequest(r, usr)
@@ -257,7 +257,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 	if u.oidcVerifier != nil {
 		if jwt := r.Header.Get(u.conf.OIDC.HeaderName); len(jwt) > 0 {
 			usr, err := u.getUserForOIDCHeader(ctx, jwt)
-			logger.DebugWhen(err != nil, message.WrapError(err, message.Fields{
+			logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
 				"message": "getting user for OIDC header",
 				"request": reqID,
 			}))
@@ -268,7 +268,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 	}
 
 	if blockStaticKey && GetUser(r.Context()) == nil {
-		WriteTextResponse(rw, http.StatusUnauthorized, "static API keys are disabled for human users")
+		WriteTextResponse(ctx, rw, http.StatusUnauthorized, "static API keys are disabled for human users")
 		return
 	}
 

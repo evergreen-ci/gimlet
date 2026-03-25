@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"net/http/httputil"
 
 	"github.com/mongodb/grip"
@@ -12,9 +13,9 @@ import (
 // based on the options described in the ProxyOption structure.
 // In most cases you'll want to specify a route matching pattern
 // that captures all routes that begin with a specific prefix.
-func (r *APIRoute) Proxy(opts ProxyOptions) *APIRoute {
+func (r *APIRoute) Proxy(ctx context.Context, opts ProxyOptions) *APIRoute {
 	if err := opts.Validate(); err != nil {
-		grip.Alert(message.WrapError(err, message.Fields{
+		grip.Alert(ctx, message.WrapError(err, message.Fields{
 			"message":          "invalid proxy options",
 			"route":            r.route,
 			"version":          r.version,

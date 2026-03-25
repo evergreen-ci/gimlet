@@ -2,6 +2,7 @@ package gimlet
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func writeResponse(of OutputFormat, w http.ResponseWriter, code int, data interface{}) {
+func writeResponse(ctx context.Context, of OutputFormat, w http.ResponseWriter, code int, data interface{}) {
 	w.Header().Set("Content-Type", of.ContentType())
 
 	w.WriteHeader(code)
@@ -21,7 +22,7 @@ func writeResponse(of OutputFormat, w http.ResponseWriter, code int, data interf
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		grip.Warning(message.WrapError(err, message.Fields{
+		grip.Warning(ctx, message.WrapError(err, message.Fields{
 			"message":       "failed to write response",
 			"size":          size,
 			"output_format": of,

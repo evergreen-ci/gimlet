@@ -305,23 +305,23 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		nonce, err := util.RandomString()
 		if err != nil {
 			err = errors.Wrap(err, "generating nonce for Okta request")
-			grip.Critical(message.WrapError(err, message.Fields{
+			grip.Critical(r.Context(), message.WrapError(err, message.Fields{
 				"reason":  "nonce could not be generated",
 				"context": "Okta",
 				"request": gimlet.GetRequestID(r.Context()),
 			}))
-			writeError(w, err)
+			writeError(r.Context(), w, err)
 			return
 		}
 		state, err := util.RandomString()
 		if err != nil {
 			err = errors.Wrap(err, "generating state for Okta request")
-			grip.Critical(message.WrapError(err, message.Fields{
+			grip.Critical(r.Context(), message.WrapError(err, message.Fields{
 				"reason":  "state could not be generated",
 				"context": "Okta",
 				"request": gimlet.GetRequestID(r.Context()),
 			}))
-			writeError(w, err)
+			writeError(r.Context(), w, err)
 			return
 		}
 
@@ -339,7 +339,7 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		for _, cookie := range r.Cookies() {
 			if cookie.Name == m.loginCookieName {
 				loginToken, err := url.QueryUnescape(cookie.Value)
-				grip.Warning(message.WrapError(err, message.Fields{
+				grip.Warning(r.Context(), message.WrapError(err, message.Fields{
 					"message": "could not decode login cookie",
 					"cookie":  cookie.Value,
 					"request": gimlet.GetRequestID(r.Context()),
@@ -360,7 +360,7 @@ func (m *userManager) GetLoginHandler(_ string) http.HandlerFunc {
 		m.setTemporaryCookie(w, nonceCookieName, nonce)
 		m.setTemporaryCookie(w, stateCookieName, state)
 		m.setTemporaryCookie(w, requestURICookieName, redirectURI)
-		grip.Debug(message.Fields{
+		grip.Debug(r.Context(), message.Fields{
 			"message": "storing nonce and state cookies",
 			"nonce":   nonce,
 			"state":   state,
@@ -420,8 +420,8 @@ func (m *userManager) unsetTemporaryCookie(w http.ResponseWriter, name string) {
 	})
 }
 
-func writeError(w http.ResponseWriter, err error) {
-	gimlet.WriteResponse(w, gimlet.MakeTextErrorResponder(gimlet.ErrorResponse{
+func writeError(ctx context.Context, w http.ResponseWriter, err error) {
+	gimlet.WriteResponse(ctx, w, gimlet.MakeTextErrorResponder(gimlet.ErrorResponse{
 		StatusCode: http.StatusInternalServerError,
 		Message:    err.Error(),
 	}))
@@ -433,32 +433,32 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 			desc := r.URL.Query().Get("error_description")
 			err := fmt.Errorf("%s: %s", errCode, desc)
 			err = errors.Wrap(err, "callback handler received error from Okta")
-			grip.Error(err)
-			writeError(w, err)
+			grip.Error(r.Context(), err)
+			writeError(r.Context(), w, err)
 			return
 		}
 
 		nonce, state, requestURI, err := getCookies(r)
 		if err != nil {
 			err = errors.Wrap(err, "getting Okta nonce and state from user")
-			grip.Error(err)
-			writeError(w, err)
+			grip.Error(r.Context(), err)
+			writeError(r.Context(), w, err)
 			return
 		}
 		checkState := r.URL.Query().Get("state")
 		if state != checkState {
 			err = errors.New("state value received from Okta did not match expected state")
-			grip.Error(message.WrapError(err, message.Fields{
+			grip.Error(r.Context(), message.WrapError(err, message.Fields{
 				"expected_state": state,
 				"actual_state":   checkState,
 			}))
-			writeError(w, err)
+			writeError(r.Context(), w, err)
 			return
 		}
 
 		tokens, idToken, err := m.getUserTokens(r.Context(), r.URL.Query().Get("code"), nonce)
 		if err != nil {
-			writeError(w, err)
+			writeError(r.Context(), w, err)
 			return
 		}
 
@@ -466,15 +466,15 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		if m.validateGroups {
 			user, err = m.generateUserFromInfo(r.Context(), tokens.AccessToken, tokens.RefreshToken)
 			if err != nil {
-				grip.Error(err)
-				writeError(w, err)
+				grip.Error(r.Context(), err)
+				writeError(r.Context(), w, err)
 				return
 			}
 		} else {
 			user, err = makeUserFromIDToken(idToken, tokens.AccessToken, tokens.RefreshToken, m.reconciliateID)
 			if err != nil {
-				grip.Error(err)
-				writeError(w, err)
+				grip.Error(r.Context(), err)
+				writeError(r.Context(), w, err)
 				return
 			}
 		}
@@ -482,16 +482,16 @@ func (m *userManager) GetLoginCallbackHandler() http.HandlerFunc {
 		user, err = m.GetOrCreateUser(r.Context(), user)
 		if err != nil {
 			err = errors.Wrap(err, "getting existing user or creating new user")
-			grip.Error(err)
-			gimlet.MakeTextErrorResponder(err)
+			grip.Error(r.Context(), err)
+			writeError(r.Context(), w, err)
 			return
 		}
 
 		loginToken, err := m.cache.Put(r.Context(), user)
 		if err != nil {
 			err = errors.Wrapf(err, "caching user '%s'", user.Username())
-			grip.Error(err)
-			writeError(w, err)
+			grip.Error(r.Context(), err)
+			writeError(r.Context(), w, err)
 			return
 		}
 
@@ -534,7 +534,7 @@ func (m *userManager) generateUserFromInfo(ctx context.Context, accessToken, ref
 	if m.validateGroups {
 		if err := m.validateGroup(userInfo.Groups); err != nil {
 			err = errors.Wrap(err, "authorizing user")
-			grip.Error(message.WrapError(err, message.Fields{
+			grip.Error(ctx, message.WrapError(err, message.Fields{
 				"expected_group": m.userGroup,
 				"actual_groups":  userInfo.Groups,
 			}))
@@ -564,7 +564,7 @@ func getCookies(r *http.Request) (nonce, state, requestURI string, err error) {
 	}
 	catcher.NewWhen(nonce == "", "nonce could not be retrieved from cookies")
 	catcher.NewWhen(state == "", "state could not be retrieved from cookies")
-	grip.NoticeWhen(requestURI == "", message.Fields{
+	grip.NoticeWhen(r.Context(), requestURI == "", message.Fields{
 		"message": "request URI could not be retrieved from cookies",
 		"request": gimlet.GetRequestID(r.Context()),
 	})
@@ -717,7 +717,7 @@ func (m *userManager) redeemTokens(ctx context.Context, query string) (*tokenRes
 	}
 	start := time.Now()
 	resp, err := client.Do(req)
-	grip.Info(message.Fields{
+	grip.Info(ctx, message.Fields{
 		"endpoint":    "token",
 		"duration_ms": int64(time.Since(start) / time.Millisecond),
 		"context":     "Okta user manager",
@@ -753,7 +753,7 @@ func (m *userManager) getUserInfo(ctx context.Context, accessToken string) (*use
 	defer m.putHTTPClient(client)
 	start := time.Now()
 	resp, err := client.Do(req)
-	grip.Info(message.Fields{
+	grip.Info(ctx, message.Fields{
 		"endpoint":    "userinfo",
 		"duration_ms": int64(time.Since(start) / time.Millisecond),
 		"context":     "Okta user manager",
@@ -807,7 +807,7 @@ func (m *userManager) getTokenInfo(ctx context.Context, token, tokenType string)
 	}
 	start := time.Now()
 	resp, err := client.Do(req)
-	grip.Info(message.Fields{
+	grip.Info(ctx, message.Fields{
 		"endpoint":    "introspect",
 		"duration_ms": int64(time.Since(start) / time.Millisecond),
 		"context":     "Okta user manager",

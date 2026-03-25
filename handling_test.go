@@ -2,6 +2,7 @@ package gimlet
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type writeResponseBaseFunc func(http.ResponseWriter, int, interface{})
-type writeResponseFunc func(http.ResponseWriter, interface{})
+type writeResponseBaseFunc func(context.Context, http.ResponseWriter, int, interface{})
+type writeResponseFunc func(context.Context, http.ResponseWriter, interface{})
 
 func TestResponseWritingFunctions(t *testing.T) {
 	assert := assert.New(t)
@@ -30,7 +31,7 @@ func TestResponseWritingFunctions(t *testing.T) {
 	for of, wf := range baseCases {
 		for _, code := range []int{200, 400, 500} {
 			r := httptest.NewRecorder()
-			wf(r, code, "")
+			wf(t.Context(), r, code, "")
 			assert.Equal(code, r.Code)
 
 			header := r.Header()
@@ -57,10 +58,10 @@ func TestSerializationErrors(t *testing.T) {
 	for _, wf := range baseCases {
 		r := httptest.NewRecorder()
 
-		wf(r, http.StatusOK, struct{ Foo chan struct{} }{Foo: make(chan struct{})})
+		wf(t.Context(), r, http.StatusOK, struct{ Foo chan struct{} }{Foo: make(chan struct{})})
 		assert.Equal(r.Code, http.StatusInternalServerError)
 
-		wf(r, http.StatusOK, errors.New("foo"))
+		wf(t.Context(), r, http.StatusOK, errors.New("foo"))
 		assert.Equal(r.Code, http.StatusInternalServerError)
 	}
 }
@@ -94,7 +95,7 @@ func TestResponsesWritingHelpers(t *testing.T) {
 	for status, cases := range testTable {
 		for of, wf := range cases {
 			r := httptest.NewRecorder()
-			wf(r, []struct{}{})
+			wf(t.Context(), r, []struct{}{})
 			assert.Equal(status, r.Code)
 			ct, ok := r.Header()["Content-Type"]
 			assert.True(ok)
@@ -162,6 +163,6 @@ func TestWriteResponseErrorLogs(t *testing.T) {
 	assert.NoError(grip.SetSender(sender))
 
 	assert.False(sender.HasMessage())
-	writeResponse(JSON, rw, 200, []byte("foo"))
+	writeResponse(t.Context(), JSON, rw, 200, []byte("foo"))
 	assert.True(sender.HasMessage())
 }
