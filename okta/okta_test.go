@@ -150,7 +150,7 @@ func (s *mockAuthorizationServer) app(port int) (*gimlet.APIApp, error) {
 	if err := app.SetHost("localhost"); err != nil {
 		return nil, errors.WithStack(err)
 	}
-	if err := app.SetPort(port); err != nil {
+	if err := app.SetPort(context.Background(), port); err != nil {
 		return nil, err
 	}
 
@@ -168,18 +168,18 @@ tryToMakeServer:
 	for {
 		select {
 		case <-ctx.Done():
-			grip.Warning("timed out starting mock server")
+			grip.Warning(ctx, "timed out starting mock server")
 			return -1, errors.WithStack(ctx.Err())
 		default:
 			port = testutil.GetPortNumber()
 			app, err := s.app(port)
 			if err != nil {
-				grip.Warning(err)
+				grip.Warning(ctx, err)
 				continue tryToMakeServer
 			}
 
 			go func() {
-				grip.Warning(app.Run(ctx))
+				grip.Warning(ctx, app.Run(ctx))
 			}()
 
 			timer := time.NewTimer(5 * time.Millisecond)
@@ -226,72 +226,72 @@ tryToMakeServer:
 }
 
 func (s *mockAuthorizationServer) root(rw http.ResponseWriter, r *http.Request) {
-	gimlet.WriteJSON(rw, struct{}{})
+	gimlet.WriteJSON(r.Context(), rw, struct{}{})
 }
 
 func (s *mockAuthorizationServer) authorize(rw http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		gimlet.WriteJSONError(rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
+		gimlet.WriteJSONError(r.Context(), rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
 		return
 	}
 	s.AuthorizeParameters, err = url.ParseQuery(string(body))
 	if err != nil {
-		gimlet.WriteJSONError(rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
+		gimlet.WriteJSONError(r.Context(), rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
 		return
 	}
 	s.AuthorizeHeaders = r.Header
 	if s.AuthorizeResponse == nil {
-		gimlet.WriteJSON(rw, struct{}{})
+		gimlet.WriteJSON(r.Context(), rw, struct{}{})
 	}
-	gimlet.WriteJSON(rw, s.AuthorizeResponse)
+	gimlet.WriteJSON(r.Context(), rw, s.AuthorizeResponse)
 }
 
 func (s *mockAuthorizationServer) token(rw http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		gimlet.WriteJSONError(rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
+		gimlet.WriteJSONError(r.Context(), rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
 		return
 	}
 	s.TokenParameters, err = url.ParseQuery(string(body))
 	if err != nil {
-		gimlet.WriteJSONError(rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
+		gimlet.WriteJSONError(r.Context(), rw, &tokenResponse{responseError: responseError{ErrorCode: "invalid_request"}})
 		return
 	}
 	s.TokenHeaders = r.Header
 	if s.TokenResponse == nil {
-		gimlet.WriteJSON(rw, struct{}{})
+		gimlet.WriteJSON(r.Context(), rw, struct{}{})
 		return
 	}
-	gimlet.WriteJSON(rw, s.TokenResponse)
+	gimlet.WriteJSON(r.Context(), rw, s.TokenResponse)
 }
 
 func (s *mockAuthorizationServer) userinfo(rw http.ResponseWriter, r *http.Request) {
 	s.UserInfoHeaders = r.Header
 	if s.UserInfoResponse == nil {
-		gimlet.WriteJSON(rw, struct{}{})
+		gimlet.WriteJSON(r.Context(), rw, struct{}{})
 		return
 	}
-	gimlet.WriteJSON(rw, s.UserInfoResponse)
+	gimlet.WriteJSON(r.Context(), rw, s.UserInfoResponse)
 }
 
 func (s *mockAuthorizationServer) introspect(rw http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		gimlet.WriteJSONError(rw, &introspectResponse{responseError: responseError{ErrorCode: "invalid_request"}})
+		gimlet.WriteJSONError(r.Context(), rw, &introspectResponse{responseError: responseError{ErrorCode: "invalid_request"}})
 		return
 	}
 	s.IntrospectParameters, err = url.ParseQuery(string(body))
 	if err != nil {
-		gimlet.WriteJSONError(rw, &introspectResponse{responseError: responseError{ErrorCode: "invalid_request"}})
+		gimlet.WriteJSONError(r.Context(), rw, &introspectResponse{responseError: responseError{ErrorCode: "invalid_request"}})
 		return
 	}
 	s.IntrospectHeaders = r.Header
 	if s.IntrospectResponse == nil {
-		gimlet.WriteJSON(rw, struct{}{})
+		gimlet.WriteJSON(r.Context(), rw, struct{}{})
 		return
 	}
-	gimlet.WriteJSON(rw, s.IntrospectResponse)
+	gimlet.WriteJSON(r.Context(), rw, s.IntrospectResponse)
 }
 
 func mapContains(t *testing.T, set, subset map[string][]string) {

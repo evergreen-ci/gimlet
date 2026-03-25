@@ -126,14 +126,15 @@ func (s server) GetServer() *http.Server { return s.Server }
 
 func (s server) Run(ctx context.Context) (WaitFunc, error) {
 	serviceWait := make(chan struct{})
+	bg := context.Background()
 	go func() {
 		defer recovery.LogStackTraceAndContinue("app service")
 		if s.Server.TLSConfig != nil {
 			err := s.ListenAndServeTLS("", "")
-			grip.ErrorWhen(err != http.ErrServerClosed, errors.Wrap(err, "starting TLS service"))
+			grip.ErrorWhen(bg, err != http.ErrServerClosed, errors.Wrap(err, "starting TLS service"))
 		} else {
 			err := s.ListenAndServe()
-			grip.ErrorWhen(err != http.ErrServerClosed, errors.Wrap(err, "starting service"))
+			grip.ErrorWhen(bg, err != http.ErrServerClosed, errors.Wrap(err, "starting service"))
 		}
 
 		close(serviceWait)
@@ -142,7 +143,7 @@ func (s server) Run(ctx context.Context) (WaitFunc, error) {
 	go func() {
 		defer recovery.LogStackTraceAndContinue("server shutdown")
 		<-ctx.Done()
-		grip.Debug(s.Shutdown(ctx))
+		grip.Debug(ctx, s.Shutdown(ctx))
 	}()
 
 	wait := func(wctx context.Context) {

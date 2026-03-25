@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"io"
 	"net/http"
 )
@@ -10,8 +11,8 @@ import (
 type Renderer interface {
 	GetTemplate(...string) (RenderTemplate, error)
 	Render(io.Writer, interface{}, string, ...string) error
-	Stream(http.ResponseWriter, int, interface{}, string, ...string)
-	WriteResponse(http.ResponseWriter, int, interface{}, string, ...string)
+	Stream(context.Context, http.ResponseWriter, int, interface{}, string, ...string)
+	WriteResponse(context.Context, http.ResponseWriter, int, interface{}, string, ...string)
 }
 
 // RenderTemplate describes the common interface used by Renderer

@@ -86,31 +86,31 @@ func TestCSV(t *testing.T) {
 	t.Run("ResponseWrappers", func(t *testing.T) {
 		t.Run("StatusOK", func(t *testing.T) {
 			rsp := httptest.NewRecorder()
-			WriteCSV(rsp, sampleGenerator())
+			WriteCSV(t.Context(), rsp, sampleGenerator())
 			assert.Equal(t, 200, rsp.Code)
 			assert.NotNil(t, rsp.Body)
 		})
 		t.Run("StatusBadRequest", func(t *testing.T) {
 			rsp := httptest.NewRecorder()
-			WriteCSVError(rsp, sampleGenerator())
+			WriteCSVError(t.Context(), rsp, sampleGenerator())
 			assert.Equal(t, 400, rsp.Code)
 			assert.NotNil(t, rsp.Body)
 		})
 		t.Run("InternalError", func(t *testing.T) {
 			rsp := httptest.NewRecorder()
-			WriteCSVInternalError(rsp, sampleGenerator())
+			WriteCSVInternalError(t.Context(), rsp, sampleGenerator())
 			assert.Equal(t, 500, rsp.Code)
 			assert.NotNil(t, rsp.Body)
 		})
 		t.Run("BadInputEmpty", func(t *testing.T) {
 			rsp := httptest.NewRecorder()
-			WriteCSV(rsp, []SampleStruct{})
+			WriteCSV(t.Context(), rsp, []SampleStruct{})
 			assert.Equal(t, 500, rsp.Code)
 			assert.NotNil(t, rsp.Body)
 		})
 		t.Run("BadInputNil", func(t *testing.T) {
 			rsp := httptest.NewRecorder()
-			WriteCSV(rsp, "hi")
+			WriteCSV(t.Context(), rsp, "hi")
 			assert.Equal(t, 500, rsp.Code)
 			assert.NotNil(t, rsp.Body)
 		})

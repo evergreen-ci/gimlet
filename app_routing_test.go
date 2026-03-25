@@ -134,8 +134,8 @@ func (s *RoutingSuite) TestHandlerMethod() {
 	r.Handler(nil)
 	s.Nil(r.handler)
 
-	hone := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { grip.Debug("dummy route") })
-	htwo := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { grip.Debug("dummy route two") })
+	hone := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { grip.Debug(r.Context(), "dummy route") })
+	htwo := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { grip.Debug(r.Context(), "dummy route two") })
 	s.NotEqual(fmt.Sprint(hone), fmt.Sprint(htwo))
 
 	r.Handler(hone)
@@ -154,7 +154,7 @@ func (s *RoutingSuite) TestHandlerType() {
 	r.Handler(nil)
 	s.Nil(r.handler)
 
-	hone := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { grip.Debug("dummy route") })
+	hone := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { grip.Debug(r.Context(), "dummy route") })
 	r.HandlerType(hone)
 	s.NotNil(r.handler)
 }
@@ -169,7 +169,7 @@ func (s *RoutingSuite) TestRouteValidation() {
 	r.methods = []httpMethod{get, del, post}
 	s.False(r.IsValid())
 
-	r.handler = func(_ http.ResponseWriter, _ *http.Request) { grip.Debug("dummy route") }
+	r.handler = func(_ http.ResponseWriter, r *http.Request) { grip.Debug(r.Context(), "dummy route") }
 	s.False(r.IsValid())
 
 	r.route = "/foo"

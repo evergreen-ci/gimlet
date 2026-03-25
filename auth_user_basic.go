@@ -125,7 +125,7 @@ func (u *BasicUser) HasPermission(ctx context.Context, opts PermissionOpts) bool
 	}
 	roles, err := u.roleManager.GetRoles(ctx, u.Roles())
 	if err != nil {
-		grip.Error(message.WrapError(err, message.Fields{
+		grip.Error(ctx, message.WrapError(err, message.Fields{
 			"message": "error getting roles",
 		}))
 		return false

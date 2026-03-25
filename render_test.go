@@ -96,7 +96,7 @@ func (s *RenderSuite) TestBadTemplates() {
 	s.Require().NoError(err)
 
 	htmlHandler := func(w http.ResponseWriter, r *http.Request) {
-		s.render.WriteResponse(w, http.StatusOK, s.testData, "badtemplate.html")
+		s.render.WriteResponse(r.Context(), w, http.StatusOK, s.testData, "badtemplate.html")
 	}
 
 	w := httptest.NewRecorder()
@@ -112,7 +112,7 @@ func (s *RenderSuite) TestWriteHTTP() {
 	/* Test a handler that writes a rendered HTML template */
 	w := httptest.NewRecorder()
 	htmlHandler := func(w http.ResponseWriter, r *http.Request) {
-		s.render.WriteResponse(w, http.StatusOK, s.testData, "base", "test1.html", "test2.html")
+		s.render.WriteResponse(r.Context(), w, http.StatusOK, s.testData, "base", "test1.html", "test2.html")
 	}
 	htmlHandler(w, req)
 
@@ -120,20 +120,20 @@ func (s *RenderSuite) TestWriteHTTP() {
 	s.Equal(http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
-	s.render.Stream(w, http.StatusOK, s.testData, "base", "test1.html", "test2.html")
+	s.render.Stream(s.T().Context(), w, http.StatusOK, s.testData, "base", "test1.html", "test2.html")
 	s.Equal(http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
-	s.render.Stream(w, http.StatusOK, s.testData, "base", "test1.html", "test2.html")
+	s.render.Stream(s.T().Context(), w, http.StatusOK, s.testData, "base", "test1.html", "test2.html")
 	s.Equal(http.StatusOK, w.Code)
 }
 
 func (s *RenderSuite) TestRenderingErrorToResponse() {
 	w := httptest.NewRecorder()
-	s.render.Stream(w, http.StatusOK, s.testData, "base2", "test1.html", "test2.html2")
+	s.render.Stream(s.T().Context(), w, http.StatusOK, s.testData, "base2", "test1.html", "test2.html2")
 	s.Equal(http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
-	s.render.Stream(w, http.StatusOK, s.testData, "base2", "test1.html", "test2.html2")
+	s.render.Stream(s.T().Context(), w, http.StatusOK, s.testData, "base2", "test1.html", "test2.html2")
 	s.Equal(http.StatusOK, w.Code)
 }

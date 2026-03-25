@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -49,21 +50,21 @@ type Responder interface {
 	SetPages(*ResponsePages) error
 }
 
-func WriteResponse(rw http.ResponseWriter, resp Responder) {
+func WriteResponse(ctx context.Context, rw http.ResponseWriter, resp Responder) {
 	// Write the response, based on the format specified.
 	switch resp.Format() {
 	case JSON:
-		WriteJSONResponse(rw, resp.Status(), resp.Data())
+		WriteJSONResponse(ctx, rw, resp.Status(), resp.Data())
 	case TEXT:
-		WriteTextResponse(rw, resp.Status(), resp.Data())
+		WriteTextResponse(ctx, rw, resp.Status(), resp.Data())
 	case HTML:
-		WriteHTMLResponse(rw, resp.Status(), resp.Data())
+		WriteHTMLResponse(ctx, rw, resp.Status(), resp.Data())
 	case YAML:
-		WriteYAMLResponse(rw, resp.Status(), resp.Data())
+		WriteYAMLResponse(ctx, rw, resp.Status(), resp.Data())
 	case BINARY:
-		WriteBinaryResponse(rw, resp.Status(), resp.Data())
+		WriteBinaryResponse(ctx, rw, resp.Status(), resp.Data())
 	case CSV:
-		WriteCSVResponse(rw, resp.Status(), resp.Data())
+		WriteCSVResponse(ctx, rw, resp.Status(), resp.Data())
 	}
 }
 

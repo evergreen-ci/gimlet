@@ -2,6 +2,7 @@ package gimlet
 
 import (
 	"bytes"
+	"context"
 	"html/template"
 	"io"
 	"net/http"
@@ -78,11 +79,11 @@ func (r *htmlRenderer) Render(out io.Writer, data interface{}, entryPoint string
 	return t.ExecuteTemplate(out, entryPoint, data)
 }
 
-func (r *htmlRenderer) WriteResponse(w http.ResponseWriter, status int, data interface{}, entryPoint string, files ...string) {
+func (r *htmlRenderer) WriteResponse(ctx context.Context, w http.ResponseWriter, status int, data interface{}, entryPoint string, files ...string) {
 	out := &bytes.Buffer{}
 	err := r.Render(out, data, entryPoint, files...)
 	if err != nil {
-		WriteTextInternalError(w, err)
+		WriteTextInternalError(ctx, w, err)
 		return
 	}
 
@@ -91,10 +92,10 @@ func (r *htmlRenderer) WriteResponse(w http.ResponseWriter, status int, data int
 	_, _ = w.Write(out.Bytes())
 }
 
-func (r *htmlRenderer) Stream(w http.ResponseWriter, status int, data interface{}, entryPoint string, files ...string) {
+func (r *htmlRenderer) Stream(ctx context.Context, w http.ResponseWriter, status int, data interface{}, entryPoint string, files ...string) {
 	w.Header().Set("Content-Type", "text/html; charset="+r.opts.Encoding)
 	w.WriteHeader(status)
-	grip.Error(message.WrapError(r.Render(w, data, entryPoint, files...), message.Fields{
+	grip.Error(ctx, message.WrapError(r.Render(w, data, entryPoint, files...), message.Fields{
 		"entry":     entryPoint,
 		"files":     files,
 		"operation": "stream rendering",

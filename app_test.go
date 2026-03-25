@@ -58,13 +58,13 @@ func (s *AppSuite) TestPortSetterDoesNotAllowImpermisableValues() {
 	s.Equal(s.app.port, 3000)
 
 	for _, port := range []int{0, -1, -2000, 99999, 65536, 1000, 100, 1023} {
-		err := s.app.SetPort(port)
+		err := s.app.SetPort(s.T().Context(), port)
 		s.Equal(s.app.port, 3000)
 		s.Error(err)
 	}
 
 	for _, port := range []int{1025, 65535, 50543, 8080, 8000} {
-		err := s.app.SetPort(port)
+		err := s.app.SetPort(s.T().Context(), port)
 		s.Equal(s.app.port, port)
 		s.NoError(err)
 	}
@@ -107,7 +107,7 @@ func (s *AppSuite) TestSetPortToExistingValueIsANoOp() {
 	port := s.app.port
 
 	s.Equal(port, s.app.port)
-	s.NoError(s.app.SetPort(port))
+	s.NoError(s.app.SetPort(s.T().Context(), port))
 	s.Equal(port, s.app.port)
 }
 
@@ -116,7 +116,7 @@ func (s *AppSuite) TestResolveValidRoute() {
 	route := &APIRoute{
 		version: 1,
 		methods: []httpMethod{get},
-		handler: func(_ http.ResponseWriter, _ *http.Request) { grip.Info("hello") },
+		handler: func(_ http.ResponseWriter, r *http.Request) { grip.Info(r.Context(), "hello") },
 		route:   "/foo",
 	}
 	s.True(route.IsValid())
@@ -134,7 +134,7 @@ func (s *AppSuite) TestResolveAppWithDefaultVersion() {
 	route := &APIRoute{
 		version: -1,
 		methods: []httpMethod{get},
-		handler: func(_ http.ResponseWriter, _ *http.Request) { grip.Info("hello") },
+		handler: func(_ http.ResponseWriter, r *http.Request) { grip.Info(r.Context(), "hello") },
 		route:   "/foo",
 	}
 	s.True(route.IsValid())
@@ -149,7 +149,7 @@ func (s *AppSuite) TestResolveAppWithInvaldVersion() {
 	route := &APIRoute{
 		version: -1,
 		methods: []httpMethod{get},
-		handler: func(_ http.ResponseWriter, _ *http.Request) { grip.Info("hello") },
+		handler: func(_ http.ResponseWriter, r *http.Request) { grip.Info(r.Context(), "hello") },
 		route:   "/foo",
 	}
 	s.True(route.IsValid())

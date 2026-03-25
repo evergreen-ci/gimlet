@@ -1,6 +1,7 @@
 package gimlet
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"testing"
@@ -25,6 +26,7 @@ func TestValidatePageInvalidUrls(t *testing.T) {
 
 func TestGetPageLink(t *testing.T) {
 	assert := assert.New(t)
+	ctx := context.Background()
 
 	url, err := url.Parse("http://example.net")
 	assert.NoError(err)
@@ -33,36 +35,37 @@ func TestGetPageLink(t *testing.T) {
 	}
 
 	p.BaseURL = "fdalkja-**(3e/)\n\n+%%%%%"
-	assert.Equal(p.GetLink("foo"), "<http://example.net?=>; rel=\"\"")
+	assert.Equal(p.GetLink(ctx, "foo"), "<http://example.net?=>; rel=\"\"")
 	p.BaseURL = ""
 
 	assert.Equal("", p.BaseURL)
-	assert.Equal(p.GetLink("foo"), "</foo?=>; rel=\"\"")
+	assert.Equal(p.GetLink(ctx, "foo"), "</foo?=>; rel=\"\"")
 
 	p.Limit = 400
 	p.LimitQueryParam = "bar"
 	p.KeyQueryParam = "baz"
 	p.Key = "cheep"
-	assert.Equal(p.GetLink("foo"), "</foo?bar=400&baz=cheep>; rel=\"\"")
+	assert.Equal(p.GetLink(ctx, "foo"), "</foo?bar=400&baz=cheep>; rel=\"\"")
 }
 
 func TestPaginationMetadataGetLinks(t *testing.T) {
 	assert := assert.New(t)
+	ctx := context.Background()
 
 	rp := &ResponsePages{}
 	assert.Nil(rp.Next)
 	assert.Nil(rp.Prev)
 
-	assert.Equal(rp.GetLinks("/foo"), "")
+	assert.Equal(rp.GetLinks(ctx, "/foo"), "")
 
 	rp.Next = &Page{
 		url: &url.URL{},
 	}
-	assert.Len(strings.Split(rp.GetLinks("/bar"), ","), 1)
+	assert.Len(strings.Split(rp.GetLinks(ctx, "/bar"), ","), 1)
 
 	rp.Prev = &Page{
 		url: &url.URL{},
 	}
-	assert.Len(strings.Split(rp.GetLinks("/baz"), ","), 2)
+	assert.Len(strings.Split(rp.GetLinks(ctx, "/baz"), ","), 2)
 
 }

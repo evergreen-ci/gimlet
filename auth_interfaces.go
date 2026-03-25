@@ -140,7 +140,7 @@ type RoleManager interface {
 func HasPermission(ctx context.Context, rm RoleManager, opts PermissionOpts, roles []Role) bool {
 	roles, err := rm.FilterForResource(ctx, roles, opts.Resource, opts.ResourceType)
 	if err != nil {
-		grip.Error(message.WrapError(err, message.Fields{
+		grip.Error(ctx, message.WrapError(err, message.Fields{
 			"message":       "error filtering for resource",
 			"resource":      opts.Resource,
 			"resource_type": opts.ResourceType,
