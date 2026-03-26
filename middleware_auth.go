@@ -133,6 +133,20 @@ func (rg *requiredGroup) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 	next(rw, r)
 }
 
+// isUserAuthenticated returns true if the request context has a valid,
+// authenticated user.
+func isUserAuthenticated(ctx context.Context) bool {
+	authenticator := GetAuthenticator(ctx)
+	if authenticator == nil {
+		return false
+	}
+	user := GetUser(ctx)
+	if user == nil {
+		return false
+	}
+	return authenticator.CheckAuthenticated(user)
+}
+
 // NewRequireAuthHandler provides middlesware that requires that users be
 // authenticated generally to access the resource, but does no
 // validation of their access.
@@ -141,26 +155,32 @@ func NewRequireAuthHandler() Middleware { return &requireAuthHandler{} }
 type requireAuthHandler struct{}
 
 func (*requireAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	ctx := r.Context()
-
-	authenticator := GetAuthenticator(ctx)
-	if authenticator == nil {
+	if !isUserAuthenticated(r.Context()) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-
-	user := GetUser(ctx)
-	if user == nil {
-		rw.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if !authenticator.CheckAuthenticated(user) {
-		rw.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
 	next(rw, r)
+}
+
+// NewRequireUserOrMiddlewareAuthHandler provides middleware that allows access
+// if the request is authenticated as a user or passes the provided fallback
+// middleware. User authentication is checked first; if it succeeds, the
+// request proceeds immediately. Otherwise the fallback middleware is invoked
+// and is responsible for writing its own error responses.
+func NewRequireUserOrMiddlewareAuthHandler(fallback Middleware) Middleware {
+	return &requireUserOrMiddlewareAuthHandler{fallback: fallback}
+}
+
+type requireUserOrMiddlewareAuthHandler struct {
+	fallback Middleware
+}
+
+func (h *requireUserOrMiddlewareAuthHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	if isUserAuthenticated(r.Context()) {
+		next(rw, r)
+		return
+	}
+	h.fallback.ServeHTTP(rw, r, next)
 }
 
 // NewRestrictAccessToUsers allows you to define a list of users that
