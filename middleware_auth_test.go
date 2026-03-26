@@ -504,3 +504,118 @@ func TestRestrictedAccessMiddleware(t *testing.T) {
 	assert.Equal(1, counter)
 
 }
+
+// mockFallbackAuth is a Middleware that either calls next (succeeds) or writes
+// a 401 (fails), controlled by the succeed field.
+type mockFallbackAuth struct {
+	succeed bool
+}
+
+func (m *mockFallbackAuth) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	if m.succeed {
+		next(rw, r)
+		return
+	}
+	rw.WriteHeader(http.StatusUnauthorized)
+}
+
+func TestRequireUserOrMiddlewareAuthHandler(t *testing.T) {
+	assert := assert.New(t)
+
+	counter := 0
+	next := func(rw http.ResponseWriter, r *http.Request) {
+		counter++
+		rw.WriteHeader(http.StatusOK)
+	}
+
+	authenticator := &MockAuthenticator{
+		UserToken:               "test",
+		CheckAuthenticatedState: map[string]bool{},
+	}
+	user := &MockUser{ID: "test-user"}
+
+	t.Run("Constructor", func(t *testing.T) {
+		fallback := &mockFallbackAuth{succeed: true}
+		h, ok := NewRequireUserOrMiddlewareAuthHandler(fallback).(*requireUserOrMiddlewareAuthHandler)
+		assert.True(ok)
+		assert.Equal(fallback, h.fallback)
+	})
+
+	t.Run("AuthenticatedUserSkipsFallback", func(t *testing.T) {
+		counter = 0
+		fallback := &mockFallbackAuth{succeed: false} // would fail if reached
+		h := NewRequireUserOrMiddlewareAuthHandler(fallback)
+
+		authenticator.CheckAuthenticatedState[user.Username()] = true
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		ctx := req.Context()
+		ctx = setAuthenticator(ctx, authenticator)
+		req = req.WithContext(ctx)
+		req = setUserForRequest(req, user)
+		rw := httptest.NewRecorder()
+
+		h.ServeHTTP(rw, req, next)
+		assert.Equal(http.StatusOK, rw.Code)
+		assert.Equal(1, counter)
+	})
+
+	t.Run("NoUserFallsBackToFallback", func(t *testing.T) {
+		counter = 0
+		fallback := &mockFallbackAuth{succeed: true}
+		h := NewRequireUserOrMiddlewareAuthHandler(fallback)
+
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		rw := httptest.NewRecorder()
+
+		h.ServeHTTP(rw, req, next)
+		assert.Equal(http.StatusOK, rw.Code)
+		assert.Equal(1, counter)
+	})
+
+	t.Run("NoAuthenticatorFallsBackToFallback", func(t *testing.T) {
+		counter = 0
+		fallback := &mockFallbackAuth{succeed: true}
+		h := NewRequireUserOrMiddlewareAuthHandler(fallback)
+
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		req = setUserForRequest(req, user) // user present but no authenticator
+		rw := httptest.NewRecorder()
+
+		h.ServeHTTP(rw, req, next)
+		assert.Equal(http.StatusOK, rw.Code)
+		assert.Equal(1, counter)
+	})
+
+	t.Run("UnauthenticatedUserFallsBackToFallback", func(t *testing.T) {
+		counter = 0
+		fallback := &mockFallbackAuth{succeed: true}
+		h := NewRequireUserOrMiddlewareAuthHandler(fallback)
+
+		unauthenticatedUser := &MockUser{ID: "unauth-user"}
+		// do not register in CheckAuthenticatedState, so CheckAuthenticated returns false
+
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		ctx := req.Context()
+		ctx = setAuthenticator(ctx, authenticator)
+		req = req.WithContext(ctx)
+		req = setUserForRequest(req, unauthenticatedUser)
+		rw := httptest.NewRecorder()
+
+		h.ServeHTTP(rw, req, next)
+		assert.Equal(http.StatusOK, rw.Code)
+		assert.Equal(1, counter)
+	})
+
+	t.Run("BothAuthsFail", func(t *testing.T) {
+		counter = 0
+		fallback := &mockFallbackAuth{succeed: false}
+		h := NewRequireUserOrMiddlewareAuthHandler(fallback)
+
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		rw := httptest.NewRecorder()
+
+		h.ServeHTTP(rw, req, next)
+		assert.Equal(http.StatusUnauthorized, rw.Code)
+		assert.Equal(0, counter)
+	})
+}
