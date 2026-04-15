@@ -166,23 +166,21 @@ type userMiddleware struct {
 // to the request.
 func UserMiddleware(ctx context.Context, um UserManager, conf UserMiddlewareConfiguration) Middleware {
 	middleware := &userMiddleware{
-		conf:    conf,
-		manager: um,
+		conf:                  conf,
+		manager:               um,
+		oidcKeyToVerifierPair: make(map[string]*oidcVerifierPair),
 	}
 
 	for _, cfg := range conf.OIDCConfigs {
 		if cfg == nil {
 			continue
 		}
-		if middleware.oidcKeyToVerifierPair == nil {
-			middleware.oidcKeyToVerifierPair = make(map[string]*oidcVerifierPair)
-		}
-		key := oidcKey(cfg.HeaderName, cfg.Issuer)
 		verifier := oidc.NewVerifier(
 			cfg.Issuer,
 			oidc.NewRemoteKeySet(ctx, cfg.KeysetURL),
 			&oidc.Config{SkipClientIDCheck: true},
 		)
+		key := oidcKey(cfg.HeaderName, cfg.Issuer)
 		middleware.oidcKeyToVerifierPair[key] = &oidcVerifierPair{
 			config:   cfg,
 			verifier: verifier,
