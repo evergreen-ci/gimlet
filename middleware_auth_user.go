@@ -346,7 +346,6 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, p
 	}
 
 	displayName := token.Subject
-	// TODO: implement this
 	if pair.config.DisplayNameFromID != nil {
 		displayName = pair.config.DisplayNameFromID(token.Subject)
 	}
