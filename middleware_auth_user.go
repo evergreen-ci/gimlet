@@ -9,10 +9,15 @@ import (
 
 	"github.com/coreos/go-oidc"
 	"github.com/evergreen-ci/utility"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/mongodb/grip"
 	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
+)
+
+const (
+	oidcKeyDelimiter = "\x00"
 )
 
 // UserMiddlewareConfiguration is an keyed-arguments struct used to
@@ -22,7 +27,7 @@ type UserMiddlewareConfiguration struct {
 	SkipHeaderCheck bool
 	HeaderUserName  string
 	HeaderKeyName   string
-	OIDC            *OIDCConfig
+	OIDCConfigs     []*OIDCConfig
 	CookieName      string
 	CookiePath      string
 	CookieTTL       time.Duration
@@ -80,7 +85,9 @@ func (umc *UserMiddlewareConfiguration) Validate() error {
 		catcher.NewWhen(umc.HeaderKeyName == "", "must specify a header key name when header auth is enabled")
 	}
 
-	catcher.AddWhen(umc.OIDC != nil, umc.OIDC.validate())
+	for _, c := range umc.OIDCConfigs {
+		catcher.AddWhen(c != nil, c.validate())
+	}
 
 	return catcher.Resolve()
 }
@@ -142,10 +149,16 @@ func GetUser(ctx context.Context) User {
 	return usr
 }
 
+type oidcVerifierPair struct {
+	config   *OIDCConfig
+	verifier *oidc.IDTokenVerifier
+}
+
 type userMiddleware struct {
-	conf         UserMiddlewareConfiguration
-	manager      UserManager
-	oidcVerifier *oidc.IDTokenVerifier
+	conf    UserMiddlewareConfiguration
+	manager UserManager
+	// oidcKeyToVerifierPair maps a key (header name + issuer) to a verifier pair.
+	oidcKeyToVerifierPair map[string]*oidcVerifierPair
 }
 
 // UserMiddleware produces a middleware that parses requests and uses
@@ -157,12 +170,23 @@ func UserMiddleware(ctx context.Context, um UserManager, conf UserMiddlewareConf
 		manager: um,
 	}
 
-	if conf.OIDC != nil {
-		middleware.oidcVerifier = oidc.NewVerifier(
-			conf.OIDC.Issuer,
-			oidc.NewRemoteKeySet(ctx, conf.OIDC.KeysetURL),
+	for _, cfg := range conf.OIDCConfigs {
+		if cfg == nil {
+			continue
+		}
+		if middleware.oidcKeyToVerifierPair == nil {
+			middleware.oidcKeyToVerifierPair = make(map[string]*oidcVerifierPair)
+		}
+		key := oidcKey(cfg.HeaderName, cfg.Issuer)
+		verifier := oidc.NewVerifier(
+			cfg.Issuer,
+			oidc.NewRemoteKeySet(ctx, cfg.KeysetURL),
 			&oidc.Config{SkipClientIDCheck: true},
 		)
+		middleware.oidcKeyToVerifierPair[key] = &oidcVerifierPair{
+			config:   cfg,
+			verifier: verifier,
+		}
 	}
 
 	return middleware
@@ -254,16 +278,24 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 	}
 
-	if u.oidcVerifier != nil {
-		if jwt := r.Header.Get(u.conf.OIDC.HeaderName); len(jwt) > 0 {
-			usr, err := u.getUserForOIDCHeader(ctx, jwt)
-			logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
-				"message": "getting user for OIDC header",
-				"request": reqID,
-			}))
-			if err == nil && usr != nil {
-				r = setUserForRequest(r, usr)
-			}
+	for key, pair := range u.oidcKeyToVerifierPair {
+		header, issuer := splitOidcKey(key)
+		jwt := r.Header.Get(header)
+		if len(jwt) == 0 {
+			continue
+		}
+		receivedIssuer, err := parseUnverifiedIssuer(jwt)
+		if err != nil || receivedIssuer == "" || issuer != receivedIssuer {
+			continue
+		}
+		usr, err := u.getUserForOIDCHeader(ctx, jwt, pair)
+		logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
+			"message": "getting user for OIDC header",
+			"request": reqID,
+		}))
+		if err == nil && usr != nil {
+			r = setUserForRequest(r, usr)
+			break
 		}
 	}
 
@@ -278,8 +310,25 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 const unauthorizedSpifeServiceUser = "istio-ingressgateway-public-service-account"
 const spiffeRoute = "spiffe://cluster.local/ns/routing"
 
-func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string) (User, error) {
-	token, err := u.oidcVerifier.Verify(ctx, header)
+func parseUnverifiedIssuer(raw string) (string, error) {
+	raw = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "Bearer "))
+	if raw == "" {
+		return "", errors.New("empty JWT")
+	}
+	token, _, err := jwt.NewParser().ParseUnverified(raw, jwt.MapClaims{})
+	if err != nil {
+		return "", err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", errors.New("invalid JWT claims")
+	}
+	iss, _ := claims["iss"].(string)
+	return iss, nil
+}
+
+func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, pair *oidcVerifierPair) (User, error) {
+	token, err := pair.verifier.Verify(ctx, jwt)
 	if err != nil {
 		return nil, errors.Wrap(err, "verifying jwt")
 	}
@@ -299,8 +348,9 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string
 	}
 
 	displayName := token.Subject
-	if u.conf.OIDC.DisplayNameFromID != nil {
-		displayName = u.conf.OIDC.DisplayNameFromID(token.Subject)
+	// TODO: implement this
+	if pair.config.DisplayNameFromID != nil {
+		displayName = pair.config.DisplayNameFromID(token.Subject)
 	}
 
 	usr, err := u.manager.GetOrCreateUser(ctx, NewBasicUser(BasicUserOptions{
@@ -313,4 +363,13 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, header string
 	}
 
 	return usr, nil
+}
+
+func oidcKey(headerName, issuer string) string {
+	return headerName + oidcKeyDelimiter + issuer
+}
+
+func splitOidcKey(key string) (string, string) {
+	parts := strings.SplitN(key, oidcKeyDelimiter, 2)
+	return parts[0], parts[1]
 }

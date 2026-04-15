@@ -2,13 +2,16 @@ package gimlet
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/coreos/go-oidc"
 	"github.com/evergreen-ci/negroni"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -277,9 +280,11 @@ func TestUserMiddleware(t *testing.T) {
 type mockKeyset struct {
 	validSignature bool
 	payload        string
+	verifyCalls    int
 }
 
 func (k *mockKeyset) VerifySignature(ctx context.Context, jwt string) (payload []byte, err error) {
+	k.verifyCalls++
 	if !k.validSignature {
 		return nil, errors.New("invalid signature")
 	}
@@ -287,59 +292,99 @@ func (k *mockKeyset) VerifySignature(ctx context.Context, jwt string) (payload [
 }
 
 func TestOIDCValidation(t *testing.T) {
+	headerName := "internal_header"
 	user := &MockUser{ID: "i-am-sam"}
 	um := &MockUserManager{Users: []*MockUser{user}}
-	headerName := "internal_header"
-	conf := UserMiddlewareConfiguration{
-		SkipHeaderCheck: true,
-		SkipCookie:      true,
-		OIDC: &OIDCConfig{
-			HeaderName: headerName,
-			Issuer:     "www.mongodb.com",
-		},
-	}
-
-	payload := `{"sub":"i-am-sam","iat":1727208337,"iss":"www.mongodb.com"}`
-	m := UserMiddleware(t.Context(), um, conf).(*userMiddleware)
-	m.oidcVerifier = oidc.NewVerifier(
-		conf.OIDC.Issuer,
-		&mockKeyset{validSignature: true, payload: payload},
-		&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
-	)
 
 	t.Run("ValidJWT", func(t *testing.T) {
+		conf := UserMiddlewareConfiguration{
+			SkipHeaderCheck: true,
+			SkipCookie:      true,
+			OIDCConfigs: []*OIDCConfig{
+				{HeaderName: headerName, Issuer: "www.mongodb.com", KeysetURL: "http://example.com"},
+			},
+		}
+		payload := `{"sub":"i-am-sam","iat":1727208337,"iss":"www.mongodb.com"}`
+		m := UserMiddleware(t.Context(), um, conf).(*userMiddleware)
+		m.oidcKeyToVerifierPair[oidcKey(headerName, conf.OIDCConfigs[0].Issuer)].verifier = oidc.NewVerifier(
+			conf.OIDCConfigs[0].Issuer,
+			&mockKeyset{validSignature: true, payload: payload},
+			&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
+		)
 		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
-		require.NotNil(t, req)
 		req.Header.Add(headerName, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJpLWFtLXNhbSIsImlhdCI6MTcyNzIwODMzNywiaXNzIjoid3d3Lm1vbmdvZGIuY29tIn0.RpKLMhvXe6IISKzmwLbVT6trddAy37_7A4Dmq_SSeh0")
 		rw := httptest.NewRecorder()
 		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-			rusr := GetUser(r.Context())
-			assert.Equal(t, user.Username(), rusr.Username())
+			assert.Equal(t, user.Username(), GetUser(r.Context()).Username())
 		})
 		assert.Equal(t, http.StatusOK, rw.Code)
 	})
 
-	t.Run("HeaderMissing", func(t *testing.T) {
+	t.Run("IssuerRouting", func(t *testing.T) {
+		multiConf := UserMiddlewareConfiguration{
+			SkipHeaderCheck: true,
+			SkipCookie:      true,
+			OIDCConfigs: []*OIDCConfig{
+				{HeaderName: headerName, Issuer: "issuer-a", KeysetURL: "http://example.com/a"},
+				{HeaderName: headerName, Issuer: "issuer-b", KeysetURL: "http://example.com/b"},
+			},
+		}
+		require.NoError(t, multiConf.Validate())
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": "i-am-sam",
+			"iat": float64(1727208337),
+			"iss": "issuer-b",
+		})
+		tokenString, err := token.SignedString([]byte("secret"))
+		require.NoError(t, err)
+		parts := strings.Split(tokenString, ".")
+		require.Len(t, parts, 3)
+		payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+		require.NoError(t, err)
+		payload := string(payloadBytes)
+		mMulti := UserMiddleware(t.Context(), um, multiConf).(*userMiddleware)
+		mMulti.oidcKeyToVerifierPair[oidcKey(headerName, "issuer-b")].verifier = oidc.NewVerifier(
+			"issuer-b",
+			&mockKeyset{validSignature: true, payload: payload},
+			&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
+		)
 		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
-		require.NotNil(t, req)
+		req.Header.Add(headerName, tokenString)
 		rw := httptest.NewRecorder()
-		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-			rusr := GetUser(r.Context())
-			assert.Nil(t, rusr)
+		mMulti.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, user.Username(), GetUser(r.Context()).Username())
 		})
 		assert.Equal(t, http.StatusOK, rw.Code)
-	})
 
-	t.Run("InvalidJWT", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
-		require.NotNil(t, req)
-		req.Header.Add(headerName, "not_a_valid_jwt")
-		rw := httptest.NewRecorder()
-		m.ServeHTTP(rw, req, func(rw http.ResponseWriter, r *http.Request) {
-			rusr := GetUser(r.Context())
-			assert.Nil(t, rusr)
+		singleConf := UserMiddlewareConfiguration{
+			SkipHeaderCheck: true,
+			SkipCookie:      true,
+			OIDCConfigs: []*OIDCConfig{
+				{HeaderName: headerName, Issuer: "www.mongodb.com", KeysetURL: "http://example.com"},
+			},
+		}
+		ks := &mockKeyset{validSignature: true, payload: `{"sub":"i-am-sam","iss":"www.mongodb.com"}`}
+		mSingle := UserMiddleware(t.Context(), um, singleConf).(*userMiddleware)
+		mSingle.oidcKeyToVerifierPair[oidcKey(headerName, singleConf.OIDCConfigs[0].Issuer)].verifier = oidc.NewVerifier(
+			singleConf.OIDCConfigs[0].Issuer,
+			ks,
+			&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
+		)
+		badToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": "i-am-sam",
+			"iat": float64(1727208337),
+			"iss": "unknown-issuer",
 		})
-		assert.Equal(t, http.StatusOK, rw.Code)
+		badTokenString, err := badToken.SignedString([]byte("secret"))
+		require.NoError(t, err)
+		req2 := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		req2.Header.Add(headerName, badTokenString)
+		rw2 := httptest.NewRecorder()
+		mSingle.ServeHTTP(rw2, req2, func(rw http.ResponseWriter, r *http.Request) {
+			assert.Nil(t, GetUser(r.Context()))
+		})
+		assert.Equal(t, http.StatusOK, rw2.Code)
+		assert.Zero(t, ks.verifyCalls)
 	})
 }
 
@@ -350,10 +395,8 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 		CookieName:     "c",
 		CookieTTL:      time.Hour,
 		CookiePath:     "/p",
-		OIDC: &OIDCConfig{
-			HeaderName: "internal_header",
-			KeysetURL:  "www.example.com",
-			Issuer:     "www.google.com",
+		OIDCConfigs: []*OIDCConfig{
+			{HeaderName: "internal_header", KeysetURL: "www.example.com", Issuer: "www.google.com"},
 		},
 	}
 	require.NoError(t, conf.Validate())
@@ -380,17 +423,6 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 		assert.Len(t, rw.Header(), 1)
 		conf.ClearCookie(rw)
 		assert.Len(t, rw.Header(), 1)
-	})
-
-	t.Run("NilOIDC", func(t *testing.T) {
-		conf := UserMiddlewareConfiguration{
-			HeaderUserName: "u",
-			HeaderKeyName:  "k",
-			CookieName:     "c",
-			CookieTTL:      time.Hour,
-			CookiePath:     "/p",
-		}
-		assert.NoError(t, conf.Validate())
 	})
 
 	t.Run("InvalidConfigurations", func(t *testing.T) {
@@ -436,21 +468,21 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 			{
 				name: "MissingOIDCHeaderName",
 				op: func(conf UserMiddlewareConfiguration) UserMiddlewareConfiguration {
-					conf.OIDC.HeaderName = ""
+					conf.OIDCConfigs[0].HeaderName = ""
 					return conf
 				},
 			},
 			{
 				name: "MissingOIDCKeysetURL",
 				op: func(conf UserMiddlewareConfiguration) UserMiddlewareConfiguration {
-					conf.OIDC.KeysetURL = ""
+					conf.OIDCConfigs[0].KeysetURL = ""
 					return conf
 				},
 			},
 			{
 				name: "MissingOIDCIssuer",
 				op: func(conf UserMiddlewareConfiguration) UserMiddlewareConfiguration {
-					conf.OIDC.Issuer = ""
+					conf.OIDCConfigs[0].Issuer = ""
 					return conf
 				},
 			},
@@ -462,10 +494,8 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 					CookieName:     "c",
 					CookieTTL:      time.Hour,
 					CookiePath:     "/p",
-					OIDC: &OIDCConfig{
-						HeaderName: "internal_header",
-						KeysetURL:  "www.example.com",
-						Issuer:     "www.google.com",
+					OIDCConfigs: []*OIDCConfig{
+						{HeaderName: "internal_header", KeysetURL: "www.example.com", Issuer: "www.google.com"},
 					},
 				}
 				require.NoError(t, conf.Validate())
