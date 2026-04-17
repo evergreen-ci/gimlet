@@ -346,14 +346,14 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, c
 	if strings.HasPrefix(token.Subject, spiffeRoute) {
 		if strings.HasSuffix(token.Subject, unauthorizedSpifeServiceUser) {
 			grip.Info(ctx, message.Fields{
-				"operation":   "oidc header check",
+				"operation":   "oidc header check 2",
 				"subject":     token.Subject,
 				"issuer":      config.Issuer,
 				"header_name": config.HeaderName,
 				"keyset_url":  config.KeysetURL,
 				"error":       err,
 			})
-			// return nil, nil
+			return nil, nil
 		}
 	}
 
