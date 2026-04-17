@@ -306,7 +306,7 @@ func TestOIDCValidation(t *testing.T) {
 		}
 		payload := `{"sub":"i-am-sam","iat":1727208337,"iss":"www.mongodb.com"}`
 		m := UserMiddleware(t.Context(), um, conf).(*userMiddleware)
-		m.oidcKeyToVerifierPair[oidcKey(headerName, conf.OIDCConfigs[0].Issuer)].verifier = oidc.NewVerifier(
+		conf.OIDCConfigs[0].verifier = oidc.NewVerifier(
 			conf.OIDCConfigs[0].Issuer,
 			&mockKeyset{validSignature: true, payload: payload},
 			&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
@@ -343,7 +343,7 @@ func TestOIDCValidation(t *testing.T) {
 		require.NoError(t, err)
 		payload := string(payloadBytes)
 		mMulti := UserMiddleware(t.Context(), um, multiConf).(*userMiddleware)
-		mMulti.oidcKeyToVerifierPair[oidcKey(headerName, "issuer-b")].verifier = oidc.NewVerifier(
+		multiConf.OIDCConfigs[1].verifier = oidc.NewVerifier(
 			"issuer-b",
 			&mockKeyset{validSignature: true, payload: payload},
 			&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
@@ -365,7 +365,7 @@ func TestOIDCValidation(t *testing.T) {
 		}
 		ks := &mockKeyset{validSignature: true, payload: `{"sub":"i-am-sam","iss":"www.mongodb.com"}`}
 		mSingle := UserMiddleware(t.Context(), um, singleConf).(*userMiddleware)
-		mSingle.oidcKeyToVerifierPair[oidcKey(headerName, singleConf.OIDCConfigs[0].Issuer)].verifier = oidc.NewVerifier(
+		singleConf.OIDCConfigs[0].verifier = oidc.NewVerifier(
 			singleConf.OIDCConfigs[0].Issuer,
 			ks,
 			&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
