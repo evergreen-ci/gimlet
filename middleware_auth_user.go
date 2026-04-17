@@ -270,7 +270,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			continue
 		}
 		receivedIssuer, err := parseUnverifiedIssuer(jwt)
-		logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
+		logger.Info(ctx, message.Fields{
 			"message":         "error parsing unverified issuer",
 			"operation":       "oidc header check",
 			"received_issuer": receivedIssuer,
@@ -278,20 +278,22 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			"header_name":     config.HeaderName,
 			"keyset_url":      config.KeysetURL,
 			"request":         reqID,
-		}))
+			"error":           err,
+		})
 		// Check the issuer first before verifying the JWT to avoid unnecessary verification.
 		if err != nil || receivedIssuer == "" || config.Issuer != receivedIssuer {
 			continue
 		}
 		usr, err := u.getUserForOIDCHeader(ctx, jwt, config)
-		logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
+		logger.Info(ctx, message.Fields{
 			"message":     "getting user for OIDC header",
 			"operation":   "oidc header check",
 			"issuer":      config.Issuer,
 			"header_name": config.HeaderName,
 			"keyset_url":  config.KeysetURL,
 			"request":     reqID,
-		}))
+			"error":       err,
+		})
 		if err == nil && usr != nil {
 			r = setUserForRequest(r, usr)
 			break
