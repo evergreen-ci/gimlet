@@ -293,6 +293,7 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			"keyset_url":  config.KeysetURL,
 			"request":     reqID,
 			"error":       err,
+			"user":        usr,
 		})
 		if err == nil && usr != nil {
 			r = setUserForRequest(r, usr)
@@ -344,6 +345,14 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, c
 	// ignore it if it's the unauthorized user.
 	if strings.HasPrefix(token.Subject, spiffeRoute) {
 		if strings.HasSuffix(token.Subject, unauthorizedSpifeServiceUser) {
+			grip.Info(ctx, message.Fields{
+				"operation":   "oidc header check",
+				"subject":     token.Subject,
+				"issuer":      config.Issuer,
+				"header_name": config.HeaderName,
+				"keyset_url":  config.KeysetURL,
+				"error":       err,
+			})
 			return nil, nil
 		}
 	}
