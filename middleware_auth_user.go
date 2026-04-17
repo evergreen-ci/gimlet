@@ -16,10 +16,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-const (
-	oidcKeyDelimiter = "\x00"
-)
-
 // UserMiddlewareConfiguration is an keyed-arguments struct used to
 // produce the user manager middleware.
 type UserMiddlewareConfiguration struct {
@@ -275,9 +271,13 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 		receivedIssuer, err := parseUnverifiedIssuer(jwt)
 		logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
-			"message":   "error parsing unverified issuer",
-			"operation": "oidc header check",
-			"request":   reqID,
+			"message":         "error parsing unverified issuer",
+			"operation":       "oidc header check",
+			"received_issuer": receivedIssuer,
+			"config_issuer":   config.Issuer,
+			"header_name":     config.HeaderName,
+			"keyset_url":      config.KeysetURL,
+			"request":         reqID,
 		}))
 		// Check the issuer first before verifying the JWT to avoid unnecessary verification.
 		if err != nil || receivedIssuer == "" || config.Issuer != receivedIssuer {
@@ -285,9 +285,12 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 		}
 		usr, err := u.getUserForOIDCHeader(ctx, jwt, config)
 		logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
-			"message":   "getting user for OIDC header",
-			"operation": "oidc header check",
-			"request":   reqID,
+			"message":     "getting user for OIDC header",
+			"operation":   "oidc header check",
+			"issuer":      config.Issuer,
+			"header_name": config.HeaderName,
+			"keyset_url":  config.KeysetURL,
+			"request":     reqID,
 		}))
 		if err == nil && usr != nil {
 			r = setUserForRequest(r, usr)
@@ -358,13 +361,4 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, c
 	}
 
 	return usr, nil
-}
-
-func oidcKey(headerName, issuer string) string {
-	return headerName + oidcKeyDelimiter + issuer
-}
-
-func splitOidcKey(key string) (string, string) {
-	parts := strings.SplitN(key, oidcKeyDelimiter, 2)
-	return parts[0], parts[1]
 }
