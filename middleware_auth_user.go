@@ -353,7 +353,7 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, c
 				"keyset_url":  config.KeysetURL,
 				"error":       err,
 			})
-			return nil, nil
+			// return nil, nil
 		}
 	}
 
