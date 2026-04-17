@@ -283,13 +283,19 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 			continue
 		}
 		receivedIssuer, err := parseUnverifiedIssuer(jwt)
+		logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
+			"message":   "error parsing unverified issuer",
+			"operation": "oidc header check",
+			"request":   reqID,
+		}))
 		if err != nil || receivedIssuer == "" || issuer != receivedIssuer {
 			continue
 		}
 		usr, err := u.getUserForOIDCHeader(ctx, jwt, pair)
 		logger.DebugWhen(ctx, err != nil, message.WrapError(err, message.Fields{
-			"message": "getting user for OIDC header",
-			"request": reqID,
+			"message":   "getting user for OIDC header",
+			"operation": "oidc header check",
+			"request":   reqID,
 		}))
 		if err == nil && usr != nil {
 			r = setUserForRequest(r, usr)
@@ -315,7 +321,7 @@ func parseUnverifiedIssuer(raw string) (string, error) {
 	}
 	token, _, err := jwt.NewParser().ParseUnverified(raw, jwt.MapClaims{})
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "parsing JWT")
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
