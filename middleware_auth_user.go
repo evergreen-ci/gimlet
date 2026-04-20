@@ -351,10 +351,21 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, c
 		displayName = config.DisplayNameFromID(token.Subject)
 	}
 
+	// Most tokens send the user's ID as the subject. Some tokens
+	// send their email as the subject, for those tokens, we send only
+	// the email to GetOrCreateUser.
+	email := claims.Email
+	id := token.Subject
+	if strings.Contains(token.Subject, "@") {
+		email = token.Subject
+		id = ""
+		displayName = ""
+	}
+
 	usr, err := u.manager.GetOrCreateUser(ctx, NewBasicUser(BasicUserOptions{
-		id:    token.Subject,
+		id:    id,
 		name:  displayName,
-		email: claims.Email,
+		email: email,
 	}))
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting or creating user '%s'", displayName)
