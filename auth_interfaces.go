@@ -114,6 +114,9 @@ type RoleManager interface {
 	// GetScope returns the given scope
 	GetScope(context.Context, string) (*Scope, error)
 
+	// GetScopes returns all scopes with the given IDs.
+	GetScopes(context.Context, []string) ([]Scope, error)
+
 	// AddResourceToScope adds the specified resource to the given scope, updating parents
 	AddResourceToScope(context.Context, string, string) error
 
