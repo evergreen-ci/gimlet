@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -280,6 +281,26 @@ func (m *mongoBackedRoleManager) GetScope(ctx context.Context, id string) (*giml
 		return nil, err
 	}
 	return scope, nil
+}
+
+func (m *mongoBackedRoleManager) GetScopes(ctx context.Context, ids []string) ([]gimlet.Scope, error) {
+	out := []gimlet.Scope{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	cursor, err := m.client.Database(m.db).Collection(m.scopeColl).Find(ctx, bson.M{
+		"_id": bson.M{
+			"$in": ids,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = cursor.All(ctx, &out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (m *mongoBackedRoleManager) AddResourceToScope(ctx context.Context, scope, resource string) error {
@@ -626,6 +647,17 @@ func (m *inMemoryRoleManager) GetScope(_ context.Context, id string) (*gimlet.Sc
 	return &scope, nil
 }
 
+func (m *inMemoryRoleManager) GetScopes(_ context.Context, ids []string) ([]gimlet.Scope, error) {
+	out := []gimlet.Scope{}
+	for _, id := range ids {
+		scope, found := m.scopes[id]
+		if found {
+			out = append(out, scope)
+		}
+	}
+	return out, nil
+}
+
 func (m *inMemoryRoleManager) AddResourceToScope(_ context.Context, scopeId, resource string) error {
 	baseScope, found := m.scopes[scopeId]
 	if !found {
@@ -776,12 +808,24 @@ func PermissionSummaryForRoles(ctx context.Context, rolesIDs []string, rm gimlet
 	if err != nil {
 		return nil, err
 	}
+	scopeIDs := make([]string, len(roles))
+	for i, role := range roles {
+		scopeIDs[i] = role.Scope
+	}
+	scopeDocs, err := rm.GetScopes(ctx, scopeIDs)
+	if err != nil {
+		return nil, err
+	}
+	scopeMap := map[string]*gimlet.Scope{}
+	for i := range scopeDocs {
+		scopeMap[scopeDocs[i].ID] = &scopeDocs[i]
+	}
 	summary := []PermissionSummary{}
 	highestPermissions := map[string]PermissionsForResources{}
 	for _, role := range roles {
-		scope, err := rm.GetScope(ctx, role.Scope)
-		if err != nil {
-			return nil, err
+		scope := scopeMap[role.Scope]
+		if scope == nil {
+			continue
 		}
 		resourceType := scope.Type
 		highestPermissionsForType, exists := highestPermissions[resourceType]
@@ -924,32 +968,25 @@ func FindAllowedResources(ctx context.Context, rm gimlet.RoleManager, roles []st
 	if requiredPermission == "" {
 		return nil, errors.New("must specify a required permission")
 	}
-	allowedResources := map[string]bool{}
 	roleDocs, err := rm.GetRoles(ctx, roles)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting roles")
 	}
+	var scopeIDs []string
 	for _, role := range roleDocs {
-		level := role.Permissions[requiredPermission]
-		if level < requiredLevel {
-			continue
-		}
-		scope, err := rm.GetScope(ctx, role.Scope)
-		if err != nil {
-			return nil, errors.Wrapf(err, "getting scope '%s'", role.Scope)
-		}
-		if scope == nil {
-			return nil, errors.Errorf("scope '%s' not found", role.Scope)
-		}
-		if scope.Type == resourceType {
-			for _, resource := range scope.Resources {
-				allowedResources[resource] = true
-			}
+		if role.Permissions[requiredPermission] >= requiredLevel {
+			scopeIDs = append(scopeIDs, role.Scope)
 		}
 	}
-	deduplicatedResources := []string{}
-	for resource := range allowedResources {
-		deduplicatedResources = append(deduplicatedResources, resource)
+	scopes, err := rm.FilterScopesByResourceType(ctx, scopeIDs, resourceType)
+	if err != nil {
+		return nil, errors.Wrap(err, "filtering scopes by resource type")
 	}
-	return deduplicatedResources, nil
+	var resources []string
+	for _, scope := range scopes {
+		resources = append(resources, scope.Resources...)
+	}
+	// Sort + Compact effectively creates a set from a slice
+	slices.Sort(resources)
+	return slices.Compact(resources), nil
 }
