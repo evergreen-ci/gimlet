@@ -102,17 +102,19 @@ func (umc UserMiddlewareConfiguration) AttachCookie(token string, rw http.Respon
 		HttpOnly: true,
 		Expires:  time.Now().Add(umc.CookieTTL),
 		Domain:   umc.CookieDomain,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
 // ClearCookie removes the cookie defied in the user manager.
 func (umc UserMiddlewareConfiguration) ClearCookie(rw http.ResponseWriter) {
 	http.SetCookie(rw, &http.Cookie{
-		Name:   umc.CookieName,
-		Path:   umc.CookiePath,
-		Domain: umc.CookieDomain,
-		Value:  "",
-		MaxAge: -1,
+		Name:     umc.CookieName,
+		Path:     umc.CookiePath,
+		Domain:   umc.CookieDomain,
+		Value:    "",
+		MaxAge:   -1,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 

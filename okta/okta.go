@@ -393,6 +393,7 @@ func (m *userManager) setLoginCookie(w http.ResponseWriter, value string) {
 		HttpOnly: true,
 		Expires:  time.Now().Add(m.loginCookieTTL),
 		Domain:   m.cookieDomain,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
