@@ -421,8 +421,16 @@ func TestUserMiddlewareConfiguration(t *testing.T) {
 		assert.Len(t, rw.Header(), 0)
 		conf.AttachCookie("foo", rw)
 		assert.Len(t, rw.Header(), 1)
-		conf.ClearCookie(rw)
-		assert.Len(t, rw.Header(), 1)
+		cookies := rw.Result().Cookies()
+		require.Len(t, cookies, 1)
+		assert.Equal(t, http.SameSiteLaxMode, cookies[0].SameSite)
+
+		clearRW := httptest.NewRecorder()
+		conf.ClearCookie(clearRW)
+		assert.Len(t, clearRW.Header(), 1)
+		cookies = clearRW.Result().Cookies()
+		require.Len(t, cookies, 1)
+		assert.Equal(t, http.SameSiteLaxMode, cookies[0].SameSite)
 	})
 
 	t.Run("InvalidConfigurations", func(t *testing.T) {

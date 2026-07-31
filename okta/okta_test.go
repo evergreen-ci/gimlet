@@ -764,6 +764,21 @@ func cookieMap(cookies []*http.Cookie) (map[string]string, error) {
 	return m, nil
 }
 
+func TestSetLoginCookie(t *testing.T) {
+	um := userManager{
+		loginCookieName: "login",
+		cookiePath:      "/",
+		loginCookieTTL:  time.Hour,
+	}
+	rw := httptest.NewRecorder()
+
+	um.setLoginCookie(rw, "token")
+
+	cookies := rw.Result().Cookies()
+	require.Len(t, cookies, 1)
+	assert.Equal(t, http.SameSiteLaxMode, cookies[0].SameSite)
+}
+
 func TestLoginHandler(t *testing.T) {
 	for testName, testCase := range map[string]func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer){
 		"Succeeds": func(ctx context.Context, t *testing.T, um *userManager, s *mockAuthorizationServer) {
