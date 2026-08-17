@@ -216,6 +216,16 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 							}
 						}
 
+						if isTransientDBAuthError(err) {
+							logger.Error(ctx, message.WrapError(err, message.Fields{
+								"message":   "transient database auth failure while looking up user",
+								"operation": "cookie check",
+								"request":   reqID,
+							}))
+							WriteTextResponse(ctx, rw, http.StatusServiceUnavailable, transientDBAuthErrorMessage)
+							return
+						}
+
 						if usr != nil && !needsReauth {
 							r = setUserForRequest(r, usr)
 							break
@@ -250,6 +260,19 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 				"name":      authDataName,
 				"request":   reqID,
 			}))
+
+			// Don't fail closed as unauthorized here, or the client stops
+			// retrying a request that would otherwise succeed.
+			if isTransientDBAuthError(err) {
+				logger.Error(ctx, message.WrapError(err, message.Fields{
+					"message":   "transient database auth failure while looking up user",
+					"operation": "header check",
+					"name":      authDataName,
+					"request":   reqID,
+				}))
+				WriteTextResponse(ctx, rw, http.StatusServiceUnavailable, transientDBAuthErrorMessage)
+				return
+			}
 
 			// only loggable if the err is non-nil
 			if err == nil && usr != nil {
