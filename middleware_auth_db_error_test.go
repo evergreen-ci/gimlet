@@ -1,11 +1,13 @@
 package gimlet
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/mongodb/grip"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -164,5 +166,78 @@ func TestUserMiddlewareTransientDBAuthError(t *testing.T) {
 
 		assert.Equal(t, http.StatusServiceUnavailable, rw.Code)
 		assert.False(t, nextCalled)
+	})
+}
+
+// permissionCheckerUser reports permission checks through the optional
+// PermissionChecker interface so a failed check can be distinguished.
+type permissionCheckerUser struct {
+	*MockUser
+	hasPermission bool
+	err           error
+}
+
+func (u *permissionCheckerUser) HasPermissionErr(context.Context, PermissionOpts) (bool, error) {
+	return u.hasPermission, u.err
+}
+
+func TestRequiresPermissionTransientDBAuthError(t *testing.T) {
+	reauthErr := errors.Wrap(mongo.CommandError{
+		Code: reauthenticationRequiredCode,
+		Name: reauthenticationRequiredName,
+	}, "getting roles")
+
+	serve := func(t *testing.T, usr User) (*httptest.ResponseRecorder, bool) {
+		m := RequiresPermission(RequiresPermissionMiddlewareOpts{
+			PermissionKey:  "edit",
+			ResourceType:   "project",
+			RequiredLevel:  1,
+			ResourceLevels: []string{"resource_id"},
+		})
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		req = mux.SetURLVars(req, map[string]string{"resource_id": "project1"})
+		ctx := AttachUser(req.Context(), usr)
+		ctx = setAuthenticator(ctx, &MockAuthenticator{
+			CheckAuthenticatedState: map[string]bool{"user": true},
+		})
+		rw := httptest.NewRecorder()
+
+		nextCalled := false
+		m.ServeHTTP(rw, req.WithContext(ctx), func(rw http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+		})
+		return rw, nextCalled
+	}
+
+	mockUser := &MockUser{ID: "user"}
+
+	t.Run("ReauthErrorDuringPermissionCheckShouldReturnServiceUnavailable", func(t *testing.T) {
+		rw, nextCalled := serve(t, &permissionCheckerUser{MockUser: mockUser, err: reauthErr})
+
+		assert.Equal(t, http.StatusServiceUnavailable, rw.Code)
+		assert.False(t, nextCalled)
+		assert.Contains(t, rw.Body.String(), "retry the request")
+	})
+
+	// A genuine denial must stay a 401 so real credential problems still look like one.
+	t.Run("DeniedPermissionShouldStillReturnUnauthorized", func(t *testing.T) {
+		rw, nextCalled := serve(t, &permissionCheckerUser{MockUser: mockUser, hasPermission: false})
+
+		assert.Equal(t, http.StatusUnauthorized, rw.Code)
+		assert.False(t, nextCalled)
+		assert.Contains(t, rw.Body.String(), "not authorized for this action")
+	})
+
+	t.Run("GrantedPermissionShouldCallNext", func(t *testing.T) {
+		_, nextCalled := serve(t, &permissionCheckerUser{MockUser: mockUser, hasPermission: true})
+
+		assert.True(t, nextCalled)
+	})
+
+	// Users that predate PermissionChecker must keep working.
+	t.Run("UserWithoutPermissionCheckerShouldFallBackToHasPermission", func(t *testing.T) {
+		_, nextCalled := serve(t, mockUser)
+
+		assert.True(t, nextCalled)
 	})
 }

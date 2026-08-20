@@ -3,6 +3,8 @@ package gimlet
 import (
 	"context"
 	"net/http"
+
+	"github.com/mongodb/grip/message"
 )
 
 // NewAuthenticationHandler produces middleware that attaches
@@ -320,7 +322,20 @@ func (rp *requiresPermissionHandler) checkPermissions(rw http.ResponseWriter, ct
 	}
 	for _, item := range resources {
 		opts.Resource = item
-		if !user.HasPermission(ctx, opts) {
+		hasPerm, err := hasPermission(ctx, user, opts)
+		// Don't fail closed as unauthorized here, or the client stops retrying
+		// a request that would otherwise succeed.
+		if isTransientDBAuthError(err) {
+			GetLogger(ctx).Error(ctx, message.WrapError(err, message.Fields{
+				"message":       "transient database auth failure while checking permissions",
+				"resource":      opts.Resource,
+				"resource_type": opts.ResourceType,
+				"request":       GetRequestID(ctx),
+			}))
+			http.Error(rw, transientDBAuthErrorMessage, http.StatusServiceUnavailable)
+			return false
+		}
+		if !hasPerm {
 			http.Error(rw, "not authorized for this action", http.StatusUnauthorized)
 			return false
 		}
