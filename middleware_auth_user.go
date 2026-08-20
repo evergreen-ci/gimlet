@@ -200,8 +200,11 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 					if len(token) > 0 {
 						usr, err = u.manager.GetUserByToken(ctx, token)
 						needsReauth := errors.Cause(err) == ErrNeedsReauthentication
+						// Logged below at error level instead, so don't
+						// also log it here as a routine lookup problem.
+						transientDBAuth := isTransientDBAuthError(err)
 
-						logger.DebugWhen(ctx, err != nil && !needsReauth, message.WrapError(err, message.Fields{
+						logger.DebugWhen(ctx, err != nil && !needsReauth && !transientDBAuth, message.WrapError(err, message.Fields{
 							"request": reqID,
 							"message": "problem getting user by token",
 						}))
@@ -209,11 +212,22 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 							usr, err = u.manager.GetOrCreateUser(r.Context(), usr)
 							// Get the user's full details from the DB or create them if they don't exists
 							if err != nil {
-								logger.Debug(ctx, message.WrapError(err, message.Fields{
+								transientDBAuth = isTransientDBAuthError(err)
+								logger.DebugWhen(ctx, !transientDBAuth, message.WrapError(err, message.Fields{
 									"message": "error looking up user",
 									"request": reqID,
 								}))
 							}
+						}
+
+						if transientDBAuth {
+							logger.Error(ctx, message.WrapError(err, message.Fields{
+								"message":   "transient database auth failure while looking up user",
+								"operation": "cookie check",
+								"request":   reqID,
+							}))
+							WriteTextResponse(ctx, rw, http.StatusServiceUnavailable, transientDBAuthErrorMessage)
+							return
 						}
 
 						if usr != nil && !needsReauth {
@@ -244,12 +258,28 @@ func (u *userMiddleware) ServeHTTP(rw http.ResponseWriter, r *http.Request, next
 
 		if len(authDataName) > 0 && len(authDataAPIKey) > 0 {
 			usr, err = u.manager.GetUserByID(r.Context(), authDataName)
-			logger.Debug(ctx, message.WrapError(err, message.Fields{
+			// Logged below at error level instead, so don't also log it
+			// here as a routine lookup problem.
+			transientDBAuth := isTransientDBAuthError(err)
+			logger.DebugWhen(ctx, !transientDBAuth, message.WrapError(err, message.Fields{
 				"message":   "problem getting user by id",
 				"operation": "header check",
 				"name":      authDataName,
 				"request":   reqID,
 			}))
+
+			// Don't fail closed as unauthorized here, or the client stops
+			// retrying a request that would otherwise succeed.
+			if transientDBAuth {
+				logger.Error(ctx, message.WrapError(err, message.Fields{
+					"message":   "transient database auth failure while looking up user",
+					"operation": "header check",
+					"name":      authDataName,
+					"request":   reqID,
+				}))
+				WriteTextResponse(ctx, rw, http.StatusServiceUnavailable, transientDBAuthErrorMessage)
+				return
+			}
 
 			// only loggable if the err is non-nil
 			if err == nil && usr != nil {

@@ -101,12 +101,19 @@ type MockUserManager struct {
 	FailClearUser        bool
 	FailGetGroupsForUser bool
 	FailReauthorizeUser  bool
+	// GetUserByIDError and GetUserByTokenError, when set, are returned verbatim
+	// so tests can inject a specific underlying error.
+	GetUserByIDError     error
+	GetUserByTokenError  error
 	Redirect             bool
 	LoginHandler         http.HandlerFunc
 	LoginCallbackHandler http.HandlerFunc
 }
 
 func (m *MockUserManager) GetUserByToken(_ context.Context, token string) (User, error) {
+	if m.GetUserByTokenError != nil {
+		return nil, m.GetUserByTokenError
+	}
 	if m.FailGetUserByToken {
 		return nil, errors.New("mock fail")
 	}
@@ -145,6 +152,9 @@ func (m *MockUserManager) ReauthorizeUser(_ context.Context, user User) error {
 }
 
 func (m *MockUserManager) GetUserByID(_ context.Context, id string) (User, error) {
+	if m.GetUserByIDError != nil {
+		return nil, m.GetUserByIDError
+	}
 	if m.FailGetUserByID {
 		return nil, errors.New("mock fail")
 	}
