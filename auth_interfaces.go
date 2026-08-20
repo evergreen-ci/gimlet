@@ -159,3 +159,20 @@ func HasPermission(ctx context.Context, rm RoleManager, opts PermissionOpts, rol
 	}
 	return false
 }
+
+// PermissionChecker is optionally implemented by a User that can distinguish a
+// denied permission from a check that could not be completed. Middleware
+// prefers it over User.HasPermission so that a transient database failure
+// becomes a retryable response instead of an authorization failure.
+type PermissionChecker interface {
+	HasPermissionErr(context.Context, PermissionOpts) (bool, error)
+}
+
+// hasPermission reports whether the user has the permission, preferring
+// PermissionChecker so a failed check can be told apart from a denial.
+func hasPermission(ctx context.Context, u User, opts PermissionOpts) (bool, error) {
+	if checker, ok := u.(PermissionChecker); ok {
+		return checker.HasPermissionErr(ctx, opts)
+	}
+	return u.HasPermission(ctx, opts), nil
+}
