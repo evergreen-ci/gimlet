@@ -26,7 +26,10 @@ func isTransientDBAuthError(err error) bool {
 	}
 
 	// Match the message too, since a failed reauth attempt and a
-	// multiUserManager aggregate both lose the original error type.
+	// multiUserManager aggregate both lose the typed error. The match is
+	// broad, but a false positive only turns a 401 into a retryable 503 and
+	// still sets no user. Neither string is driver API, so recheck them
+	// against x/mongo/driver/operation.go on a driver upgrade.
 	msg := err.Error()
 	return strings.Contains(msg, "error reauthenticating") ||
 		strings.Contains(msg, reauthenticationRequiredName)
