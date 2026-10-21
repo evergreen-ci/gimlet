@@ -106,7 +106,12 @@ func (m *mongoBackedRoleManager) FilterForResource(ctx context.Context, roles []
 
 	cursor, err := coll.Find(ctx, bson.M{
 		"resources": resource,
-	})
+	}, options.Find().SetProjection(bson.M{
+		// Only the scope ID is used and some scopes have many resources, so
+		// projecting out all other fields reduces the size of the returned
+		// documents.
+		"_id": 1,
+	}))
 	if err != nil {
 		return nil, err
 	}
