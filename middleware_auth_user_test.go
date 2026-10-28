@@ -388,6 +388,86 @@ func TestOIDCValidation(t *testing.T) {
 	})
 }
 
+func TestOIDCUserIdentification(t *testing.T) {
+	const (
+		headerName = "internal_header"
+		issuer     = "www.mongodb.com"
+		oktaID     = "00ujy6u7xpRtaSiCJ0h7"
+	)
+
+	// serve sends a request with a JWT containing the given claims and returns the user the
+	// middleware passes to GetOrCreateUser.
+	serve := func(t *testing.T, claims jwt.MapClaims) User {
+		claims["iss"] = issuer
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("secret"))
+		require.NoError(t, err)
+		parts := strings.Split(token, ".")
+		require.Len(t, parts, 3)
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		require.NoError(t, err)
+
+		um := &MockUserManager{}
+		oidcConfig := &OIDCConfig{
+			HeaderName:        headerName,
+			Issuer:            issuer,
+			KeysetURL:         "http://example.com",
+			DisplayNameFromID: func(id string) string { return "Display " + id },
+			UsernameFromEmail: func(email string) string { return strings.TrimSuffix(email, "@mongodb.com") },
+		}
+		m := UserMiddleware(t.Context(), um, UserMiddlewareConfiguration{
+			SkipHeaderCheck: true,
+			SkipCookie:      true,
+			OIDCConfigs:     []*OIDCConfig{oidcConfig},
+		})
+		oidcConfig.verifier = oidc.NewVerifier(
+			issuer,
+			&mockKeyset{validSignature: true, payload: string(payload)},
+			&oidc.Config{SkipClientIDCheck: true, SkipExpiryCheck: true, SupportedSigningAlgs: []string{"HS256"}},
+		)
+
+		req := httptest.NewRequest("GET", "http://localhost/bar", nil)
+		req.Header.Add(headerName, token)
+		var usr User
+		m.ServeHTTP(httptest.NewRecorder(), req, func(rw http.ResponseWriter, r *http.Request) {
+			usr = GetUser(r.Context())
+		})
+		require.NotNil(t, usr)
+		return usr
+	}
+
+	t.Run("UsernameSubjectBeforeMigrationShouldIdentifyUserByUsername", func(t *testing.T) {
+		usr := serve(t, jwt.MapClaims{"sub": "sam.smith", "email": "sam.smith@mongodb.com"})
+		assert.Equal(t, "sam.smith", usr.Username())
+		assert.Equal(t, "Display sam.smith", usr.DisplayName())
+		assert.Equal(t, "sam.smith@mongodb.com", usr.Email())
+		assert.Empty(t, usr.OktaID())
+	})
+
+	t.Run("SubIDDuringMigrationShouldIdentifyUserByOktaID", func(t *testing.T) {
+		usr := serve(t, jwt.MapClaims{"sub": "sam.smith", "subid": oktaID, "email": "sam.smith@mongodb.com"})
+		assert.Equal(t, "sam.smith", usr.Username())
+		assert.Equal(t, "Display sam.smith", usr.DisplayName())
+		assert.Equal(t, "sam.smith@mongodb.com", usr.Email())
+		assert.Equal(t, oktaID, usr.OktaID())
+	})
+
+	t.Run("OktaIDSubjectAfterMigrationShouldIdentifyUserByOktaID", func(t *testing.T) {
+		usr := serve(t, jwt.MapClaims{"sub": oktaID, "email": "sam.smith@mongodb.com"})
+		assert.Equal(t, "sam.smith", usr.Username())
+		assert.Equal(t, "Display sam.smith", usr.DisplayName())
+		assert.Equal(t, "sam.smith@mongodb.com", usr.Email())
+		assert.Equal(t, oktaID, usr.OktaID())
+	})
+
+	t.Run("EmailSubjectShouldIdentifyUserByEmail", func(t *testing.T) {
+		usr := serve(t, jwt.MapClaims{"sub": "sam.smith@mongodb.com"})
+		assert.Empty(t, usr.Username())
+		assert.Empty(t, usr.DisplayName())
+		assert.Equal(t, "sam.smith@mongodb.com", usr.Email())
+		assert.Empty(t, usr.OktaID())
+	})
+}
+
 func TestUserMiddlewareConfiguration(t *testing.T) {
 	conf := UserMiddlewareConfiguration{
 		HeaderUserName: "u",

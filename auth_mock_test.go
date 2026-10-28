@@ -43,6 +43,7 @@ func (u *MockUser) Email() string           { return u.EmailAddress }
 func (u *MockUser) Username() string        { return u.ID }
 func (u *MockUser) IsNil() bool             { return u.ReportNil }
 func (u *MockUser) GetAPIKey() string       { return u.APIKey }
+func (u *MockUser) OktaID() string          { return "" }
 func (u *MockUser) GetAccessToken() string  { return u.AccessToken }
 func (u *MockUser) GetRefreshToken() string { return u.RefreshToken }
 func (u *MockUser) Roles() []string         { return u.RoleNames }

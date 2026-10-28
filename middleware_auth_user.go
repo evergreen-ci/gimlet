@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -34,6 +35,18 @@ type UserMiddlewareConfiguration struct {
 	StaticKeysDisabledForHumanUsers bool
 }
 
+// oidcClaims are the claims used to identify the user from a verified JWT.
+type oidcClaims struct {
+	Subject string `json:"sub"`
+	Email   string `json:"email"`
+	// SubID is a temporary claim holding the user's Okta user ID while CorpSecure migrates the
+	// subject from the user's username to their Okta user ID.
+	SubID string `json:"subid"`
+}
+
+// oktaUserIDRegexp matches Okta user IDs, such as "00ujy6u7xpRtaSiCJ0h7".
+var oktaUserIDRegexp = regexp.MustCompile(`^00u[0-9A-Za-z]{17}$`)
+
 // OIDCConfig configures the validation of JWTs provided as a header on requests.
 type OIDCConfig struct {
 	// HeaderName is the name of the header expected to contain the JWT.
@@ -42,9 +55,14 @@ type OIDCConfig struct {
 	Issuer string
 	// KeysetURL is a URL to download a remote keyset from to use for validating the JWT.
 	KeysetURL string
-	// DisplayNameFromID parses a display name from the subject in the JWT. If not provided the
-	// display name will default to the token's subject.
+	// DisplayNameFromID parses a display name from the user's ID. If not provided the
+	// display name will default to the user's ID.
 	DisplayNameFromID func(string) string
+	// UsernameFromEmail returns the user ID for an email address, or an empty string if the email
+	// address cannot be trusted to identify a user. It is used to link an Okta user ID to an
+	// existing user when the token's subject is an Okta user ID. If not provided, an Okta user ID
+	// subject can only resolve to a user already linked to it.
+	UsernameFromEmail func(string) string
 
 	// verifier is a pre-configured verifier for the OIDC config.
 	// It is cached in the UserMiddlewareConfiguration to avoid re-creating the verifier for each request.
@@ -364,44 +382,81 @@ func (u *userMiddleware) getUserForOIDCHeader(ctx context.Context, jwt string, c
 		return nil, errors.Wrap(err, "verifying jwt")
 	}
 
-	claims := struct {
-		Email string `json:"email"`
-	}{}
+	var claims oidcClaims
 	if err := token.Claims(&claims); err != nil {
 		return nil, errors.Wrap(err, "parsing token claims")
 	}
 	// if the subject starts with the spiffe route, then
 	// ignore it if it's the unauthorized user.
-	if strings.HasPrefix(token.Subject, spiffeRoute) {
-		if strings.HasSuffix(token.Subject, unauthorizedSpifeServiceUser) {
+	if strings.HasPrefix(claims.Subject, spiffeRoute) {
+		if strings.HasSuffix(claims.Subject, unauthorizedSpifeServiceUser) {
 			return nil, nil
 		}
 	}
 
-	displayName := token.Subject
-	if config.DisplayNameFromID != nil {
-		displayName = config.DisplayNameFromID(token.Subject)
-	}
-
-	// Most tokens send the user's ID as the subject. Some tokens
-	// send their email as the subject, for those tokens, we send only
-	// the email to GetOrCreateUser.
-	email := claims.Email
-	id := token.Subject
-	if strings.Contains(token.Subject, "@") {
-		email = token.Subject
-		id = ""
-		displayName = ""
-	}
-
+	identity := identifyOIDCUser(config, claims)
 	usr, err := u.manager.GetOrCreateUser(ctx, NewBasicUser(BasicUserOptions{
-		id:    id,
-		name:  displayName,
-		email: email,
+		id:     identity.id,
+		name:   identity.displayName,
+		email:  identity.email,
+		oktaID: identity.oktaID,
 	}))
 	if err != nil {
-		return nil, errors.Wrapf(err, "getting or creating user '%s'", displayName)
+		return nil, errors.Wrapf(err, "getting or creating user '%s'", identity.displayName)
 	}
 
 	return usr, nil
+}
+
+// oidcIdentity identifies the user for a verified JWT.
+type oidcIdentity struct {
+	// oktaID is the user's Okta user ID, if the token has one.
+	oktaID string
+	// id is the user's ID, if it is known.
+	id          string
+	displayName string
+	email       string
+}
+
+// identifyOIDCUser determines what identifies the user in a verified JWT. CorpSecure is migrating
+// the subject from the user's username to their Okta user ID:
+//   - Before migrating, the subject is the username.
+//   - While migrating, the subject is the username and the subid claim is the Okta user ID.
+//   - After migrating, the subject is the Okta user ID, and the username is derived from the email
+//     claim if possible.
+//
+// Some tokens send the user's email address as the subject; for those tokens, the user is
+// identified only by their email address.
+func identifyOIDCUser(config *OIDCConfig, claims oidcClaims) oidcIdentity {
+	identity := oidcIdentity{
+		oktaID: claims.SubID,
+		id:     claims.Subject,
+		email:  claims.Email,
+	}
+	switch {
+	case oktaUserIDRegexp.MatchString(claims.Subject):
+		if identity.oktaID == "" {
+			identity.oktaID = claims.Subject
+		}
+		identity.id = usernameFromEmail(config, claims.Email)
+	case strings.Contains(claims.Subject, "@"):
+		identity.email = claims.Subject
+		identity.id = ""
+		if identity.oktaID != "" {
+			identity.id = usernameFromEmail(config, claims.Subject)
+		}
+	}
+
+	identity.displayName = identity.id
+	if identity.id != "" && config.DisplayNameFromID != nil {
+		identity.displayName = config.DisplayNameFromID(identity.id)
+	}
+	return identity
+}
+
+func usernameFromEmail(config *OIDCConfig, email string) string {
+	if config.UsernameFromEmail == nil || email == "" {
+		return ""
+	}
+	return config.UsernameFromEmail(email)
 }

@@ -11,6 +11,7 @@ type BasicUserOptions struct {
 	id           string
 	name         string
 	email        string
+	oktaID       string
 	password     string
 	key          string
 	accessToken  string
@@ -38,6 +39,11 @@ func (opts BasicUserOptions) Name(name string) BasicUserOptions {
 
 func (opts BasicUserOptions) Email(email string) BasicUserOptions {
 	opts.email = email
+	return opts
+}
+
+func (opts BasicUserOptions) OktaID(oktaID string) BasicUserOptions {
+	opts.oktaID = oktaID
 	return opts
 }
 
@@ -83,6 +89,7 @@ func NewBasicUser(opts BasicUserOptions) *BasicUser {
 		ID:           opts.id,
 		Name:         opts.name,
 		EmailAddress: opts.email,
+		OktaUserID:   opts.oktaID,
 		Password:     opts.password,
 		Key:          opts.key,
 		AccessToken:  opts.accessToken,
@@ -97,6 +104,7 @@ type BasicUser struct {
 	ID           string   `bson:"_id" json:"id" yaml:"id"`
 	Name         string   `bson:"name" json:"name" yaml:"name"`
 	EmailAddress string   `bson:"email" json:"email" yaml:"email"`
+	OktaUserID   string   `bson:"okta_id,omitempty" json:"okta_id,omitempty" yaml:"okta_id,omitempty"`
 	Password     string   `bson:"password" json:"password" yaml:"password"`
 	Key          string   `bson:"key" json:"key" yaml:"key"`
 	AccessToken  string   `bson:"access_token" json:"access_token" yaml:"access_token"`
@@ -110,6 +118,7 @@ type BasicUser struct {
 func (u *BasicUser) Username() string        { return u.ID }
 func (u *BasicUser) Email() string           { return u.EmailAddress }
 func (u *BasicUser) DisplayName() string     { return u.Name }
+func (u *BasicUser) OktaID() string          { return u.OktaUserID }
 func (u *BasicUser) GetAPIKey() string       { return u.Key }
 func (u *BasicUser) GetAccessToken() string  { return u.AccessToken }
 func (u *BasicUser) GetRefreshToken() string { return u.RefreshToken }
