@@ -433,13 +433,12 @@ func identifyOIDCUser(config *OIDCConfig, claims oidcClaims) oidcIdentity {
 		id:     claims.Subject,
 		email:  claims.Email,
 	}
-	switch {
-	case oktaUserIDRegexp.MatchString(claims.Subject):
+	if oktaUserIDRegexp.MatchString(claims.Subject) {
 		if identity.oktaID == "" {
 			identity.oktaID = claims.Subject
 		}
 		identity.id = usernameFromEmail(config, claims.Email)
-	case strings.Contains(claims.Subject, "@"):
+	} else if strings.Contains(claims.Subject, "@") {
 		identity.email = claims.Subject
 		identity.id = ""
 		if identity.oktaID != "" {
