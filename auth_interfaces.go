@@ -17,6 +17,9 @@ type User interface {
 	DisplayName() string
 	Email() string
 	Username() string
+	// OktaID returns the user's Okta user ID, if it is known. When it is set on a user passed to
+	// UserManager.GetOrCreateUser, the user should be resolved by their Okta user ID.
+	OktaID() string
 	GetAPIKey() string
 	GetAccessToken() string
 	GetRefreshToken() string
